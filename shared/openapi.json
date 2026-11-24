@@ -5680,8 +5680,8 @@
                     "photo": {
                         "type": "string",
                         "format": "uuid",
-                        "readOnly": true,
-                        "nullable": true
+                        "nullable": true,
+                        "readOnly": true
                     },
                     "status": {
                         "allOf": [

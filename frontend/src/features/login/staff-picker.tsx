@@ -165,13 +165,13 @@ export function StaffPicker({
             <li key={person.id}>
               {opensThePassword(person) ? (
                 // The demo's manager: a real link, to the password login with his id, as the button's
-                // look on a link is ButtonLink's (ADR-0039). Same size and look as every tile.
+                // look on a link is ButtonLink's (ADR-0039). Same size and look as every tile. No face: he has no
+                // PIN, and the laptops hold the photos of people with one alone (PPL-14).
                 <ButtonLink
                   href={`/login/?as=${person.id}`}
                   kind="second"
                   className={TILE}
                 >
-                  <Face photo={photo} />
                   <Names person={person} />{" "}
                   <span className="text-base font-normal">
                     {words("withPassword")}

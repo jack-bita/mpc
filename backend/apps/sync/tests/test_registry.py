@@ -55,7 +55,7 @@ from apps.shops.services import add_side
 from apps.sync.api.serializers import StaffRecord
 from apps.sync.registry import REGISTRY
 from apps.sync.selectors import last_change_number
-from tests.change_log import last_line
+from tests.change_log import last_line, lines_written
 
 pytestmark = pytest.mark.django_db
 
@@ -271,9 +271,26 @@ def test_a_persons_row_names_their_photo(shop_a: Shop, staff_a: StaffMember, giv
     asha, baraka = hire(shop_a, "Asha Mfano", "Asha"), hire(shop_a, "Baraka Mfano", "Baraka")
     photo_id = uuid.uuid7()
     with shop_context(shop_a):
+        for person in (asha, baraka):
+            set_pin(person, "2580", by=None)
         set_worker_photo(asha, photo_id=photo_id, instead_of=None, content=FACE, by=staff_a)
     assert row_of(asha)["photo"] == str(photo_id)
     assert row_of(baraka)["photo"] is None
+
+
+def test_a_row_names_no_photo_of_someone_with_no_pin(shop_a: Shop, staff_a: StaffMember, give_role: GiveRole) -> None:
+    # The cook never logs in at a laptop: no PIN, so no tile to show her face on (PPL-4), and no laptop keeps it (Jack:
+    # A, PPL-14's review). Her PIN writes her line, and her row then names it.
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    cook = hire(shop_a, "Zawadi Mfano", "Zawadi")
+    photo_id = uuid.uuid7()
+    with shop_context(shop_a):
+        set_worker_photo(cook, photo_id=photo_id, instead_of=None, content=FACE, by=staff_a)
+    assert row_of(cook)["photo"] is None
+    with shop_context(shop_a), lines_written(shop_a) as lines:
+        set_pin(cook, "2580", by=None)
+    assert lines == [("staff", cook.pk, "upsert")]
+    assert row_of(cook)["photo"] == str(photo_id)
 
 
 def test_reading_the_photos_ids_costs_no_query_a_person(
@@ -283,13 +300,17 @@ def test_reading_the_photos_ids_costs_no_query_a_person(
     # as many queries as five with none.
     give_role(staff_a, RoleTemplate.OWNER, None)
     people = [hire(shop_a, f"Mfanyakazi {number}", f"Mfanyakazi {number}") for number in range(5)]
+    with shop_context(shop_a):
+        for person in people:
+            set_pin(person, "2580", by=None)
     with CaptureQueriesContext(connection) as without:
         sent("staff", shop_a)
     with shop_context(shop_a):
         for person in people:
             set_worker_photo(person, photo_id=uuid.uuid7(), instead_of=None, content=FACE, by=staff_a)
     with CaptureQueriesContext(connection) as with_photos:
-        sent("staff", shop_a)
+        rows = sent("staff", shop_a)
+    assert len([row for row in rows if row["photo"] is not None]) == 5
     assert len(with_photos) == len(without)
 
 

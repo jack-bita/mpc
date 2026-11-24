@@ -8,11 +8,12 @@ it, so her face shows with no internet too:
     the photo a person on the laptop's list shows now     200: the photo, its type as its label, never kept by a cache
     any other photo, and an id no shop has                404 attachment.not_found, alike
 
-A laptop's own list is the rows the pull hands it (staff_rows): the people at work, the suspended among them. So the
-photos it may read are exactly the ones its rows name, and nothing else of the shop's: not a clock-in photo, which only
-whoever manages attendance may open, not a photo a newer one replaced, not the face of someone who left or was switched
-off. A lost or stolen laptop then holds the faces on its own PIN screen, and can ask for no more. Every "not found"
-reads the same, so an answer says nothing of what the shop keeps.
+A laptop's own list is the rows the pull hands it (staff_rows): the people at work, the suspended among them. The photos
+it may read are exactly the ones its rows name, those of the people with a PIN, who log in there, and nothing else of
+the shop's: not a clock-in photo, which only whoever manages attendance may open, not a photo a newer one replaced, not
+the face of someone who left, was switched off, or never had a PIN. A lost or stolen laptop then holds the faces of the
+people who log in at it, and can ask for no more. Every "not found" reads the same, so an answer says nothing of what
+the shop keeps.
 
 How a photo is handed out is photo_answer's (apps/control/api/downloads.py), tested at the office's door. The tenancy
 sweep asks this route about shop A's photos as shop B's laptop. The photos are a few made-up bytes that start the way a
@@ -41,6 +42,7 @@ from apps.people.services import (
     confirm_pairing,
     mark_left,
     remove_worker_photo,
+    set_pin,
     set_worker_photo,
     start_pairing,
     suspend,
@@ -86,6 +88,11 @@ def hire(shop: Shop, full_name: str, nickname: str) -> StaffMember:
     user = User.objects.create_user(full_name=full_name)
     with shop_context(shop):
         return add_staff(shop=shop, user=user, display_name=nickname, started_on=START, by=None)
+
+
+def with_a_pin(staff: StaffMember) -> StaffMember:
+    with shop_context(staff.shop_id):
+        return set_pin(staff, "2580", by=None)
 
 
 def set_photo(
@@ -135,7 +142,8 @@ def baba(staff_a: StaffMember, give_role: GiveRole) -> StaffMember:
 
 @pytest.fixture
 def asha(shop_a: Shop) -> StaffMember:
-    return hire(shop_a, "Asha Mfano", "Asha")
+    # She logs in at the laptops, with a PIN, so they have a tile for her face to show on.
+    return with_a_pin(hire(shop_a, "Asha Mfano", "Asha"))
 
 
 @pytest.fixture
@@ -229,6 +237,21 @@ def test_a_switched_off_persons_photo_is_not_found(
     assert_not_found(client.get(address(photo_id)), client)
 
 
+def test_a_photo_of_someone_with_no_pin_is_not_found(
+    shop_a: Shop, baba: StaffMember, laptop: tuple[Device, str]
+) -> None:
+    # The cook never logs in at a laptop: no PIN, so no tile, and her face would sit on every laptop shown to nobody
+    # (Jack: A, PPL-14's review). It comes with her PIN, at the next sync.
+    cook = hire(shop_a, "Zawadi Mfano", "Zawadi")
+    photo_id = set_photo(cook, by=baba)
+    client = a_browser(laptop[1])
+
+    assert_not_found(client.get(address(photo_id)), client)
+
+    with_a_pin(cook)
+    assert client.get(address(photo_id)).getvalue() == FACE
+
+
 def test_a_photo_no_row_names_is_not_found(asha: StaffMember, laptop: tuple[Device, str]) -> None:
     # A whole worker's photo, its file kept, pinned to Asha, but not the one her job shows: which one shows is the job's
     # to say (StaffMember.photo), never what a photo is pinned to.
@@ -272,7 +295,7 @@ def test_a_photo_of_someone_else_is_never_handed_to_a_laptop(
     # A job made to name a coworker's photo, by a bug no foreign key can refuse: Juma's tile would wear the face of
     # Asha, who left. Not found, as a photo shows only on the very job it is pinned to.
     ashas = set_photo(asha, by=baba)
-    juma = hire(shop_a, "Juma Mfano", "Juma")
+    juma = with_a_pin(hire(shop_a, "Juma Mfano", "Juma"))
     with shop_context(shop_a):
         mark_left(asha, left_on=shop_today(shop_a), by=baba, reason="Amehamia mji mwingine")
         StaffMember.objects.filter(pk=juma.pk).update(photo=ashas)
@@ -290,6 +313,7 @@ def test_another_shops_photo_is_never_read_whatever_a_row_names(
     ours = set_photo(asha, by=baba)
     give_role(staff_b, RoleTemplate.OWNER, None)
     _device_b, key_b = pair(staff_b, side_b, "Laptop B")
+    with_a_pin(staff_b)
     with shop_context(shop_b):
         StaffMember.objects.filter(pk=staff_b.pk).update(photo=ours)
         assert staff_photo(shop_b, ours) is None
@@ -317,7 +341,7 @@ def test_each_shops_laptop_reads_its_own_photo_of_one_person(
     # shop's, and the other's is an id it has never heard of.
     give_role(staff_b, RoleTemplate.OWNER, None)
     with shop_context(shop_b):
-        at_b = add_staff(shop=shop_b, user=asha.user, display_name="Asha", started_on=START, by=None)
+        at_b = with_a_pin(add_staff(shop=shop_b, user=asha.user, display_name="Asha", started_on=START, by=None))
     ours, theirs = set_photo(asha, by=baba), set_photo(at_b, by=staff_b, content=BETTER_FACE)
     here, there = a_browser(laptop[1]), a_browser(pair(staff_b, side_b, "Laptop B")[1])
 

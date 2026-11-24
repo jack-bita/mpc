@@ -427,18 +427,6 @@ describe("the staff picker", () => {
     read.mockRestore();
   });
 
-  it("shows the face on a tile that opens the password login too", async () => {
-    saveLogins([MENEJA_LOGIN]);
-    await theLaptopKnows({ ...MENEJA, photo: ASHAS_FACE });
-    await theLaptopHoldsPhoto(ASHAS_FACE);
-    render(<StaffPicker onPick={vi.fn()} />);
-
-    const tile = await screen.findByRole("link", {
-      name: "Neema Mfano Neema Ingia kwa nenosiri",
-    });
-    await waitFor(() => expect(facesOn(tile)).toHaveLength(1));
-  });
-
   it("shows a demo seller's PIN under their names, and none for the others", async () => {
     // One tap on Jaribu demo kept Asha's PIN (OPS-3). Juma, who has none kept, gets a plain tile.
     savePins([{ staff_id: ASHA.id, pin: "2580" }]);

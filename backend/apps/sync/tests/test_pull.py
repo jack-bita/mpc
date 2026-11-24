@@ -47,6 +47,7 @@ from apps.people.services import (
     end_role,
     mark_left,
     remove_worker_photo,
+    set_pin,
     set_worker_photo,
     suspend,
 )
@@ -266,6 +267,8 @@ def test_a_photo_reaches_the_laptop_at_its_next_pull(
     # it hands every laptop her row, naming the photo she shows now, or none.
     give_role(staff_a, RoleTemplate.OWNER, None)
     asha = hire(shop_a, "Asha Mfano", "Asha")
+    with shop_context(shop_a):
+        set_pin(asha, "2580", by=None)
     first, better = uuid.uuid7(), uuid.uuid7()
 
     def photo_at_the_next_pull(change: Callable[[], object]) -> str | None:

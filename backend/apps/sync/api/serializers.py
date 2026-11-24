@@ -71,10 +71,12 @@ class StaffRecord(serializers.ModelSerializer[StaffMember]):
     # the PIN's hash, a password, a phone or an email: whoever uses the laptop next could read them. `pin_changed_at` is
     # empty for someone with no PIN, which tells only that nobody can log in as them here. `photo`: only which photo the
     # tile shows, its id, or none; the laptop asks for the picture itself by that id, once, at an address of its own
-    # (PPL-14), so the people's list stays small at every pull.
+    # (PPL-14), so the people's list stays small at every pull. None for someone with no PIN, who gets no tile: a face
+    # no laptop shows is kept on no laptop (Jack: A, PPL-14's review). Their PIN writes their line, and brings it.
     full_name = serializers.CharField(source="user.full_name", read_only=True)
     language = serializers.ChoiceField(source="user.language", choices=Language.choices, read_only=True)
     font = serializers.ChoiceField(source="user.font", choices=Font.choices, read_only=True)
+    photo = serializers.SerializerMethodField()
     permissions = serializers.SerializerMethodField()
 
     class Meta:
@@ -91,6 +93,14 @@ class StaffRecord(serializers.ModelSerializer[StaffMember]):
             "permissions",
         ]
         read_only_fields = fields
+
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_photo(self, staff: StaffMember) -> str | None:
+        # The id is on the job's own row, so naming the photo reads no other. The route that hands the photo out asks
+        # the same of the person (staff_photo, apps/sync/selectors.py).
+        if staff.photo_id is None or staff.pin_changed_at is None:
+            return None
+        return str(staff.photo_id)
 
     @extend_schema_field(StaffKeysRecord)
     def get_permissions(self, staff: StaffMember) -> dict[str, Any]:

@@ -97,10 +97,12 @@ def staff_rows(shop: Shop) -> QuerySet[StaffMember]:
 
 
 def staff_photo(shop: Shop, photo_id: uuid.UUID) -> Attachment | None:
-    """The photo `photo_id`, if a person on a device's list shows it now (StaffRecord's `photo`); else None, whatever it
-    is: a photo a newer one replaced, a leaver's, a clock-in's, another shop's, or none at all (PPL-14)."""
-    # Asked of the very rows the device holds, so the photos it may read and the ones its rows name can't disagree: a
-    # person who leaves the list takes their face along. The job says which photo it shows, never the photo what it is
+    """The photo `photo_id`, if the row of a person on a device's list names it now (StaffRecord's `photo`); else None,
+    whatever it is: a photo a newer one replaced, a leaver's, that of someone with no PIN, a clock-in's, another shop's,
+    or none at all (PPL-14)."""
+    # Asked of the very rows the device holds, and, as StaffRecord does, of the people with a PIN alone, who have a tile
+    # for their face to show on: so the photos it may read and the ones its rows name can't disagree, and a person who
+    # leaves the list takes their face along. The job says which photo it shows, never the photo what it is
     # pinned to: a photo no job shows is nobody's face now. No index by photo is needed: the rows are one shop's few
     # people.
     #
@@ -111,6 +113,7 @@ def staff_photo(shop: Shop, photo_id: uuid.UUID) -> Attachment | None:
     person = (
         staff_rows(shop)
         .filter(
+            pin_changed_at__isnull=False,
             photo=photo_id,
             photo__kind=AttachmentKind.STAFF_PHOTO,
             photo__shop=shop,
