@@ -582,6 +582,9 @@
       "attendance": {
         "manage": "Kurekebisha mahudhurio"
       },
+      "meals": {
+        "record": "Kuandika hela ya chakula"
+      },
       "pay": {
         "run": "Kuandaa mishahara ya mwezi",
         "approve": "Kuidhinisha mishahara ya mwezi"

@@ -1,6 +1,6 @@
 // give-screen.tsx — Ongeza kazi kwa Juma, at /workers/give/?id=…: Ongeza kazi's form on a page of its own (UI-11),
 // opened from Ongeza kazi on Cheo's heading row. Before UI-11 the form opened under the worker's roles, its six roles
-// or 38 keys and its sides pushing the rest of the page down the manager's phone; as Jack pictured it (20 Nov 2026), a
+// or 39 keys and its sides pushing the rest of the page down the manager's phone; as Jack pictured it (20 Nov 2026), a
 // long form keeps a page of its own.
 //
 // The form itself is give-form.tsx, as PPL-8 built it: Anapewa nini?, the role or the key, the side, what the giver may

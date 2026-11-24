@@ -10,7 +10,7 @@
 // The lists offer only what the server would let this person give (giving.ts, the card's default), and never the
 // Owner role. Each list narrows the other: a side picked leaves what may be given there, a role or key picked leaves the
 // sides where it may be; a pick no longer on its list counts as no pick (the card: "a choice no longer on them is
-// cleared"), worked out on each draw, never stored. The 38 keys show in their eight groups (keys.ts), each group a
+// cleared"), worked out on each draw, never stored. The 39 keys show in their eight groups (keys.ts), each group a
 // Choice of its own under its heading, all picking the one key (Jack, PPL-8: A), so no shared design piece changes.
 //
 // The give sends an id the app made (ADR-0007): the same id for a try of the same choices, so a give whose answer the

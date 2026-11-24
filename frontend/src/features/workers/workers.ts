@@ -36,7 +36,7 @@ export type Role = components["schemas"]["Role"];
 type StaffPage = components["schemas"]["PaginatedStaffList"];
 type RolePage = components["schemas"]["PaginatedRoleList"];
 
-/** The key the workers' routes ask, on the whole shop: one of the owner's own four (spec §6). */
+/** The key the workers' routes ask, on the whole shop: one of the owner's own (spec §6). */
 export const MANAGES_STAFF = "staff.manage";
 
 /** The list's place in the store of server answers. Ongeza and each change ask it again. */

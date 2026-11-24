@@ -99,12 +99,13 @@ export const SELLER_CODES = [
   "drawer.count",
 ];
 
-/** The owner's own four, which the Manager's template leaves out (permissions.py). */
+/** The owner's own, which the Manager's template leaves out (permissions.py). */
 const OWNERS_OWN = [
   "drawer.approve",
   "pay.approve",
   "settings.manage",
   "staff.manage",
+  "meals.record",
 ];
 
 /** One of the shop's roles, with its id and codes. */

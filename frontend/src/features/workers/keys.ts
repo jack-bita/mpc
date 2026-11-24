@@ -77,6 +77,7 @@ const GROUP_OF: Record<Permission, KeyGroup> = {
   // Staff, attendance and pay (02 §5, §12).
   "staff.manage": "staff",
   "attendance.manage": "staff",
+  "meals.record": "staff",
   "pay.run": "staff",
   "pay.approve": "staff",
   // The shop itself (02 §4, §5, §13).

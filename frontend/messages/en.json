@@ -582,6 +582,9 @@
       "attendance": {
         "manage": "Fix attendance"
       },
+      "meals": {
+        "record": "Record the meal money"
+      },
       "pay": {
         "run": "Prepare the month's pay",
         "approve": "Approve the month's pay"

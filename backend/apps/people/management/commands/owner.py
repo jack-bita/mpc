@@ -18,7 +18,7 @@ So he types it on the server, one subcommand for each thing done:
   there, and only he may set an owner's (set_pin: pin.superuser_only).
 - `take` asks the reason, and ends every Owner role the person holds (end_role), together, with that one reason (Jack,
   PPL-13: 4A). When no other Owner is working there, it asks once more (the card's default): only the superuser can
-  make one again, and the owner's four keys stay only with someone given them one by one.
+  make one again, and the owner's own keys stay only with someone given them one by one.
 
 Thin, like a view (ADR-0043): it asks, shows, and calls the services as they are; every rule is theirs (the card's
 Watch out). The superuser acts as `by=None`, as the system does: each service's rules for the superuser hold (a taken
@@ -189,13 +189,13 @@ class Command(BaseCommand):
 
     def _last_owner_agreed(self, ask: Asker, shop: Shop) -> bool:
         # Asked once more (the card's default). With no other Owner working, nobody there may give the role again: only
-        # the superuser can (role.superuser_only). And the owner's four keys (the day's final approval, the pay, the
-        # shop's rules, who works there; spec §6) stay only with someone given them one by one, as a manager may be
-        # (apps/core/permissions.py): so the words claim no more than that. "No other": true whether the person taken
-        # is working or suspended (PPL-13's review).
+        # the superuser can (role.superuser_only). And the owner's own keys (the day's final approval, the pay, the
+        # shop's rules, who works there, the meal money; spec §6) stay only with someone given them one by one, as a
+        # manager may be (apps/core/permissions.py): so the words claim no more than that. "No other": true whether the
+        # person taken is working or suspended (PPL-13's review).
         ask.say(f"No other Owner is working at {shop.code}.")
         ask.say("Once taken, only the superuser can make one again,")
-        ask.say("and the owner's four keys stay only with someone given them one by one.")
+        ask.say("and the owner's own keys stay only with someone given them one by one.")
         return ask.yes("Take it all the same?")
 
 

@@ -265,7 +265,7 @@ def test_list_shows_only_sides_with_a_permission(
 def test_action_needs_its_permission(
     shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
 ) -> None:
-    # Adding or renaming a side changes the shop itself: `settings.manage`, one of the owner's own four (spec §6).
+    # Adding or renaming a side changes the shop itself: `settings.manage`, one of the owner's own (spec §6).
     # A Manager on every side sees both sides, and still may not.
     give_role(staff_a2, RoleTemplate.MANAGER, None)
     manager = client_for(staff_a2)

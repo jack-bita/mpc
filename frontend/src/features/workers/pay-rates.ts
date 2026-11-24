@@ -21,7 +21,7 @@ import { MANAGES_STAFF } from "./workers";
 export type PayRate = components["schemas"]["PayRate"];
 export type PayRates = components["schemas"]["PayRatesAnswer"];
 
-/** The rates route's key, on the whole shop: one of the owner's own four (spec §6). The other is MANAGES_STAFF. */
+/** The rates route's key, on the whole shop: one of the owner's own (spec §6). The other is MANAGES_STAFF. */
 export const MANAGES_RATES = "settings.manage";
 
 /** Every worker's rates' place in the store of server answers; a save asks them all again. */

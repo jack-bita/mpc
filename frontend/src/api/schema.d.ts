@@ -1650,6 +1650,7 @@ export interface components {
          *     * `drawer.approve` - Approve the day
          *     * `staff.manage` - Add workers and give them roles
          *     * `attendance.manage` - Fix attendance
+         *     * `meals.record` - Record the day's meal money
          *     * `pay.run` - Prepare the month's pay
          *     * `pay.approve` - Approve the month's pay
          *     * `settings.manage` - Change the shop's rules and rates
@@ -1660,7 +1661,7 @@ export interface components {
          *     * `production.run` - Record a production run
          * @enum {string}
          */
-        PermissionEnum: "sale.write" | "sale.take_payment" | "sale.hand_over" | "sale.bargain" | "sale.below_floor_approve" | "sale.jumla_switch" | "sale.cancel" | "sale.refund" | "credit.give" | "credit.approve" | "debt.view" | "debt.adjust" | "price.change" | "cost.view" | "product.manage" | "contact.manage" | "stock.receive" | "stock.weigh" | "stock.loss" | "stock.count" | "stock.count_approve" | "stock.transfer" | "money.expense" | "money.advance" | "money.withdraw" | "drawer.count" | "drawer.confirm" | "drawer.approve" | "staff.manage" | "attendance.manage" | "pay.run" | "pay.approve" | "settings.manage" | "device.manage" | "flag.review" | "report.view" | "job.manage" | "production.run";
+        PermissionEnum: "sale.write" | "sale.take_payment" | "sale.hand_over" | "sale.bargain" | "sale.below_floor_approve" | "sale.jumla_switch" | "sale.cancel" | "sale.refund" | "credit.give" | "credit.approve" | "debt.view" | "debt.adjust" | "price.change" | "cost.view" | "product.manage" | "contact.manage" | "stock.receive" | "stock.weigh" | "stock.loss" | "stock.count" | "stock.count_approve" | "stock.transfer" | "money.expense" | "money.advance" | "money.withdraw" | "drawer.count" | "drawer.confirm" | "drawer.approve" | "staff.manage" | "attendance.manage" | "meals.record" | "pay.run" | "pay.approve" | "settings.manage" | "device.manage" | "flag.review" | "report.view" | "job.manage" | "production.run";
         /**
          * @description * `kept` - Kept
          *     * `waiting` - Waiting

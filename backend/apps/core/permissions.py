@@ -10,8 +10,9 @@ A role template is a named bundle of codes. The templates live here, beside the 
 its own copy of them, as Role rows its owner can change later (set_up_shop, apps/people/services.py). So a change
 here reaches the shops made after it, never a shop that already has its roles. A new code therefore comes with a data
 migration that adds it to the Owner role of every shop that already has its roles, and to the Manager's unless it
-joins the owner's own four, moving each role's `version` (its history records the edit, ADR-0036): without it, nobody
-in those shops would hold the new code, and under the giver rule nobody there could ever give it (03 §5.8).
+joins the owner's own, moving each role's `version` (its history records the edit, ADR-0036): without it, nobody in
+those shops would hold the new code, and under the giver rule nobody there could ever give it (03 §5.8). People's 0022
+and 0023 are the first of their kind (meals.record, WAGE-7): the rule of known codes, then the roles.
 
 Who holds which code, and where, is `people`'s (apps/people/permissions.py): `core` is layer 0 and may not import
 `people` (ADR-0035). So `core` only says what an answer looks like, and how it is read (PPL-5): HeldPermissions, every
@@ -73,6 +74,7 @@ class Permission(models.TextChoices):
     # Staff, attendance and pay (02 §5, §12).
     STAFF_MANAGE = "staff.manage", "Add workers and give them roles"
     ATTENDANCE_MANAGE = "attendance.manage", "Fix attendance"
+    MEALS_RECORD = "meals.record", "Record the day's meal money"
     PAY_RUN = "pay.run", "Prepare the month's pay"
     PAY_APPROVE = "pay.approve", "Approve the month's pay"
     # The shop itself (02 §4, §5, §13).
@@ -96,20 +98,27 @@ class RoleTemplate(models.TextChoices):
     WORKER = "worker", "Worker"
 
 
-# The owner's own four: the day's final approval, the pay, the shop's rules, and who works there (spec §6).
+# The owner's own: the day's final approval, the pay, the shop's rules, and who works there (spec §6); and the day's
+# meal money, which comes out of every worker's pay, so the owner chooses who types it (Jack, 15 Nov 2026; WAGE-7).
 _OWNERS_OWN = frozenset(
-    {Permission.DRAWER_APPROVE, Permission.PAY_APPROVE, Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE}
+    {
+        Permission.DRAWER_APPROVE,
+        Permission.PAY_APPROVE,
+        Permission.SETTINGS_MANAGE,
+        Permission.STAFF_MANAGE,
+        Permission.MEALS_RECORD,
+    }
 )
 
 # What each template holds, as Jack chose them for MPC (29 Oct 2026, from spec §6). Each shop's owner can change
 # their own copy later. A new code reaches the Owner's template by itself, and the Manager's unless it joins the
-# owner's own four; any other template, only by a line here. Shops that already have their roles get it through the
+# owner's own; any other template, only by a line here. Shops that already have their roles get it through the
 # data migration the header asks for. Weighing goods as they arrive is everyone's job (Jack): it is on
 # every role, and buying prices stay with whoever completes the delivery.
 ROLE_TEMPLATES: dict[RoleTemplate, frozenset[Permission]] = {
     # Everything, on every side: the shop is theirs.
     RoleTemplate.OWNER: frozenset(Permission),
-    # Runs the shop when the owner is away. Any of the owner's four can still go to one manager as a grant.
+    # Runs the shop when the owner is away. Any of the owner's own can still go to one manager as a grant.
     RoleTemplate.MANAGER: frozenset(Permission) - _OWNERS_OWN,
     # One screen on the Drugs side: writes, takes the money and hands over; bargains down to the floor; sells on
     # credit and takes back a sale; adds customers and suppliers; counts the stock and their own drawer.

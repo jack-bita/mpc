@@ -4,7 +4,7 @@
 The codes are stored in roles and grants (apps/people/models.py), whose columns hold PERMISSION_CODE_MAX_LENGTH
 characters and whose database rules take only codes from the list: so each code must have the shape 02 §5 writes and
 fit the column; every template may name only codes from the list, the Owner's every one of them; and two of Jack's
-choices hold, that everyone weighs what arrives and that the Manager holds all but the owner's four.
+choices hold, that everyone weighs what arrives and that the Manager holds all but the owner's own.
 """
 
 import re
@@ -49,13 +49,18 @@ def test_everyone_may_weigh_what_arrives() -> None:
         assert (Permission.STOCK_RECEIVE in codes) == (template in {RoleTemplate.OWNER, RoleTemplate.MANAGER}), template
 
 
-def test_manager_holds_all_but_the_owners_four() -> None:
+def test_manager_holds_all_but_the_owners_own() -> None:
     # Jack (29 Oct 2026): the owner keeps the day's final approval, the pay, the shop's rules and who works there; a
-    # manager runs everything else when the owner is away.
-    owners_four = {
+    # manager runs everything else when the owner is away. And who types the day's meal money, which comes out of every
+    # worker's pay: the owner gives that key to whoever he chooses (Jack, 15 Nov 2026; WAGE-7).
+    owners_own = {
         Permission.DRAWER_APPROVE,
         Permission.PAY_APPROVE,
         Permission.SETTINGS_MANAGE,
         Permission.STAFF_MANAGE,
+        Permission.MEALS_RECORD,
     }
-    assert ROLE_TEMPLATES[RoleTemplate.MANAGER] == set(Permission) - owners_four
+    assert ROLE_TEMPLATES[RoleTemplate.MANAGER] == set(Permission) - owners_own
+    # Nor does any other template hold it: no new shop starts with a seller who can type everyone's meal money.
+    for template in set(RoleTemplate) - {RoleTemplate.OWNER}:
+        assert Permission.MEALS_RECORD not in ROLE_TEMPLATES[template], template

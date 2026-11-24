@@ -346,7 +346,7 @@ def test_seed_demo_makes_todays_shop_again_without_its_peoples_keys(monkeypatch:
     seed_demo(fresh=True)
     made = the_demo_shop()
     meneja = next(person for person in services.PEOPLE if person.keys)
-    # One of the owner's own four, which no role of the demo holds: only the seed's grant can give it.
+    # One of the owner's own, which no role of the demo holds: only the seed's grant can give it.
     more = replace(meneja, keys=(*meneja.keys, Permission.PAY_APPROVE))
     monkeypatch.setattr(services, "PEOPLE", tuple(more if person is meneja else person for person in services.PEOPLE))
 
@@ -633,7 +633,7 @@ def test_seed_demo_gives_each_side_its_band() -> None:
 
 def test_seed_demo_lets_its_manager_change_the_shops_rules() -> None:
     # The demo has no owner, and a manager alone may not change the shop's rules (settings.manage is one of the
-    # owner's own four, spec §6). Meneja holds that key besides the role, on the whole shop, so a visitor can try
+    # owner's own, spec §6). Meneja holds that key besides the role, on the whole shop, so a visitor can try
     # Badilisha on Mipangilio ya duka (Jack, SHOP-5). Not the Owner's whole role: the demo's people stay as the seed
     # made them, which the Owner's role would let a visitor change (see the test below, PPL-4).
     seed_demo(fresh=True)
