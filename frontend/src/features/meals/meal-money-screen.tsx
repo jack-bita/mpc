@@ -237,7 +237,8 @@ function TheDays({
   return (
     <>
       <p className="flex flex-wrap justify-between gap-x-4 text-lg font-semibold">
-        <span>{totalLabel}</span>
+        {/* The space between is for a screen reader: side by side with none, it may run the two into one word. */}
+        <span>{totalLabel}</span>{" "}
         <span className="tabular-nums">
           {formatMoney(new Decimal(answer.total))}
         </span>

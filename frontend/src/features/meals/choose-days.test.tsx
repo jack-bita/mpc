@@ -103,7 +103,7 @@ describe("choosing the days", () => {
     ).toBeTruthy();
     await waitFor(() =>
       expect(wordsOf(screen.getByText("Jumla").parentElement)).toBe(
-        "JumlaTSh 15,000",
+        "Jumla TSh 15,000",
       ),
     );
     const list = screen.getByRole("list", { name: "Siku ulizochagua" });
