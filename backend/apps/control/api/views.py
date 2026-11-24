@@ -29,8 +29,8 @@ class AttachmentViewSet(ShopViewSet[Attachment]):
     # A photo belongs to the whole shop, not to a side: a worker's attendance is the shop's (ATTACHMENT_KINDS).
     side_field = None
     # Opening a file only shows it, so the route asks only that the person sees the shop's rows, as any read of a
-    # row of the whole shop does. The kind's own key is asked inside the action, on the whole shop: the key depends on
-    # each photo's kind, and a show action may not name a key of its own here (PPL-5's rule, apps/core/api/base.py).
+    # row of the whole shop does. The kind's own key is asked inside the action, on the whole shop, as it depends on
+    # each photo's kind, which the route's list of keys can't say.
     action_permissions: ClassVar[dict[str, Permission | Sight]] = {"file": SEES_THE_SIDE}
 
     @extend_schema(responses=PHOTO_ANSWER)

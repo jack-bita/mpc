@@ -50,6 +50,24 @@ def test_sides_seen_are_those_with_a_code() -> None:
     assert asha.sides_seen() == frozenset({DAWA, VYAKULA})
 
 
+def test_sides_with_a_code_are_those_that_hold_it() -> None:
+    # Asha sells on Dawa and counts stock on Vyakula: of a list shown behind a key of its own, she sees the side where
+    # she holds that very key, not each side she works on (CTRL-4).
+    asha = HeldPermissions(on_side={DAWA: SELLER_ON_DAWA, VYAKULA: frozenset({Permission.STOCK_COUNT})})
+
+    assert asha.sides_with(Permission.SALE_WRITE) == frozenset({DAWA})
+    assert asha.sides_with(Permission.STOCK_COUNT) == frozenset({VYAKULA})
+    assert asha.sides_with(Permission.DEBT_VIEW) == frozenset()
+
+
+def test_a_code_held_on_every_side_is_on_every_side() -> None:
+    # None, as sides_seen answers: every side, one added tomorrow included, whatever is given on a side besides.
+    juma = HeldPermissions(every_side=WEIGH_EVERYWHERE, on_side={DAWA: SELLER_ON_DAWA})
+
+    assert juma.sides_with(Permission.STOCK_WEIGH) is None
+    assert juma.sides_with(Permission.SALE_WRITE) == frozenset({DAWA})
+
+
 def test_a_side_with_no_codes_is_not_seen() -> None:
     # A role whose owner took every code out of it still sits on Juma's side: it opens nothing, so he sees nothing.
     juma = HeldPermissions(on_side={VYAKULA: frozenset()})

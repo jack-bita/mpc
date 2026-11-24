@@ -185,6 +185,14 @@ class HeldPermissions:
         # A side listed with no codes, as a role emptied by its owner leaves, opens nothing, so it isn't seen.
         return frozenset(side for side, codes in self.on_side.items() if codes)
 
+    def sides_with(self, code: str) -> frozenset[uuid.UUID] | None:
+        """The sides on which the person holds this one code, or None for every side, a side added later included. What
+        a list shown behind a key of its own keeps to (CTRL-4): Asha works on Dawa and Vyakula, and sees the debts of
+        the side where she holds debt.view."""
+        if code in self.every_side:
+            return None
+        return frozenset(side for side, codes in self.on_side.items() if code in codes)
+
     def covers(self, other: HeldPermissions) -> bool:
         """True when this person holds everything `other` holds, side by side. The giver rule of 02 §5 for acts that
         hand over a whole person, such as setting their password: whoever does it could then act as them, so it must
