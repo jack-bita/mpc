@@ -31,8 +31,8 @@ remove_attachment_file is the hook for retention rules: it takes the file away a
 why (rule 7). ATT-7's nightly job calls it for clock-in photos 90 days after their pay run is approved (03 §5.13).
 
 A broken rule is a ValidationError with a code (ADR-0032), which the API's error handler
-(apps/core/api/errors.py) will turn into its error shape when the review screen comes (CTRL-4); a bug in the
-calling code, such as a row of another shop, is ShopMismatch, a server error.
+(apps/core/api/errors.py) turns into its error shape for the flags' pages (CTRL-4); a bug in the calling code, such as a
+row of another shop, is ShopMismatch, a server error.
 
 `control` is layer 0 and may import only `core` (ADR-0035), so the services can't name a Side or a
 StaffMember. The caller passes in what they need, as ADR-0035 says: the subject and the side as rows
@@ -50,6 +50,7 @@ from contextlib import contextmanager, nullcontext
 from decimal import Decimal
 from typing import Any
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import connection, models, transaction
@@ -58,6 +59,8 @@ from django.utils import timezone
 
 from apps.control.models import (
     ATTACHMENT_KINDS,
+    CLOSED,
+    DEMO_NOTES,
     LARGEST_FILE,
     Attachment,
     AttachmentKind,
@@ -72,18 +75,16 @@ from apps.control.models import (
     FlagStep,
     attachment_file_name,
 )
+from apps.control.selectors import flag_names
 from apps.core.acting import acting_as, current_device_id
 from apps.core.links import link_type_of
 from apps.core.models import ShopScoped
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop_context
 
-# A flag in one of these takes no more notes: it is closed for good.
-_CLOSED = {FlagStatus.RESOLVED, FlagStatus.DISMISSED}
-
 # The kinds the system closes by itself, each with the code of the note it writes (Jack, SYNC-5; 02 v1.22): a
 # missing-number flag, once every record it waited for has come. A code, not words: a person's note is kept as they
-# wrote it, in their language, but the system has no language of its own, so the review screen shows the code's
-# sentence in the reader's (ADR-0040; the sentences come with that screen, CTRL-4). Every other kind waits for a person.
+# wrote it, in their language, but the system has no language of its own, so a flag's page shows the code's sentence in
+# the reader's (ADR-0040; `flags.systemNote` in the word books, CTRL-4). Every other kind waits for a person.
 SYSTEM_NOTES = {FlagKind.DEVICE_GAP: "flag.device_gap_filled"}
 
 
@@ -224,7 +225,7 @@ def resolve_flag_by_system(flag: Flag) -> Flag:
         # Read again and locked, as a person's step is (_step): a manager closing it at this moment takes turns with
         # the system, and the second finds it closed.
         fresh = Flag.objects.select_for_update().get(pk=flag.pk)
-        if fresh.status in _CLOSED:
+        if fresh.status in CLOSED:
             return fresh
         # No `created_by`: the system acted. The note is kept for good, like every note (ADR-0021), so the owner sees
         # why the flag closed, and when.
@@ -478,6 +479,8 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
     text = text.strip()
     if not text:
         raise ValidationError({"text": ValidationError("A note is required.", code="flag.note_required")})
+    if settings.DEMO_SEED and text not in DEMO_NOTES:
+        raise ValidationError({"text": ValidationError("On the demo, pick a ready note.", code="demo.ready_reasons")})
     with transaction.atomic():
         # Read again and locked until the transaction ends (SELECT ... FOR UPDATE). Two managers closing the same flag
         # at once take turns, and the second sees that the first has closed it, not the open copy still on their screen.
@@ -494,17 +497,19 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
             sent_before = FlagNote.objects.filter(pk=note_id).first()
             if sent_before is not None:
                 if sent_before.flag_id != fresh.pk:
-                    # Not this step sent again, but another flag's note.
-                    raise ValidationError("This id is already another flag's note.", code="id.taken")
+                    # Not this step sent again, but another flag's note. Filed under the id, as another shop's note's
+                    # is (the route): the two answers are one, so neither tells whose it is (03 §5.4).
+                    raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")})
                 return fresh
         # The status only moves forward: every step leads to explained or to a final status, and a closed
         # flag takes none.
-        if fresh.status in _CLOSED:
+        if fresh.status in CLOSED:
             raise ValidationError("This flag is closed.", code="flag.closed")
         # A person the flag names may explain it, but never decide it (Jack, at CTRL-1's review; 02 v1.8):
         # Asha closing her own drawer's shortage with "no problem" would hide it from the owner. Someone else
-        # closes it; who may is `flag.review` on the flag's side, which the review screen checks (CTRL-4).
-        if step is not FlagStep.EXPLAINED and FlagPerson.objects.filter(flag=fresh, staff_id=by.staff_id).exists():
+        # closes it; who may is `flag.review` on the flag's side, which the office's route checks (CTRL-4). By the
+        # person: hired again, she has a new job, and the flag that names her old one is still hers (flag_names).
+        if step is not FlagStep.EXPLAINED and flag_names(fresh, by):
             raise ValidationError("A person this flag names can't close it.", code="flag.own_flag")
         written = FlagNote(shop_id=fresh.shop_id, flag=fresh, step=step, text=text, created_by_id=by.staff_id)
         if note_id is not None:

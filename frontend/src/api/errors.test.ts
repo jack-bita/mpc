@@ -129,6 +129,11 @@ const CODES_THE_API_SENDS = [
   "tap.not_working_day",
   "tap.in_future",
   "tap.reason_missing",
+  // Explaining or closing a flag (CTRL-4, apps/control/services.py): no words; one closed already; one that names the
+  // person closing it. On the demo, a note that isn't a ready one is demo.ready_reasons above.
+  "flag.note_required",
+  "flag.closed",
+  "flag.own_flag",
   // A photo's file, sent by a laptop after the record that named it (CTRL-3): an id this shop doesn't hold, or whose
   // record hasn't arrived yet; over 1 MB; not a JPEG or a WebP by its first bytes; or not the file its record named.
   "attachment.not_found",

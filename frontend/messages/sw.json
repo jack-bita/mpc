@@ -909,6 +909,121 @@
     },
     "save": "Hifadhi uamuzi"
   },
+  "flags": {
+    "title": "Tofauti",
+    "intro": "Mambo ambayo mfumo umeyaona, na mtu anapaswa kuyaangalia.",
+    "tabs": {
+      "waiting": "Zinasubiri",
+      "waitingCount": "Zinasubiri ({count})",
+      "closed": "Zilizofungwa"
+    },
+    "none": {
+      "waiting": "Hakuna tofauti inayosubiri.",
+      "closed": "Bado hakuna tofauti iliyofungwa.",
+      "filtered": "Hakuna tofauti kwa ulichochuja."
+    },
+    "more": "Onyesha zaidi",
+    "wholeShop": "Duka zima",
+    "details": "{who} · {where} · {when}",
+    "detailsNobody": "{where} · {when}",
+    "day": "{weekday} {date}",
+    "kind": {
+      "unverified_time": "Saa yake haiaminiki",
+      "suspended_staff_activity": "Alisimamishwa au aliondoka, lakini alibonyeza",
+      "device_gap": "Kumbukumbu zinakosekana",
+      "permission_break": "Hakuwa na ruhusa",
+      "invalid_document": "Kumbukumbu haikukubalika",
+      "another": "Tofauti nyingine"
+    },
+    "status": {
+      "open": "Inasubiri",
+      "explained": "Imeelezwa",
+      "resolved": "Imetatuliwa",
+      "dismissed": "Si tatizo"
+    },
+    "filter": {
+      "title": "Chuja",
+      "side": "Upande",
+      "everySide": "Pande zote",
+      "kind": "Aina",
+      "everyKind": "Aina zote",
+      "show": "Onyesha",
+      "on": "Umechuja: {what}",
+      "both": "{side} · {kind}",
+      "clear": "Onyesha zote"
+    },
+    "moment": "{weekday} {date}, saa {time}",
+    "tapKind": {
+      "in": "Ingia kazini",
+      "out": "Toka kazini"
+    },
+    "page": {
+      "noFlag": "Hakuna tofauti iliyochaguliwa.",
+      "why": "Kwa nini: {why}",
+      "people": "{count, plural, one {Anayetajwa} other {Wanaotajwa}}",
+      "side": "Upande",
+      "device": "Kompyuta",
+      "broughtFrom": "Iliandikwa kwenye",
+      "loadedBy": "Faili lilipakiwa na",
+      "madeAt": "Lini (kwa saa ya kompyuta)",
+      "raisedAt": "Mfumo uliona",
+      "status": "Hali",
+      "openDay": "Fungua siku yake",
+      "notes": "Maelezo ({count})",
+      "noNotes": "Bado hakuna maelezo.",
+      "noteBy": "{step} · {by} · {when}",
+      "system": "Mfumo"
+    },
+    "what": {
+      "someone": "Mtu",
+      "unverifiedTap": "{name} alibonyeza {kind} kwenye kompyuta ambayo saa yake haikuaminika, kwa hiyo saa halisi haijulikani.",
+      "unverifiedTime": "{name} aliandika kumbukumbu kwenye kompyuta ambayo saa yake haikuaminika, kwa hiyo saa halisi haijulikani.",
+      "suspendedTap": "{name} alibonyeza {kind} akiwa amesimamishwa, au baada ya kuondoka kazini.",
+      "suspendedRecord": "{name} aliandika kumbukumbu akiwa amesimamishwa, au baada ya kuondoka kazini.",
+      "suspendedLoaded": "{name} alipakia faili la kumbukumbu akiwa amesimamishwa, au baada ya kuondoka kazini.",
+      "permissionRecord": "{name} aliandika kumbukumbu ambayo hana ruhusa ya kuiandika.",
+      "permissionLoaded": "{name} alipakia faili la kumbukumbu bila ruhusa.",
+      "recordsMissing": "Kompyuta hii ilituma kumbukumbu namba {actual}, lakini seva ilisubiri namba {expected}. Zinazokosekana: {missing}.",
+      "numbersWentBack": "Namba za kumbukumbu za kompyuta hii zimerudi nyuma: seva ilisubiri namba {expected}, ikaja namba {actual}.",
+      "recordRefused": "Seva haikuweza kuhifadhi kumbukumbu iliyotumwa na kompyuta hii.",
+      "another": "Mfumo umeona tofauti ambayo toleo hili la programu halijui kuieleza."
+    },
+    "systemNote": {
+      "deviceGapFilled": "Kumbukumbu zote zilizokosekana zimefika."
+    },
+    "act": {
+      "text": "Maelezo",
+      "textHint": "Itahifadhiwa pamoja na jina lako na muda.",
+      "readyHint": "Kwenye demo, chagua maelezo yaliyo tayari.",
+      "namesYou": "Tofauti hii inakutaja, kwa hiyo mtu mwingine ndiye anayeifunga.",
+      "explain": {
+        "button": "Eleza",
+        "title": "Eleza tofauti hii",
+        "about": "Andika kwa nini ilitokea. Tofauti itaendelea kusubiri.",
+        "save": "Hifadhi maelezo",
+        "done": "Maelezo yamehifadhiwa."
+      },
+      "resolve": {
+        "button": "Imetatuliwa",
+        "title": "Imetatuliwa",
+        "about": "Ilikuwa tatizo la kweli, na limeshughulikiwa. Ikifungwa, tofauti hii haifunguliwi tena.",
+        "save": "Funga tofauti",
+        "done": "Tofauti imefungwa: imetatuliwa."
+      },
+      "dismiss": {
+        "button": "Si tatizo",
+        "title": "Si tatizo",
+        "about": "Hakukuwa na tatizo. Ikifungwa, tofauti hii haifunguliwi tena.",
+        "save": "Funga tofauti",
+        "done": "Tofauti imefungwa: si tatizo."
+      }
+    },
+    "ready": {
+      "askedThem": "Nimewauliza wahusika.",
+      "checkedLaptop": "Nimeikagua kompyuta.",
+      "honestMistake": "Walikosea, si kwa makusudi."
+    }
+  },
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",
     "clock": "{name}: {action}, saa {time}",
@@ -921,6 +1036,7 @@
       "typeUnknown": "Seva haipokei aina hii ya kumbukumbu.",
       "versionUnknown": "Kumbukumbu hii ni ya toleo jingine la programu.",
       "makerUnknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
+      "shapeWrong": "Baadhi ya taarifa za kumbukumbu hii si sahihi.",
       "idTaken": "Seva ina kumbukumbu nyingine yenye namba hii ya utambulisho.",
       "carriedFromUnknown": "Kumbukumbu hii inasema imetoka kwenye kompyuta ambayo si nyingine ya duka hili.",
       "loadedByUnknown": "Aliyepakia faili la kumbukumbu hii hafanyi kazi katika duka hili.",
@@ -1250,6 +1366,11 @@
       "not_working_day": "Siku hii si siku ya kazi ya mfanyakazi huyu.",
       "in_future": "Saa hii bado haijafika.",
       "reason_missing": "Andika sababu."
+    },
+    "flag": {
+      "note_required": "Andika maelezo.",
+      "closed": "Tofauti hii imeshafungwa.",
+      "own_flag": "Tofauti hii inakutaja, kwa hiyo mtu mwingine ndiye anayeifunga."
     },
     "attachment": {
       "not_found": "Seva haina picha hii.",

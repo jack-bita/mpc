@@ -79,6 +79,7 @@ from apps.staffpay.calculations import (
     Tap,
     day_choices,
     shop_minute,
+    tap_day,
     work_out_day,
 )
 from apps.staffpay.models import (
@@ -340,17 +341,11 @@ def _falls_between(first: dt.date, last: dt.date, zone: ZoneInfo) -> Q:
 def _where_it_falls(
     trusted_time: dt.datetime | None, client_time: dt.datetime | None, zone: ZoneInfo
 ) -> tuple[dt.date, dt.time | None]:
-    # A tap's date on the shop's calendar, by its trusted time, or by the laptop's for one with none; and its minute on
-    # the shop's clock, its seconds dropped, as the counter showed it (shop_minute): 07:35:40 is 07:35, on time. No
-    # minute for a tap with no trusted time, which sends its day to review (ATT-4). A tap entered in the office has no
-    # laptop time, but always its trusted one (ATT-13); a laptop's always has its own: the table's rule
-    # (from_a_laptop_or_the_office) holds one of the two there, so a tap with neither is a bug, and fails loudly.
-    moment = trusted_time if trusted_time is not None else client_time
-    if moment is None:
-        raise ValueError("A tap with neither a trusted time nor a laptop's: the table's rules forbid it.")
-    day = moment.astimezone(zone).date()
+    # A tap's date on the shop's calendar (tap_day); and its minute on the shop's clock, its seconds dropped, as the
+    # counter showed it (shop_minute): 07:35:40 is 07:35, on time. No minute for a tap with no trusted time, which sends
+    # its day to review (ATT-4).
     minute = shop_minute(trusted_time, zone) if trusted_time is not None else None
-    return day, minute
+    return tap_day(trusted_time, client_time, zone), minute
 
 
 def _doubt_questions(shop: Shop) -> tuple[Exists, Exists]:

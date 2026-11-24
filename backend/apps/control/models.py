@@ -76,6 +76,10 @@ class FlagStatus(models.TextChoices):
     DISMISSED = "dismissed", "Dismissed"
 
 
+# Final for good: a flag in one of these takes no more notes. Any other waits for a person.
+CLOSED = frozenset({FlagStatus.RESOLVED, FlagStatus.DISMISSED})
+
+
 class FlagStep(models.TextChoices):
     # What a note did to its flag. Each value is also the status the flag has after it: a note never opens
     # a flag, only raise_flag does.
@@ -118,8 +122,7 @@ class Flag(ShopScoped):
     # The side the difference belongs to, so each side's people see their own flags (X1). Empty for one of
     # the whole shop. T1: raise_flag checks it belongs to the flag's shop. Named, not imported (ADR-0035).
     # PROTECT: nothing is deleted (rule 7). related_name="+": a side's flags are read through Flag.objects.
-    # db_index=False: indexes lead with `shop` (03 §9), and the review screen's own index comes with it
-    # (CTRL-4).
+    # db_index=False: indexes lead with `shop` (03 §9), as the list's does (Meta).
     side = models.ForeignKey(
         "shops.Side", on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
     )
@@ -164,6 +167,11 @@ class Flag(ShopScoped):
                 violation_error_code="flag.numbers_unpaired",
             ),
         ]
+        indexes = [
+            # The list's question (CTRL-4): a shop's flags, newest found first, whichever tab, a page at a time. Read
+            # from its end, so in CursorPage's order. Leads with `shop` (03 §9).
+            models.Index(fields=["shop", "created_at", "id"], name="control_flag_by_time"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.kind} ({self.status})"
@@ -199,6 +207,13 @@ class FlagPerson(AppendOnly):
                 violation_error_message="This flag already names this person.",
             ),
         ]
+
+
+# On the demo every visitor logs in as Meneja (OPS-13): words one visitor typed would show to every visitor after them,
+# until the morning's seed makes the shop again. So a note there is one of three ready ones the sheet offers, kept as
+# its code, which the page says in words: *Nimewauliza wahusika*, *Nimeikagua kompyuta*, *Walikosea, si kwa makusudi*;
+# as a day's reason is (Jack, ATT-6: A). Visitors still try every action.
+DEMO_NOTES = ("asked_them", "checked_laptop", "honest_mistake")
 
 
 class FlagNote(AppendOnly):

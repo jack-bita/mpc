@@ -18,10 +18,12 @@ An office route builds on ShopViewSet: `class SideViewSet(ShopViewSet[Side])`.
   needs: a permission code, or SEES_THE_SIDE for an action that only shows rows. An action it doesn't name is
   refused with a server error before it starts, so no action is ever open by forgetting. The person a login names
   hands over their keys once a visit (a Person, apps/core/permissions.py), since `core` may not import `people`.
-  visible_sides(): the sides the person holds any key on; every read the route makes keeps to them, so a list
-  never shows the others and their rows are "not found". check_side_permission(): may the person do this action on
-  this side, asked for each row edited or made one at a time, and on the whole shop for a change to a whole list.
-  A person who is suspended, or has left, holds no key, so they see nothing and do nothing.
+  visible_sides(): the sides whose rows the person sees; every read the route makes keeps to them, so a list never
+  shows the others and their rows are "not found". Those they hold any key on; or, on a route that shows its rows
+  behind a key of their own, as the flags' does (CTRL-4), those they hold that key on, and the whole shop's rows only
+  with it on every side. check_side_permission(): may the person do this action on this side, asked for each row edited
+  or made one at a time, and on the whole shop for a change to a whole list. A person who is suspended, or has left,
+  holds no key, so they see nothing and do nothing.
 - Creates: a route that makes rows adds CreateOnceMixin. The client sends the new row's id (ADR-0007), so
   the same request sent twice makes one row, and an id already used in another shop is refused.
 - Edits: a route that changes rows adds EditMixin. The client sends the `version` it read, so an edit made
@@ -136,11 +138,16 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         asks_for_itself = self.action == "create" and getattr(type(self), "create", None) is CreateOnceMixin.create
         if request.method in SAFE_METHODS:
             # Showing rows needs only to see their sides, which every read of the route keeps to (get_queryset). A show
-            # action behind a key of its own, which only a route of the whole shop's rows may name (permission_needed),
-            # asks it on the whole shop, before any row is read, for the list and the one row alike: the shop's workers
-            # are for whoever manages them, not for everyone who works there (PPL-4).
+            # action behind a key of its own asks it before any row is read, for the list and the one row alike. Rows of
+            # the whole shop ask it on the whole shop: the shop's workers are for whoever manages them, not for everyone
+            # who works there (PPL-4). A side's rows keep to the sides where it is held, so here only someone who holds
+            # it nowhere is refused: an empty list would tell them that nothing waits (CTRL-4).
             if needed is not SEES_THE_SIDE:
-                self.check_side_permission(request, None)
+                if self.side_field is None:
+                    self.check_side_permission(request, None)
+                elif self.held.sides_with(needed) == frozenset():
+                    # English for the logs; the screens translate the code (ADR-0032).
+                    raise exceptions.PermissionDenied(f"This person may not {needed} on any side.")
             return
         if lookup in self.kwargs:
             # A change to one row: the row is found and checked now, with its own side, before the action runs
@@ -162,24 +169,26 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
             raise ImproperlyConfigured(
                 f"{type(self).__name__} names no permission for its action {self.action!r} (action_permissions)."
             )
-        if needed is not SEES_THE_SIDE and self.request.method in SAFE_METHODS and self.side_field is not None:
-            # A show action behind a key of its own, on a route of a side's rows, as debts (debt.view) and reports
-            # (report.view) will be. Nothing yet keeps its rows to the sides where that key is held: it would show
-            # every side the person sees. The first card that shows a side's rows behind a key builds that (Jack,
-            # PPL-5; CAT-2's note). A route of the whole shop's rows (side_field None) has no side to keep to: it may
-            # name a key, which initial() asks on the whole shop, as the shop's workers do (PPL-4).
-            raise ImproperlyConfigured(
-                f"{type(self).__name__}.{self.action} shows rows behind {needed}: "
-                "a show action with a key of its own waits for the card that first needs one (PPL-5)."
-            )
         if needed is SEES_THE_SIDE and self.request.method not in SAFE_METHODS:
-            # The mirror rule: a change (a create, an edit, a void) always needs a key of its own. Seeing a side is not
-            # leave to change it: named so, the change would be open to anyone who works there, a Worker included.
+            # A change (a create, an edit, a void) always needs a key of its own. Seeing a side is not leave to change
+            # it: named so, the change would be open to anyone who works there, a Worker included.
             raise ImproperlyConfigured(
                 f"{type(self).__name__}.{self.action} changes rows and names no key for it: "
                 "a change needs a permission code of its own (PPL-5)."
             )
         return needed
+
+    def read_key(self) -> Permission | None:
+        """The key this visit's rows are shown behind, on a route of sides' rows that shows them behind one (CTRL-4):
+        None when seeing a row's side is enough. A read's own; for a change, the key of the route's read of one row
+        (retrieve), else of its list, so a row the person may not be shown is "not found" for a change too, before the
+        change's own key is asked: a 403 would tell them it exists (03 §5.4)."""
+        if self.side_field is None:
+            # The whole shop's rows have no side to keep to: initial() asks a read's key on the whole shop (PPL-4).
+            return None
+        read = self.action_permissions.get("retrieve", self.action_permissions.get("list", SEES_THE_SIDE))
+        needed = self.permission_needed() if self.request.method in SAFE_METHODS else read
+        return None if isinstance(needed, Sight) else needed
 
     @cached_property
     def held(self) -> HeldPermissions:
@@ -221,12 +230,14 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
             # it, and whoever sees none, such as a person suspended, sees none of those rows either.
             return rows if sides else rows.none()
         seen = models.Q(**{f"{self.side_field}__in": sides})
-        if sides and self.side_field != "pk":
+        if sides and self.side_field != "pk" and self.read_key() is None:
             # A table whose side link may be empty holds rows of the whole shop beside rows of a side, as a rule's rows
             # do (a late fine has no side, a cash tolerance has one, SHOP-3). The same rule as above holds for them:
             # whoever sees a side sees them. Asked for in so many words, because `side IN (…)` never matches an empty
             # link: SQL's NULL equals nothing, so those rows would vanish for anyone whose keys cover only some sides.
             # On a link that can't be empty, the extra test finds nothing. A route of sides themselves ("pk") has none.
+            # Behind a key of their own, the whole shop's rows need it on every side, as any act on them does (02 §5):
+            # someone who reviews Dawa's flags alone sees none of the whole shop's (CTRL-4).
             seen |= models.Q(**{f"{self.side_field}__isnull": True})
         return rows.filter(seen)
 
@@ -244,8 +255,10 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
 
     def visible_sides(self, request: Request) -> Collection[uuid.UUID] | None:
         """The sides whose rows the person acting may see: those they hold at least one key on, or None for all of
-        them, a side added later included, when a key of theirs covers every side (02 §5, X1)."""
-        return self.held.sides_seen()
+        them, a side added later included, when a key of theirs covers every side (02 §5, X1). Behind a key of the
+        rows' own (read_key), that key alone counts."""
+        key = self.read_key()
+        return self.held.sides_seen() if key is None else self.held.sides_with(key)
 
     def side_of(self, row: M) -> uuid.UUID | None:
         """The side a row belongs to, for the per-side check, found by `side_field`: None for a row of the

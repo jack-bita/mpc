@@ -10,8 +10,9 @@ so, while shop A has none; and a card that adds a route needing query parameters
 sends to every device route (sweep_device_clients, AUTH-2); dated rules, which the bootstrap sends (SYNC-2); the
 days each shop is closed, which the closures route lists (ATT-8); a worker's photo with its file, whose id the sweep
 sends the photo routes as shop B (CTRL-3); a worker's pay rate, which the pay rates route lists, asked about shop
-A's worker (WAGE-1); and a worker paid by the day with their days in the book, whom the month page lists (ATT-5). The
-demo seed (DATA-1) could fill the shops later.
+A's worker (WAGE-1); a worker paid by the day with their days in the book, whom the month page lists (ATT-5); and a
+flag about a record a laptop sent, with a note, which *Tofauti* lists (CTRL-4). The demo seed (DATA-1) could fill the
+shops later.
 
 The sweep knows shop A's rows by their ids, and by the texts and amounts only shop A holds, so that a leak
 with no ids, like a report of names and totals, is found too. So give shop A values of its own: names and
@@ -33,19 +34,20 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.control.models import AttachmentKind, AttachmentType
-from apps.control.services import expect_attachment, receive_attachment_file
+from apps.control.models import AttachmentKind, AttachmentType, FlagKind
+from apps.control.services import expect_attachment, explain_flag, raise_flag, receive_attachment_file
 from apps.core.permissions import RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON, CASH_TOLERANCE, LATE_FINE
 from apps.core.tenancy import shop_context
 from apps.people.device_keys import DEVICE_KEY_COOKIE
-from apps.people.models import StaffMember, User
+from apps.people.models import Device, StaffMember, User
 from apps.people.services import Outage, add_staff, confirm_pairing, record_outages, set_pin, start_pairing
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side
 from apps.staffpay.models import AttendanceEvent, ClockKind, NoPhoto, TimeCheck
 from apps.staffpay.services import set_pay_rate, work_out_days
+from apps.sync.models import PushedDocument, PushedStatus
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -59,12 +61,14 @@ def sweep_shops(
     sweep_attachments: tuple[Shop, Shop],
     sweep_pay_rates: tuple[Shop, Shop],
     sweep_attendance: tuple[Shop, Shop],
+    sweep_flags: tuple[Shop, Shop],
 ) -> tuple[Shop, Shop]:
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
     # sides, a paired device each, which the office device list shows (AUTH-5), with an offline period the health page
     # shows (SYNC-14), dated rules, which the bootstrap sends (SYNC-2), days closed, which the closures route lists
     # (ATT-8), a photo with its file, which the photo routes are asked about (CTRL-3), a worker's pay rate, which
-    # the pay rates route lists (WAGE-1), and a worker's days in the book, which the month page lists (ATT-5).
+    # the pay rates route lists (WAGE-1), a worker's days in the book, which the month page lists (ATT-5), and a flag
+    # with its note, which the flags' page lists (CTRL-4).
     return sweep_sides
 
 
@@ -220,6 +224,42 @@ def sweep_device_keys(
             record_outages(device, [Outage(id=uuid.uuid7(), started_at=went, ended_at=went + timedelta(minutes=10))])
         keys.append(asked.key)
     return keys[0], keys[1]
+
+
+@pytest.fixture
+def sweep_flags(
+    sweep_sides: tuple[Shop, Shop],
+    sweep_device_keys: tuple[str, str],
+    staff_a: StaffMember,
+    staff_b: StaffMember,
+) -> tuple[Shop, Shop]:
+    # Each shop's laptop (sweep_device_keys) sent a record the server flagged, naming its worker, who said why in words
+    # only that shop holds: *Tofauti* lists it, behind flag.review, which each shop's owner holds (CTRL-4). The record's
+    # line is written past the push, whose own checks are its own to test; the flag and its note, through the services.
+    for shop, staff, words in (
+        (sweep_sides[0], staff_a, "Maelezo ya Mfano"),
+        (sweep_sides[1], staff_b, "Maelezo ya Jirani"),
+    ):
+        with shop_context(shop):
+            laptop = Device.objects.get()
+            now = timezone.now()
+            line = PushedDocument.objects.create(
+                shop=shop,
+                device=laptop,
+                device_seq=1,
+                client_time=now,
+                received_at=now,
+                document_id=uuid.uuid7(),
+                type="clock",
+                schema_version=2,
+                status=PushedStatus.ACCEPTED,
+                created_by=staff,
+            )
+            flag = raise_flag(
+                kind=FlagKind.SUSPENDED_STAFF_ACTIVITY, subject=line, people=[staff], side=laptop.home_side, by=None
+            )
+            explain_flag(flag, text=words, by=staff)
+    return sweep_sides
 
 
 @pytest.fixture

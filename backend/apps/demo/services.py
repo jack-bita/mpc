@@ -21,6 +21,11 @@ rates start that far back, and the demo's laptop, Laptop ya Dawa, sends three we
 as a laptop back online does: most days on time, a few late with their fine, a half day, an absent day, and one day to
 decide (DemoPerson.odd_days). The minutes come from a fixed random seed, so every reset makes the same taps.
 
+And three flags for Meneja's Tofauti (CTRL-4), made by the same laptop's pushes: one of its taps is sent last, after the
+later ones, so its missing number is flagged and then closed by the system, as a late record's is; and after the last
+tap it sends a record the server doesn't know, one number too far, so a missing number and a refused record both wait.
+None is about a tap's time or its worker, so none sends a day to review.
+
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
 the tests log in as these people, with the logins written again in frontend/e2e/pair-and-pin-login.spec.ts. Change
@@ -40,9 +45,9 @@ safe only on a database that holds nothing but demo data, so the seed refuses, b
 Once a day, not on every start (DATA-1's plan, 8 Nov 2026): the free demo sleeps after 15 minutes with no visitor,
 and every wake-up runs its start again. A visitor back from a break should find the PIN screen with their work still
 there (the idle lock, UI-4), so a start keeps a demo shop made today, in the shop's own time, and makes it again only
-when it was made on an earlier day, or lacks a rule, a closure, a person's extra key or rate, or the taps of the days
-before today this seed sets, as a demo an older seed made that morning does on a deploy's day (ATT-2, ATT-8, #275,
-WAGE-1, DATA-8). `fresh=True` makes it again whatever its day.
+when it was made on an earlier day, or lacks a rule, a closure, a person's extra key or rate, the taps of the days
+before today, or the flags this seed sets, as a demo an older seed made that morning does on a deploy's day (ATT-2,
+ATT-8, #275, WAGE-1, DATA-8, CTRL-4). `fresh=True` makes it again whatever its day.
 
 Made through the services, as a real shop is set up (set_up_shop, add_staff, assign_role, set_pin), never by writing
 rows: the demo can't hold anything a real shop couldn't, and a service that changes its rules changes the demo too.
@@ -96,8 +101,8 @@ from apps.shops.services import NewSide, add_closure, set_setting, switch_side
 from apps.staffpay.models import AttendanceEvent, ClockKind, NoPhoto, PayRate
 from apps.staffpay.services import SUNDAY, set_pay_rate
 from apps.sync.api.serializers import MOST_DOCUMENTS
-from apps.sync.models import PushedStatus
-from apps.sync.push import Sent, push
+from apps.sync.models import PushedDocument, PushedStatus
+from apps.sync.push import Answer, Sent, push
 
 SHOP_NAME = "Duka la Mfano"
 SHOP_CODE = "DEMO"
@@ -217,6 +222,9 @@ HISTORY_DAYS = 21
 # side. Anyone working at the shop may clock in on it (Jack, ATT-1), Baraka of Vyakula too.
 DEMO_LAPTOP_NAME = "Laptop ya Dawa"
 DEMO_LAPTOP_SIDE = "D"
+# The type of the record the demo's laptop sends and the server refuses (CTRL-4): a name no card's documents will take,
+# which is checked as it is sent (_send_a_refused_record).
+DEMO_UNKNOWN_TYPE = "demo_unknown"
 
 # The seed of the random minutes of an ordinary day: a fixed one, so every reset makes the same taps (DATA-1's first
 # box, the same shop every time). Any number does; changing it changes every minute.
@@ -316,6 +324,7 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
         and _holds_its_keys(shop)
         and _holds_its_rates(shop)
         and _holds_its_taps(shop)
+        and _holds_its_flags(shop)
     ):
         return Seeded.KEPT
     try:
@@ -449,6 +458,17 @@ def _holds_its_taps(shop: Shop) -> bool:
     return held >= len(_demo_taps(today, zone))
 
 
+def _holds_its_flags(shop: Shop) -> bool:
+    # Whether today's demo holds the flags this seed raises (CTRL-4): as for its taps, a deploy whose seed raises them
+    # must not keep a demo an older seed made that morning without them. Known by the refused record's line, sent last,
+    # in the same transaction as the rest, of a type nothing else sends; a line is never deleted, whatever a visitor
+    # does with its flags. A seed with no days before today sends no record, so it raises none.
+    if not _demo_taps(shop_today(shop), ZoneInfo(shop.timezone)):
+        return True
+    with shop_context(shop):
+        return PushedDocument.objects.filter(shop=shop, type=DEMO_UNKNOWN_TYPE).exists()
+
+
 def _holds_its_closures(shop: Shop) -> bool:
     # Whether today's demo holds every closure this seed adds, as the system added them: as for its rules, a deploy
     # whose seed adds a closure must not keep a demo made that morning without it (ATT-8). Known by its first day and
@@ -475,7 +495,9 @@ def _make_the_shop() -> Shop:
         # transaction: a refused tap undoes the whole reset.
         manager = next(people[person.display_name] for person in PEOPLE if person.email == MANAGER_EMAIL)
         laptop = _demo_laptop(manager, Side.objects.get(code=DEMO_LAPTOP_SIDE))
-        _send_the_taps(laptop, people, _demo_taps(today, ZoneInfo(shop.timezone)), today)
+        taps = _demo_taps(today, ZoneInfo(shop.timezone))
+        _send_the_taps(laptop, people, taps, today)
+        _send_a_refused_record(laptop, people, taps)
     return shop
 
 
@@ -606,18 +628,16 @@ def _send_the_taps(laptop: Device, people: dict[str, StaffMember], taps: list[_D
         )
         for number, tap in enumerate(taps, start=1)
     ]
-    for start in range(0, len(documents), MOST_DOCUMENTS):
-        batch = documents[start : start + MOST_DOCUMENTS]
-        now = timezone.now()
-        answers = push(
-            laptop,
-            batch,
-            received_at=now,
-            sent_at=now,
-            unsent_count=len(documents) - start - len(batch),
-            app_version=settings.APP_VERSION,
-            outages=[],
-        )
+    # One tap waits on the laptop until the others are in, so its number is missing, then late (CTRL-4): the flag the
+    # server raises for it closes itself as it comes (SYNC-5). The middle one, whose neighbours are sure to be taps too;
+    # its time is later than the one before it, as each record's is, so no sign says the laptop's clock moved.
+    late = documents[len(documents) // 2 : len(documents) // 2 + 1]
+    in_order = [document for document in documents if document not in late]
+    batches = [in_order[start : start + MOST_DOCUMENTS] for start in range(0, len(in_order), MOST_DOCUMENTS)]
+    unsent = len(documents)
+    for batch in [*batches, *([late] if late else [])]:
+        unsent -= len(batch)
+        answers = _push_from_the_demo_laptop(laptop, batch, unsent_count=unsent)
         # The push never raises for a tap it refuses: it answers invalid, and goes on (03 §6.3). Nor for one it flags:
         # that one is accepted (accept, then flag). The seed's taps are its own, timed by a right clock, so either is a
         # bug in this seed, and a flag would hand a visitor a day to decide nobody made. So it stops the reset, and its
@@ -629,6 +649,47 @@ def _send_the_taps(laptop: Device, people: dict[str, StaffMember], taps: list[_D
         ]
         if wrong:
             raise RuntimeError(f"The push refused or flagged the demo laptop's taps: {wrong}")
+
+
+def _send_a_refused_record(laptop: Device, people: dict[str, StaffMember], taps: list[_DemoTap]) -> None:
+    # The two flags that wait on the demo's Tofauti (CTRL-4): after the last tap, five minutes later, the laptop sends a
+    # record of Asha's of a type the server doesn't know, as a laptop whose app is newer than the server's would, so it
+    # is set aside (invalid_document); and one number too far, so the number between them is missing (device_gap).
+    if not taps:
+        return
+    seller = next(person for person in PEOPLE if person.side == DEMO_LAPTOP_SIDE)
+    (answer,) = _push_from_the_demo_laptop(
+        laptop,
+        [
+            Sent(
+                id=uuid.uuid7(),
+                type=DEMO_UNKNOWN_TYPE,
+                schema_version=1,
+                device_seq=len(taps) + 2,
+                client_time=taps[-1].at + timedelta(minutes=5),
+                created_by=people[seller.display_name].pk,
+                payload={},
+            )
+        ],
+        unsent_count=0,
+    )
+    # A type a later card's documents take would be saved, or refused for its shape: not what the page is to show.
+    if (answer.status, answer.code) != (PushedStatus.INVALID, "document.type_unknown"):
+        raise RuntimeError(f"The push knows the demo laptop's unknown record: {answer.status} {answer.code}")
+
+
+def _push_from_the_demo_laptop(laptop: Device, documents: list[Sent], *, unsent_count: int) -> list[Answer]:
+    # One push of the demo's laptop, by a right clock: what it sends now, sent and received at the server's now.
+    now = timezone.now()
+    return push(
+        laptop,
+        documents,
+        received_at=now,
+        sent_at=now,
+        unsent_count=unsent_count,
+        app_version=settings.APP_VERSION,
+        outages=[],
+    )
 
 
 @dataclass(frozen=True)

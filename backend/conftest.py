@@ -18,8 +18,9 @@ from rest_framework.test import APIClient
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, Role, RoleAssignment, StaffMember, User
-from apps.people.services import add_staff, assign_role, copy_role_templates
+from apps.people.services import add_staff, assign_role, copy_role_templates, hire_again, mark_left
 from apps.shops.models import Shop, Side
+from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
 
 # Fake data only: the repo is public (03 §10).
@@ -67,6 +68,17 @@ def staff_a2(shop_a: Shop) -> StaffMember:
     user = User.objects.create_user(full_name="Staff Demo Two")
     with shop_context(shop_a):
         return add_staff(shop=shop_a, user=user, display_name="Staff A2", by=None)
+
+
+@pytest.fixture
+def staff_a_again(shop_a: Shop, staff_a: StaffMember) -> StaffMember:
+    # Staff A's second job: they left, and the shop hired the same person again (PPL-11), for the rules that read the
+    # person and not the job (CTRL-4). A test that also asks for `staff_a` holds their old job as it was before they
+    # left; the row in the database says left.
+    with shop_context(shop_a):
+        old = StaffMember.objects.get(pk=staff_a.pk)
+        mark_left(old, left_on=shop_today(shop_a), by=None, reason="Ameacha kazi")
+        return hire_again(StaffMember.objects.get(pk=old.pk), display_name="Staff A Again", by=None)
 
 
 @pytest.fixture

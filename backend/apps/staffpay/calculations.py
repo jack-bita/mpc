@@ -120,6 +120,19 @@ def check_time(evidence: Evidence) -> CheckedTime:
     return CheckedTime(TimeCheck.DEVICE_OK, evidence.client_time, clock_error, signs)
 
 
+def tap_day(trusted_time: dt.datetime | None, client_time: dt.datetime | None, zone: dt.tzinfo) -> dt.date:
+    """A tap's date on the shop's calendar: by its trusted time, or by the laptop's for one with none. The one rule the
+    book of days puts a tap on a day by (ATT-10), and a flag about the tap opens a day by (CTRL-4): written twice, the
+    two could differ, and the flag would open a day the tap isn't on."""
+    # A tap entered in the office has no laptop time, but always its trusted one (ATT-13); a laptop's always has its
+    # own: the table's rule (from_a_laptop_or_the_office) holds one of the two there, so a tap with neither is a bug,
+    # and fails loudly.
+    moment = trusted_time if trusted_time is not None else client_time
+    if moment is None:
+        raise ValueError("A tap with neither a trusted time nor a laptop's: the table's rules forbid it.")
+    return moment.astimezone(zone).date()
+
+
 def shop_minute(moment: dt.datetime, zone: dt.tzinfo) -> dt.time:
     """A tap's time as a minute on the shop's clock, as the counter shows it (ATT-4, 02 §12): 04:35:40 in UTC is 07:35
     in Arusha. Every window of the owner's day is such a minute, so a tap's seconds never count."""

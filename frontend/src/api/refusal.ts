@@ -4,7 +4,8 @@
 // drops. TanStack Query sees a failure only when something is thrown. So office screens call the server
 // through answerOf(), which gives back the answer, or throws an ApiRefusal that keeps the status and the
 // one error shape (apps/core/api/errors.py). When no answer came at all, the client throws NoConnection. And every
-// office form asks aboutTheWholeRequest() which failure it shows above its buttons, the rest being beside its boxes.
+// office form asks aboutTheWholeRequest() which failure it shows above its buttons, the rest being beside its boxes; or
+// aboutTheChange(), when the server may name a field the form has no box for.
 import type { components } from "./schema";
 
 /** The one error shape, as the server's description gives it: `{code, message, fields, params}`. */
@@ -92,4 +93,29 @@ export function aboutTheWholeRequest(error: unknown): unknown {
     Object.keys(error.body.fields).length > 0
     ? null
     : error;
+}
+
+/** What a form shows above its buttons when it has no box for a field the server may name: aboutTheWholeRequest, with one
+ * more step. A refusal of fields alone (`invalid`) names fields the form may have no box for, as id.taken comes on `id`,
+ * or a role or side no longer there on `role`, `role_given`, `key` or `side`: the first such field's code is about the
+ * whole change, so it shows in the code's place, never nowhere (PPL-8's review). A refusal of the form's own boxes
+ * (`boxes`) alone shows beside them instead: nothing above. Moved here from the workers' forms once the flags' sheet used
+ * it too (CTRL-4's review). */
+export function aboutTheChange(
+  error: unknown,
+  boxes: readonly string[] = [],
+): unknown {
+  if (!(error instanceof ApiRefusal) || error.body.code !== "invalid")
+    return error;
+  const field = Object.entries(error.body.fields).find(
+    ([name, codes]) => !boxes.includes(name) && codes.length > 0,
+  );
+  if (field === undefined)
+    // Its own boxes' alone, said beside them; or a refusal that names no field at all, shown whole, never nowhere.
+    return aboutTheWholeRequest(error);
+  return new ApiRefusal(error.status, {
+    ...error.body,
+    code: field[1][0] ?? error.body.code,
+    fields: {},
+  });
 }

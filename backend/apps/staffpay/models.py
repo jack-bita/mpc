@@ -38,9 +38,12 @@ and the old one stays, so a month with a raise on the 15th pays each day at its 
     Juma   15 Nov      12,000.00   yes
 """
 
+from zoneinfo import ZoneInfo
+
 from django.db import models
 from django.db.models.functions import Floor
 
+from apps.control.facts import FlagFacts, FlaggedTap
 from apps.core.models import AppendOnly, CounterRecord, ShopScoped
 
 
@@ -309,6 +312,15 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
 
     def __str__(self) -> str:
         return f"{self.kind} {self.client_time:%Y-%m-%d %H:%M}"
+
+    def flag_facts(self) -> FlagFacts:
+        # What a flag about this tap says on its page (CTRL-4): whose, which, and the day to open, on the shop's own
+        # calendar, by the book's own rule (tap_day): 00:30 on Monday in Arusha is still Sunday in UTC. Imported here,
+        # not at the top: calculations.py imports this file, and each would wait for the other.
+        from apps.staffpay.calculations import tap_day
+
+        day = tap_day(self.trusted_time, self.client_time, ZoneInfo(self.shop.timezone))
+        return FlagFacts(tap=FlaggedTap(staff=self.staff_id, kind=self.kind, day=day))
 
 
 class AttendanceDay(ShopScoped):

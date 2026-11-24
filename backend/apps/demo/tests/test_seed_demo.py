@@ -41,7 +41,8 @@ from django.test import Client
 from django.utils import timezone
 from pytest_django import Settings
 
-from apps.control.models import Flag
+from apps.control.models import Flag, FlagKind, FlagNote, FlagStatus
+from apps.control.services import resolve_flag
 from apps.core.models import ChangeOp, SequenceName
 from apps.core.permissions import Permission
 from apps.core.sequences import next_numbers
@@ -853,7 +854,8 @@ def test_seed_demo_taps_are_the_laptops_time(three_weeks: None) -> None:
     # Each tap reaches the server as a laptop's do, through the push (SYNC-4), from the demo's laptop on Dawa, sent at
     # the reset, long after it was made: so the server keeps the laptop's time (device_ok, ATT-1), as no sign says its
     # clock moved, and no photo, as the demo keeps none (ATT-3). The laptop numbers them from 1 with none missing, every
-    # line of the answer log says accepted, and nothing is flagged.
+    # line of the answer log but the refused record's says accepted, and no tap is flagged: the three flags to try are
+    # about the laptop's own records (CTRL-4, below).
     seed_demo(fresh=True)
 
     shop = the_demo_shop()
@@ -866,9 +868,82 @@ def test_seed_demo_taps_are_the_laptops_time(three_weeks: None) -> None:
         }
         assert all(tap.trusted_time == tap.client_time for tap in taps)
         assert [tap.device_seq for tap in taps] == list(range(1, len(taps) + 1))
-        assert list(PushedDocument.objects.values_list("status", flat=True).distinct()) == [PushedStatus.ACCEPTED]
-        assert PushedDocument.objects.count() == len(taps)
-        assert not Flag.objects.exists()
+        accepted = PushedDocument.objects.filter(status=PushedStatus.ACCEPTED)
+        assert {line.document_id for line in accepted} == {tap.pk for tap in taps}
+        assert PushedDocument.objects.count() == len(taps) + 1
+        assert set(Flag.objects.values_list("kind", flat=True)) == {FlagKind.DEVICE_GAP, FlagKind.INVALID_DOCUMENT}
+
+
+def test_seed_demo_gives_flags_to_try(three_weeks: None) -> None:
+    # Meneja's Tofauti on the demo (CTRL-4): two flags wait, a number missing from the laptop's records, and a record of
+    # Asha's the server refused; and one is closed, as its missing record came late, by the system's own note. Each made
+    # by the seed's pushes, as a shop's are, and none about a tap's time or its worker, so no visitor finds a day to
+    # decide nobody made.
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        dawa = Side.objects.get(code="D")
+        flags = {
+            (flag.kind, flag.status): (
+                flag.side_id,
+                None if flag.difference is None else int(flag.difference),
+                list(flag.people.values_list("display_name", flat=True)),
+                list(FlagNote.objects.filter(flag=flag).values_list("text", "created_by")),
+            )
+            for flag in Flag.objects.all()
+        }
+        last_tap = PushedDocument.objects.filter(status=PushedStatus.ACCEPTED).order_by("-device_seq")[0]
+        refused = PushedDocument.objects.get(status=PushedStatus.INVALID)
+    assert flags == {
+        (FlagKind.DEVICE_GAP, FlagStatus.OPEN): (dawa.pk, 1, [], []),
+        (FlagKind.INVALID_DOCUMENT, FlagStatus.OPEN): (None, None, ["Asha"], []),
+        (FlagKind.DEVICE_GAP, FlagStatus.RESOLVED): (dawa.pk, 1, [], [("flag.device_gap_filled", None)]),
+    }
+    # The refused record came after the last tap, one number past the missing one, for a type no laptop sends.
+    assert refused.reason == "document.type_unknown"
+    assert (refused.device_seq, refused.client_time > last_tap.client_time) == (last_tap.device_seq + 2, True)
+
+
+def test_seed_demo_makes_todays_shop_again_without_its_flags(
+    three_weeks: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # As for its taps: CTRL-4's deploy finds the demo the older seed made that morning, with no flag, and makes the shop
+    # again at once, so Tofauti has something to show the same day.
+    with monkeypatch.context() as older_seed:
+        older_seed.setattr(services, "_send_a_refused_record", lambda *_args: None)
+        seed_demo(fresh=True)
+    made = the_demo_shop()
+
+    assert seed_demo() == Seeded.MADE
+    assert the_demo_shop() != made
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_keeps_todays_shop_whose_flags_a_visitor_closed(three_weeks: None) -> None:
+    # A visitor who closed them all made nothing the seed lacks: the demo wakes with their work in it.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    with shop_context(made):
+        meneja = StaffMember.objects.get(display_name="Meneja")
+        for flag in Flag.objects.filter(status=FlagStatus.OPEN):
+            resolve_flag(flag, text="checked_laptop", by=meneja)
+
+    assert seed_demo() == Seeded.KEPT
+    assert the_demo_shop() == made
+
+
+def test_seed_demo_stops_when_its_unknown_record_is_known(three_weeks: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The refused record is of a type no laptop sends. If a later card's type took that name, the record would be saved,
+    # or refused for its shape, and the demo would say something nobody meant: the reset stops, and the demo made before
+    # stays.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    monkeypatch.setattr(services, "DEMO_UNKNOWN_TYPE", "clock")
+
+    with pytest.raises(RuntimeError, match="unknown record"):
+        seed_demo(fresh=True)
+    assert the_demo_shop() == made
 
 
 def test_seed_demo_reads_its_day_once(three_weeks: None, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -887,7 +962,8 @@ def test_seed_demo_reads_its_day_once(three_weeks: None, monkeypatch: pytest.Mon
 
     shop = the_demo_shop()
     with shop_context(shop):
-        assert not Flag.objects.exists()
+        # Only the flags to try (CTRL-4), about the laptop's own records: none about a tap.
+        assert set(Flag.objects.values_list("kind", flat=True)) == {FlagKind.DEVICE_GAP, FlagKind.INVALID_DOCUMENT}
         assert set(AttendanceEvent.objects.values_list("time_check", flat=True)) == {TimeCheck.DEVICE_OK}
 
 

@@ -909,6 +909,121 @@
     },
     "save": "Save the decision"
   },
+  "flags": {
+    "title": "Flags",
+    "intro": "What the system found, and a person must look into.",
+    "tabs": {
+      "waiting": "Waiting",
+      "waitingCount": "Waiting ({count})",
+      "closed": "Closed"
+    },
+    "none": {
+      "waiting": "No flag is waiting.",
+      "closed": "No flag has been closed yet.",
+      "filtered": "No flag fits this filter."
+    },
+    "more": "Show more",
+    "wholeShop": "Whole shop",
+    "details": "{who} · {where} · {when}",
+    "detailsNobody": "{where} · {when}",
+    "day": "{weekday} {date}",
+    "kind": {
+      "unverified_time": "Its time can't be trusted",
+      "suspended_staff_activity": "Suspended or gone, but used the system",
+      "device_gap": "Records are missing",
+      "permission_break": "Had no permission",
+      "invalid_document": "A record was refused",
+      "another": "Another flag"
+    },
+    "status": {
+      "open": "Waiting",
+      "explained": "Explained",
+      "resolved": "Resolved",
+      "dismissed": "Not a problem"
+    },
+    "filter": {
+      "title": "Filter",
+      "side": "Side",
+      "everySide": "Every side",
+      "kind": "Kind",
+      "everyKind": "Every kind",
+      "show": "Show",
+      "on": "Filtered: {what}",
+      "both": "{side} · {kind}",
+      "clear": "Show all"
+    },
+    "moment": "{weekday} {date}, {time}",
+    "tapKind": {
+      "in": "Clock in",
+      "out": "Clock out"
+    },
+    "page": {
+      "noFlag": "No flag was chosen.",
+      "why": "Why: {why}",
+      "people": "{count, plural, one {Who it names} other {Who it names}}",
+      "side": "Side",
+      "device": "Laptop",
+      "broughtFrom": "Written on",
+      "loadedBy": "File loaded by",
+      "madeAt": "When (by the laptop's clock)",
+      "raisedAt": "The system found it",
+      "status": "State",
+      "openDay": "Open their day",
+      "notes": "Notes ({count})",
+      "noNotes": "No notes yet.",
+      "noteBy": "{step} · {by} · {when}",
+      "system": "The system"
+    },
+    "what": {
+      "someone": "Someone",
+      "unverifiedTap": "{name} tapped {kind} on a laptop whose clock couldn't be trusted, so the real time isn't known.",
+      "unverifiedTime": "{name} made a record on a laptop whose clock couldn't be trusted, so the real time isn't known.",
+      "suspendedTap": "{name} tapped {kind} while suspended, or after leaving the job.",
+      "suspendedRecord": "{name} made a record while suspended, or after leaving the job.",
+      "suspendedLoaded": "{name} loaded a file of records while suspended, or after leaving the job.",
+      "permissionRecord": "{name} made a record they have no permission to make.",
+      "permissionLoaded": "{name} loaded a file of records without permission.",
+      "recordsMissing": "This laptop sent record number {actual}, but the server was waiting for number {expected}. Missing: {missing}.",
+      "numbersWentBack": "This laptop's record numbers went back: the server was waiting for number {expected}, and number {actual} came.",
+      "recordRefused": "The server couldn't keep a record this laptop sent.",
+      "another": "The system found something this version of the app can't explain."
+    },
+    "systemNote": {
+      "deviceGapFilled": "Every missing record has arrived."
+    },
+    "act": {
+      "text": "Note",
+      "textHint": "Kept with your name and the time.",
+      "readyHint": "On the demo, pick a ready note.",
+      "namesYou": "This flag names you, so someone else closes it.",
+      "explain": {
+        "button": "Explain",
+        "title": "Explain this flag",
+        "about": "Write why it happened. The flag will go on waiting.",
+        "save": "Save the note",
+        "done": "The note is saved."
+      },
+      "resolve": {
+        "button": "Resolved",
+        "title": "Resolved",
+        "about": "It was a real problem, and it is dealt with. Once closed, this flag is never opened again.",
+        "save": "Close the flag",
+        "done": "The flag is closed: resolved."
+      },
+      "dismiss": {
+        "button": "Not a problem",
+        "title": "Not a problem",
+        "about": "There was no problem. Once closed, this flag is never opened again.",
+        "save": "Close the flag",
+        "done": "The flag is closed: not a problem."
+      }
+    },
+    "ready": {
+      "askedThem": "I asked those involved.",
+      "checkedLaptop": "I checked the laptop.",
+      "honestMistake": "They made a mistake, not on purpose."
+    }
+  },
   "needsAttention": {
     "title": "Records the server refused",
     "clock": "{name}: {action}, at {time}",
@@ -921,6 +1036,7 @@
       "typeUnknown": "The server doesn't take this kind of record.",
       "versionUnknown": "This record is from another version of the app.",
       "makerUnknown": "Whoever made this record doesn't work at this shop.",
+      "shapeWrong": "Some of this record's details aren't right.",
       "idTaken": "The server already has another record with this id.",
       "carriedFromUnknown": "This record says it came from a laptop that isn't another laptop of this shop.",
       "loadedByUnknown": "Whoever loaded this record's file doesn't work at this shop.",
@@ -1250,6 +1366,11 @@
       "not_working_day": "This day isn't one of this worker's working days.",
       "in_future": "This time hasn't come yet.",
       "reason_missing": "Write why."
+    },
+    "flag": {
+      "note_required": "Write a note.",
+      "closed": "This flag is already closed.",
+      "own_flag": "This flag names you, so someone else closes it."
     },
     "attachment": {
       "not_found": "The server has no such photo.",

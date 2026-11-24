@@ -37,7 +37,7 @@ import { type FormEvent, useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { aboutTheChange, answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
 import { Choice, type ChoiceOption } from "@/components/design/choice";
@@ -62,7 +62,6 @@ import {
   useKeyWords,
 } from "./keys";
 import {
-  aboutTheChange,
   keepWorker,
   type RolesRead,
   useOnSide,

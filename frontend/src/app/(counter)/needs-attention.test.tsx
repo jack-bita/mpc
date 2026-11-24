@@ -113,6 +113,8 @@ describe("the records the server refused", () => {
       "document.maker_unknown",
       "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
     ],
+    // Its shape was wrong (CTRL-4's review): a form's words, "look at the marked boxes", mark nothing here.
+    ["invalid", "Baadhi ya taarifa za kumbukumbu hii si sahihi."],
     [
       "id.taken",
       "Seva ina kumbukumbu nyingine yenye namba hii ya utambulisho.",

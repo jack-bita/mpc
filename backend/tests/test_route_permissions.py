@@ -12,9 +12,9 @@ checks that the office routes ask for them, through the two hooks of their base 
 - a person who is suspended, or has left, gets nothing at all;
 - every route names a permission for each of its actions, and an action it forgets is refused: no route is ever
   open by forgetting (Jack, PPL-5);
-- a show action needs only its side to be seen; one that names a key of its own (debts, reports) is refused until
-  the card that first needs one builds it (Jack, PPL-5); but a route of the whole shop's rows, which have no side to
-  keep to, may show them behind a key, asked on the whole shop, as the shop's workers are (PPL-4);
+- a show action needs only its side to be seen, or a key of its own: a side's rows, as flags are, then keep to the
+  sides where that key is held, and to the whole shop's rows only for the key on every side (CTRL-4); the whole shop's
+  rows, which have no side to keep to, ask the key on the whole shop, as the shop's workers do (PPL-4);
 - a visit reads the person's permissions once, however many sides the shop has (Jack, PPL-5).
 
 It lives outside `apps` because it needs both the side routes (`shops`) and the roles (`people`), and an app's own
@@ -43,7 +43,7 @@ from rest_framework.response import Response
 from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIClient
 
-from apps.control.api.views import AttachmentViewSet
+from apps.control.api.views import AttachmentViewSet, FlagViewSet
 from apps.control.models import AttachmentKind, AttachmentType
 from apps.control.services import expect_attachment, receive_attachment_file
 from apps.core.api import base
@@ -168,7 +168,30 @@ class ManagedNoteMakerViewSet(mixins.RetrieveModelMixin, CreateOnceMixin[Note]):
         return note
 
 
+class RuleSerializer(serializers.ModelSerializer[Setting]):
+    class Meta:
+        model = Setting
+        fields = ["id", "value"]
+
+
+class RuleBehindAKeyViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, ShopViewSet[Setting]):
+    # A side's rows shown behind a key of their own, as the flags are (`flag.review`, CTRL-4) and debts will be, and a
+    # change to one behind another key. A rule's row stands for them: it belongs to a side, or to the whole shop.
+    model = Setting
+    serializer_class = RuleSerializer
+    action_permissions = {
+        "list": Permission.DEBT_VIEW,
+        "retrieve": Permission.DEBT_VIEW,
+        "touch": Permission.SETTINGS_MANAGE,
+    }
+
+    @action(detail=True, methods=["post"])
+    def touch(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return Response(self.get_serializer(self.get_object()).data)
+
+
 router = SimpleRouter()
+router.register("rules-behind-a-key", RuleBehindAKeyViewSet, basename="rule-behind-a-key")
 router.register("managed-notes", ManagedNoteViewSet, basename="managed-note")
 router.register("managed-note-makers", ManagedNoteMakerViewSet, basename="managed-note-maker")
 router.register("plain-note-makers", PlainNoteMakerViewSet, basename="plain-note-maker")
@@ -179,6 +202,7 @@ urlpatterns = [path("api/v1/test/", include(router.urls))]
 
 PLAIN_MAKERS = "/api/v1/test/plain-note-makers/"
 MANAGED_NOTES = "/api/v1/test/managed-notes/"
+RULES_BEHIND_A_KEY = "/api/v1/test/rules-behind-a-key/"
 
 
 def client_for(staff: StaffMember) -> APIClient:
@@ -489,6 +513,18 @@ def test_attachment_routes_name_their_permissions() -> None:
     assert AttachmentViewSet.action_permissions == {"file": base.SEES_THE_SIDE}
 
 
+def test_flag_routes_name_their_permissions() -> None:
+    # A flag shows only to whoever may close it, so even its list and its page are behind `flag.review`, as its three
+    # actions are (CTRL-4). Written out in full, as above.
+    assert FlagViewSet.action_permissions == {
+        "list": Permission.FLAG_REVIEW,
+        "retrieve": Permission.FLAG_REVIEW,
+        "explain": Permission.FLAG_REVIEW,
+        "resolve": Permission.FLAG_REVIEW,
+        "dismiss": Permission.FLAG_REVIEW,
+    }
+
+
 def test_settings_routes_name_their_permissions() -> None:
     # Seeing the rules needs only to see a side; a new value needs `settings.manage` (SHOP-3), on the row's side, or on
     # the whole shop for a shop's rule. Written out in full, as above.
@@ -742,23 +778,17 @@ def test_a_create_sent_twice_keeps_the_routes_own_checks(staff_a: StaffMember, g
 
 
 def permission_problems(routes: Iterable[tuple[type[ShopViewSet[Any]], Mapping[str, str]]]) -> list[str]:
-    # What breaks the three rules every route's permission list keeps, for each route and the actions its address
+    # What breaks the two rules every route's permission list keeps, for each route and the actions its address
     # answers with ({"get": "list", "post": "create"}, as DRF's router notes them):
     # - every action is named, so none is open by forgetting;
-    # - a show action (GET) needs only to see its side, for now: one behind a key of its own waits for the card that
-    #   first needs one (cost.view, debt.view, report.view), which decides how a list keeps to that key's sides. A
-    #   route of the whole shop's rows (side_field None) has no sides to keep to: it may, asking its key on the whole
-    #   shop, as the shop's workers do (PPL-4);
-    # - a change (any other method) always names a key of its own: seeing a side is not leave to change it.
+    # - a change (any method but a read) always names a key of its own: seeing a side is not leave to change it.
+    # A show action names either: to see its side, or a key of its own, which the base keeps its rows to (CTRL-4).
     problems = []
     for view, actions in routes:
         named = getattr(view, "action_permissions", {})
-        whole_shop = getattr(view, "side_field", "side") is None
         for method, name in sorted(actions.items()):
             if name not in named:
                 problems.append(f"{view.__name__}: {name} names no permission")
-            elif method in ("get", "head") and named[name] is not base.SEES_THE_SIDE and not whole_shop:
-                problems.append(f"{view.__name__}: {name} shows rows behind {named[name]}, not built yet")
             elif method not in ("get", "head") and named[name] is base.SEES_THE_SIDE:
                 problems.append(f"{view.__name__}: {name} changes rows with no key of its own")
     return problems
@@ -822,6 +852,7 @@ def test_permission_check_finds_what_breaks_its_rules() -> None:
         action_permissions = {"list": base.SEES_THE_SIDE, "create": Permission.SETTINGS_MANAGE}
 
     class ShowsDebts(ShopViewSet[Side]):
+        # A side's rows behind a key: allowed, kept to the sides where it is held (CTRL-4).
         model = Side
         action_permissions = {"list": Permission.DEBT_VIEW}
 
@@ -847,7 +878,6 @@ def test_permission_check_finds_what_breaks_its_rules() -> None:
             (ChangesBySight, {"patch": "partial_update"}),
         ]
     ) == [
-        "ShowsDebts: list shows rows behind debt.view, not built yet",
         "Forgets: void names no permission",
         "ChangesBySight: partial_update changes rows with no key of its own",
     ]
@@ -867,19 +897,99 @@ def test_unnamed_action_refused(
         client_for(staff_a).get(SIDES)
 
 
+@pytest.fixture
+def rules(shop_a: Shop, sides: dict[str, Side]) -> dict[str, Setting]:
+    # Three rows: one of Dawa's, one of Vyakula's and one of the whole shop's.
+    with shop_context(shop_a):
+        return {
+            name: Setting.objects.create(
+                shop=shop_a, key=f"test.{name}", value=f'"{name}"', effective_from=shop_today(shop_a), side=side
+            )
+            for name, side in (("dawa", sides["D"]), ("vyakula", sides["F"]), ("duka", None))
+        }
+
+
+def values_shown(client: APIClient) -> set[str]:
+    return {row["value"].strip('"') for row in client.get(RULES_BEHIND_A_KEY).json()["results"]}
+
+
 @pytest.mark.django_db
-def test_show_action_with_a_key_stopped_for_now(
+@pytest.mark.urls(__name__)
+def test_a_side_list_behind_a_key_keeps_to_the_sides_that_hold_it(
+    shop_a: Shop, sides: dict[str, Side], rules: dict[str, Setting], staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # Asha sells on Dawa, where her role holds debt.view, and loads on Vyakula, where it doesn't. Behind that key she
+    # sees Dawa's rows only: Vyakula's, a side she works on, and the whole shop's are "not found", alike, as another
+    # shop's are (03 §5.4).
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    give_role(staff_a, RoleTemplate.WORKER, sides["F"])
+    asha = client_for(staff_a)
+
+    assert values_shown(asha) == {"dawa"}
+    assert asha.get(f"{RULES_BEHIND_A_KEY}{rules['dawa'].pk}/").status_code == 200
+    for hidden in ("vyakula", "duka"):
+        answer = asha.get(f"{RULES_BEHIND_A_KEY}{rules[hidden].pk}/")
+        assert (answer.status_code, answer.json()["code"]) == (404, "not_found"), hidden
+
+    # The key on both of today's sides is still not the whole shop's: a third side may come, whose rows it opens not.
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.DEBT_VIEW, side=sides["F"], by=None)
+    assert values_shown(client_for(staff_a)) == {"dawa", "vyakula"}
+
+    # On every side: the whole shop's rows too.
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.DEBT_VIEW, side=None, by=None)
+    assert values_shown(client_for(staff_a)) == {"dawa", "vyakula", "duka"}
+
+
+@pytest.mark.django_db
+@pytest.mark.urls(__name__)
+def test_who_holds_the_key_nowhere_is_refused(
+    sides: dict[str, Side], rules: dict[str, Setting], staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # Juma loads on Dawa: he sees the side, and holds no key to these rows on any. Refused, as a whole shop's list
+    # refuses him (PPL-4), so the page says why, where an empty list would say that nothing waits.
+    give_role(staff_a, RoleTemplate.WORKER, sides["D"])
+    juma = client_for(staff_a)
+
+    for address in (RULES_BEHIND_A_KEY, f"{RULES_BEHIND_A_KEY}{rules['dawa'].pk}/"):
+        refused = juma.get(address)
+        assert (refused.status_code, refused.json()["code"]) == (403, "permission_denied"), address
+
+
+@pytest.mark.django_db
+@pytest.mark.urls(__name__)
+def test_a_change_to_a_row_shown_behind_a_key_keeps_to_the_key(
+    shop_a: Shop, sides: dict[str, Side], rules: dict[str, Setting], staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # A row a person may not be shown is "not found" for a change too, even one whose own key they hold everywhere: a
+    # 403, or a change that went through, would tell them it is there.
+    def touch(name: str) -> int:
+        return client_for(staff_a).post(f"{RULES_BEHIND_A_KEY}{rules[name].pk}/touch/").status_code
+
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    assert {name: touch(name) for name in rules} == {"dawa": 403, "vyakula": 404, "duka": 404}
+
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.SETTINGS_MANAGE, side=None, by=None)
+    assert {name: touch(name) for name in rules} == {"dawa": 200, "vyakula": 404, "duka": 404}
+
+
+@pytest.mark.django_db
+def test_the_sides_themselves_keep_to_a_key(
     monkeypatch: pytest.MonkeyPatch, sides: dict[str, Side], staff_a: StaffMember, give_role: GiveRole
 ) -> None:
-    # A list behind a key of its own, as debts will be (`debt.view`): nothing yet keeps such a list to the sides
-    # where the key is held, so it would show every side the person sees. Refused until a card builds that.
+    # A route whose rows are sides, kept to the key as a side's rows are. The read of one side keeps its own rule, as
+    # its action names it: to see the side.
     monkeypatch.setattr(
         SideViewSet, "action_permissions", {**SideViewSet.action_permissions, "list": Permission.DEBT_VIEW}
     )
-    give_role(staff_a, RoleTemplate.OWNER, None)
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    give_role(staff_a, RoleTemplate.WORKER, sides["F"])
+    asha = client_for(staff_a)
 
-    with pytest.raises(ImproperlyConfigured, match="debt.view"):
-        client_for(staff_a).get(SIDES)
+    assert [row["code"] for row in asha.get(SIDES).json()["results"]] == ["D"]
+    assert asha.get(f"{SIDES}{sides['F'].pk}/").status_code == 200
 
 
 @pytest.mark.django_db

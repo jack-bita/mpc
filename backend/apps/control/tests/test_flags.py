@@ -195,6 +195,30 @@ def test_named_person_cannot_close_their_own_flag(
         assert close(flag, text=words, by=staff_a2).status == closed_status
 
 
+@pytest.mark.parametrize(("close", "closed_status", "words"), CLOSES)
+def test_a_person_hired_again_cannot_close_a_flag_naming_their_old_job(
+    shop_a: Model,
+    flag: Flag,
+    staff_a_again: Actor,
+    staff_a2: Actor,
+    close: Callable[..., Flag],
+    closed_status: FlagStatus,
+    words: str,
+) -> None:
+    # Asha left after her drawer was short, and was hired again as a manager (PPL-11): one person, two jobs. E4's flag
+    # names her old job, and it is still her own drawer, so her new job may say why and never decide it (02 §13): the
+    # rule reads the person, as deciding a day does (ATT-6), never the job.
+    with shop_context(shop_a):
+        assert explain_flag(flag, text="Nilitoa chenji zaidi", by=staff_a_again).status == FlagStatus.EXPLAINED
+        with pytest.raises(ValidationError) as refused:
+            close(flag, text=words, by=staff_a_again)
+        assert refused.value.code == "flag.own_flag"
+        assert Flag.objects.get(pk=flag.pk).status == FlagStatus.EXPLAINED
+
+        # A colleague is nobody the flag names.
+        assert close(flag, text=words, by=staff_a2).status == closed_status
+
+
 def test_every_explanation_is_kept(shop_a: Model, side_a: ShopScoped, staff_a: Actor, staff_a2: Actor) -> None:
     # E9 (02 §18): a 50 kg bag, and only 48.5 kg sold loose before the next was opened. Both sellers sold
     # loose kg in that window, so the flag names both, and each explains (Jack, 29 Oct 2026).
@@ -492,7 +516,7 @@ def test_a_retried_step_is_written_once(
         other = raise_flag(kind=FlagKind.DUPLICATE_CODE, subject=drawer_day, by=None)
         with pytest.raises(ValidationError) as refused:
             explain_flag(other, text="Nambari ilitumika mara mbili", by=staff_a, note_id=explanation_id)
-        assert refused.value.code == "id.taken"
+        assert refused.value.error_dict["id"][0].code == "id.taken"
         assert notes_of(other) == []
 
 

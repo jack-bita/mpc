@@ -4,7 +4,12 @@
 import { describe, expect, it } from "vitest";
 
 import { createApiClient } from "./client";
-import { aboutTheWholeRequest, ApiRefusal, answerOf } from "./refusal";
+import {
+  aboutTheChange,
+  aboutTheWholeRequest,
+  ApiRefusal,
+  answerOf,
+} from "./refusal";
 
 const LOCKED = {
   code: "pin.locked",
@@ -124,5 +129,34 @@ describe("aboutTheWholeRequest", () => {
     const offline = new TypeError("Failed to fetch");
     expect(aboutTheWholeRequest(offline)).toBe(offline);
     expect(aboutTheWholeRequest(null)).toBeNull();
+  });
+});
+
+describe("aboutTheChange", () => {
+  const refusedFor = (code: string, fields: Record<string, string[]>) =>
+    new ApiRefusal(400, { code, message: code, fields, params: {} });
+
+  it("says a field the form has no box for in that field's own code, above the buttons", () => {
+    const taken = aboutTheChange(refusedFor("invalid", { id: ["id.taken"] }), [
+      "text",
+    ]);
+    expect(taken).toBeInstanceOf(ApiRefusal);
+    expect((taken as ApiRefusal).body).toMatchObject({
+      code: "id.taken",
+      fields: {},
+    });
+  });
+
+  it("leaves the form's own boxes' refusals beside them", () => {
+    const beside = refusedFor("invalid", { text: ["flag.note_required"] });
+    expect(aboutTheChange(beside, ["text"])).toBeNull();
+  });
+
+  it("shows any other failure as it is, one that names nothing included", () => {
+    const whole = refusedFor("flag.closed", {});
+    expect(aboutTheChange(whole, ["text"])).toBe(whole);
+    const nowhere = refusedFor("invalid", {});
+    expect(aboutTheChange(nowhere, ["text"])).toBe(nowhere);
+    expect(aboutTheChange(null)).toBeNull();
   });
 });
