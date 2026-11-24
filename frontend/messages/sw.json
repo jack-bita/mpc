@@ -1251,6 +1251,11 @@
       "in_future": "Saa hii bado haijafika.",
       "reason_missing": "Andika sababu."
     },
+    "flag": {
+      "note_required": "Andika maelezo.",
+      "closed": "Tofauti hii imeshafungwa.",
+      "own_flag": "Tofauti hii inakutaja, kwa hiyo mtu mwingine ndiye anayeifunga."
+    },
     "attachment": {
       "not_found": "Seva haina picha hii.",
       "too_big": "Picha hii ni kubwa mno: picha isizidi MB 1.",

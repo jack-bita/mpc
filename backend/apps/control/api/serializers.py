@@ -2,7 +2,8 @@
 
 Thin: they describe fields and check their shape. The flags are read by the selectors (apps/control/selectors.py) and
 moved by the services (apps/control/services.py). The list takes a state and its filters (FlagsQuery) and answers a line
-per flag (FlagLineSerializer); a flag's page answers it whole (FlagSerializer).
+per flag (FlagLineSerializer); a flag's page answers it whole (FlagSerializer), and its three actions take a note
+(FlagNoteCreateSerializer).
 """
 
 from typing import Any
@@ -11,6 +12,7 @@ from rest_framework import serializers
 
 from apps.control.models import FlagKind, FlagStatus, FlagStep
 from apps.control.selectors import FlagState
+from apps.core.api.ids import uuid7_only
 
 
 class FlagsQuery(serializers.Serializer[Any]):
@@ -76,3 +78,14 @@ class FlagSerializer(FlagLineSerializer):
     )
     notes = FlagNoteSerializer(many=True)
     names_you = serializers.BooleanField(help_text="Whether it names the person looking, who may only explain it.")
+    ready_notes = serializers.ListField(
+        child=serializers.CharField(), help_text="On the demo, the notes an action may take, as codes; elsewhere none."
+    )
+
+
+class FlagNoteCreateSerializer(serializers.Serializer[Any]):
+    # A note, as the sheet sends it with the action in the address: its id, made on the phone (ADR-0007), required and a
+    # UUIDv7, as every create's; and its words, or a ready note's code on the demo. They may come empty here: the
+    # services refuse that with their own code (flag.note_required), beside the box.
+    id = serializers.UUIDField(validators=[uuid7_only])
+    text = serializers.CharField(max_length=500, allow_blank=True)

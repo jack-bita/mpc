@@ -1251,6 +1251,11 @@
       "in_future": "This time hasn't come yet.",
       "reason_missing": "Write why."
     },
+    "flag": {
+      "note_required": "Write a note.",
+      "closed": "This flag is already closed.",
+      "own_flag": "This flag names you, so someone else closes it."
+    },
     "attachment": {
       "not_found": "The server has no such photo.",
       "too_big": "This photo is too big: a photo can be at most 1 MB.",

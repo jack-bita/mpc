@@ -516,7 +516,7 @@ def test_a_retried_step_is_written_once(
         other = raise_flag(kind=FlagKind.DUPLICATE_CODE, subject=drawer_day, by=None)
         with pytest.raises(ValidationError) as refused:
             explain_flag(other, text="Nambari ilitumika mara mbili", by=staff_a, note_id=explanation_id)
-        assert refused.value.code == "id.taken"
+        assert refused.value.error_dict["id"][0].code == "id.taken"
         assert notes_of(other) == []
 
 

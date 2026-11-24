@@ -776,6 +776,177 @@
                 }
             }
         },
+        "/api/v1/control/flags/{id}/dismiss/": {
+            "post": {
+                "operationId": "control_flags_dismiss_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this flag.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FlagNoteCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Flag"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/control/flags/{id}/explain/": {
+            "post": {
+                "operationId": "control_flags_explain_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this flag.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FlagNoteCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Flag"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/control/flags/{id}/resolve/": {
+            "post": {
+                "operationId": "control_flags_resolve_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this flag.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FlagNoteCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Flag"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/people/devices/": {
             "get": {
                 "operationId": "people_devices_list",
@@ -3893,6 +4064,13 @@
                     "names_you": {
                         "type": "boolean",
                         "description": "Whether it names the person looking, who may only explain it."
+                    },
+                    "ready_notes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "On the demo, the notes an action may take, as codes; elsewhere none."
                     }
                 },
                 "required": [
@@ -3909,6 +4087,7 @@
                     "notes",
                     "people",
                     "raised_at",
+                    "ready_notes",
                     "refused_for",
                     "side",
                     "status",
@@ -4020,6 +4199,23 @@
                     "by",
                     "id",
                     "step",
+                    "text"
+                ]
+            },
+            "FlagNoteCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "text": {
+                        "type": "string",
+                        "maxLength": 500
+                    }
+                },
+                "required": [
+                    "id",
                     "text"
                 ]
             },

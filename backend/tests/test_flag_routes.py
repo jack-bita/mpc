@@ -3,6 +3,9 @@
     GET  /api/v1/control/flags/?state=waiting     what waits, newest found first, in pages, and how many wait
     GET  /api/v1/control/flags/?state=closed      the closed ones
     GET  /api/v1/control/flags/{id}/              one flag: what happened, and every note
+    POST /api/v1/control/flags/{id}/explain/      say why; it still waits
+    POST /api/v1/control/flags/{id}/resolve/      close it: a real problem, dealt with
+    POST /api/v1/control/flags/{id}/dismiss/      close it: no problem after all
 
 Each flag shows only to whoever may close it: `flag.review` on its side, or on the whole shop for a flag of no side, as
 attendance's are. The rest are "not found". The rule itself, a side's rows shown behind a key of their own, is the
@@ -26,6 +29,7 @@ import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
+from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.control.api.pagination import FlagPage
@@ -477,3 +481,147 @@ def test_a_flag_the_viewer_may_not_close_is_not_found(
     for hidden in (vyakula.pk, whole.pk, uuid.uuid7()):
         answer = asha.get(f"{FLAGS}{hidden}/")
         assert (answer.status_code, answer.json()["code"]) == (404, "not_found")
+
+
+# --- Explain, resolve, dismiss
+
+
+STEPS = [
+    ("explain", "explained", "waiting"),
+    ("resolve", "resolved", "closed"),
+    ("dismiss", "dismissed", "closed"),
+]
+CLOSES = ["resolve", "dismiss"]
+
+
+def note(text: str = "Nimezungumza naye", **parts: Any) -> dict[str, Any]:
+    # A note as the sheet sends it, with the id the phone made for it (ADR-0007).
+    return {"id": str(uuid.uuid7()), "text": text, **parts}
+
+
+def step(viewer: StaffMember, flag: Flag, name: str, sent: dict[str, Any]) -> Any:
+    return client_for(viewer).post(f"{FLAGS}{flag.pk}/{name}/", sent, format="json")
+
+
+@pytest.fixture
+def waiting(side_a: Side, device_a: Device, staff_a: StaffMember) -> Flag:
+    # Asha tapped while suspended, on the Dawa laptop.
+    return flagged(pushed(device_a, 1), FlagKind.SUSPENDED_STAFF_ACTIVITY, staff_a, side=side_a)
+
+
+@pytest.mark.parametrize(("name", "status", "tab"), STEPS)
+def test_each_action_writes_its_note_and_moves_the_flag(
+    waiting: Flag, baba: StaffMember, name: str, status: str, tab: str
+) -> None:
+    sent = note("Alikuja kuchukua vitu vyake tu")
+
+    answer = step(baba, waiting, name, sent)
+
+    assert answer.status_code == 200, answer.json()
+    page = answer.json()
+    assert page["status"] == status
+    # The note by the id the phone made, with who wrote it: the page shows it at once, with no second ask.
+    assert [(line["id"], line["step"], line["text"], line["by"]) for line in page["notes"]] == [
+        (sent["id"], status, "Alikuja kuchukua vitu vyake tu", "Staff A2")
+    ]
+    assert page == page_of(baba, waiting)
+    assert shown(client_for(baba), state=tab) == ids(waiting)
+
+
+@pytest.mark.parametrize("name", ["explain", *CLOSES])
+def test_the_same_send_twice_writes_one_note(waiting: Flag, baba: StaffMember, name: str) -> None:
+    # A phone whose answer was lost sends the note again, by the same id: the first answer again, and no second note,
+    # which could never be taken away (ADR-0007).
+    sent = note()
+    first, again = step(baba, waiting, name, sent), step(baba, waiting, name, sent)
+
+    assert (first.status_code, again.status_code) == (200, 200)
+    assert again.json() == first.json()
+    assert len(again.json()["notes"]) == 1
+
+
+def test_a_closed_flag_takes_no_more(waiting: Flag, baba: StaffMember) -> None:
+    # Meneja closed it while Baba's page still showed it waiting: he is told, and nothing is written (02 §13).
+    assert step(baba, waiting, "dismiss", note()).status_code == 200
+
+    for name in ("explain", *CLOSES):
+        refused = step(baba, waiting, name, note("Nyingine"))
+        assert (refused.status_code, refused.json()["code"]) == (400, "flag.closed"), name
+    assert len(page_of(baba, waiting)["notes"]) == 1
+
+
+def test_the_one_it_names_explains_and_never_closes(
+    waiting: Flag, staff_a: StaffMember, baba: StaffMember, give_role: GiveRole
+) -> None:
+    # Asha is a manager now, and holds the key: the flag still names her (02 §13).
+    give_role(staff_a, RoleTemplate.MANAGER, None)
+
+    assert step(staff_a, waiting, "explain", note("Nilikuja kuchukua vitu vyangu")).status_code == 200
+    for name in CLOSES:
+        refused = step(staff_a, waiting, name, note())
+        assert (refused.status_code, refused.json()["code"]) == (400, "flag.own_flag"), name
+    assert step(baba, waiting, "resolve", note()).status_code == 200
+
+
+def test_a_wrong_note_is_refused_beside_its_box(waiting: Flag, baba: StaffMember) -> None:
+    for sent, field, code in (
+        (note("   "), "text", "flag.note_required"),
+        (note("a" * 501), "text", "max_length"),
+        ({"id": str(uuid.uuid7())}, "text", "required"),
+        ({"text": "Nimezungumza naye"}, "id", "required"),
+        (note(id=str(uuid.uuid4())), "id", "id.not_uuid7"),
+    ):
+        refused = step(baba, waiting, "resolve", sent)
+        assert (refused.status_code, refused.json()["fields"]) == (400, {field: [code]}), sent
+    assert page_of(baba, waiting)["notes"] == []
+
+
+def test_a_notes_id_already_taken_says_nothing_of_whose(
+    shop_b: Shop, side_b: Side, waiting: Flag, staff_b: StaffMember, baba: StaffMember, device_a: Device, side_a: Side
+) -> None:
+    # Another shop's note holds the id, or another flag's of this shop: refused, the two alike, with not a word of it.
+    with shop_context(shop_b):
+        theirs = raise_flag(kind=FlagKind.TOTAL_MISMATCH, subject=side_b, side=side_b, people=[staff_b], by=None)
+        explain_flag(theirs, text="Ya duka jingine", by=staff_b, note_id=(of_shop_b := uuid.uuid7()))
+    ours = flagged(pushed(device_a, 2), FlagKind.PERMISSION_BREAK, side=side_a)
+    sent = note()
+    assert step(baba, ours, "explain", sent).status_code == 200
+
+    for taken in (str(of_shop_b), sent["id"]):
+        refused = step(baba, waiting, "resolve", note(id=taken))
+        assert (refused.status_code, refused.json()["code"], refused.json()["fields"]) == (
+            400,
+            "invalid",
+            {"id": ["id.taken"]},
+        )
+    assert page_of(baba, waiting)["notes"] == []
+
+
+def test_acting_on_a_flag_needs_the_key_on_its_side(
+    shop_a: Shop, foods: Side, waiting: Flag, staff_a2: StaffMember, staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # A seller holds flag.review nowhere, and a manager of Vyakula alone holds it on no flag of Dawa's: "not found" to
+    # both, before anything sent is read, and nothing written.
+    give_role(staff_a2, RoleTemplate.SELLER, foods)
+    for _ in range(2):
+        for name in ("explain", *CLOSES):
+            for sent in (note(), {}):
+                refused = step(staff_a2, waiting, name, sent)
+                assert (refused.status_code, refused.json()["code"]) == (404, "not_found"), name
+        give_role(staff_a2, RoleTemplate.MANAGER, foods)
+    with shop_context(shop_a):
+        assert not FlagNote.objects.exists()
+
+
+def test_the_demo_takes_ready_sentences_only(settings: Settings, waiting: Flag, baba: StaffMember) -> None:
+    # Every visitor is Meneja there (OPS-13): words one typed would show to every visitor after them, so a note is one
+    # of three ready ones, kept as its code, as a day's reason is (Jack, ATT-6: A).
+    assert page_of(baba, waiting)["ready_notes"] == []
+    settings.DEMO_SEED = True
+
+    assert page_of(baba, waiting)["ready_notes"] == ["asked_them", "checked_laptop", "honest_mistake"]
+    refused = step(baba, waiting, "explain", note("Nimezungumza naye"))
+    assert (refused.status_code, refused.json()["fields"]) == (400, {"text": ["demo.ready_reasons"]})
+    for name, ready in (("explain", "asked_them"), ("resolve", "checked_laptop")):
+        assert step(baba, waiting, name, note(ready)).status_code == 200
+    assert [line["text"] for line in page_of(baba, waiting)["notes"]] == ["asked_them", "checked_laptop"]

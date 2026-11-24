@@ -20,10 +20,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from django.conf import settings
 from django.db import models
 
 from apps.control.facts import FlagFacts, SaysItsFacts
-from apps.control.models import CLOSED, Flag, FlagNote, FlagPerson
+from apps.control.models import CLOSED, DEMO_NOTES, Flag, FlagNote, FlagPerson
 from apps.core.links import table_of
 from apps.core.models import CounterRecord
 from apps.core.tenancy import Actor
@@ -123,6 +124,9 @@ class FlagDetail(FlagLine):
     facts: FlagFacts
     notes: list[NoteLine]
     names_you: bool
+    # On the demo, the ready notes an action may take (DEMO_NOTES), as codes the page says in words; elsewhere none, and
+    # a person types their own.
+    ready_notes: list[str]
 
 
 def flag_detail(flag: Flag, *, viewer: Actor) -> FlagDetail:
@@ -150,6 +154,7 @@ def flag_detail(flag: Flag, *, viewer: Actor) -> FlagDetail:
             for note in notes
         ],
         names_you=flag_names(flag, viewer),
+        ready_notes=list(DEMO_NOTES) if settings.DEMO_SEED else [],
     )
 
 

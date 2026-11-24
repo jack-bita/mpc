@@ -209,6 +209,13 @@ class FlagPerson(AppendOnly):
         ]
 
 
+# On the demo every visitor logs in as Meneja (OPS-13): words one visitor typed would show to every visitor after them,
+# until the morning's seed makes the shop again. So a note there is one of three ready ones the sheet offers, kept as
+# its code, which the page says in words: *Nimewauliza wahusika*, *Nimeikagua kompyuta*, *Walikosea, si kwa makusudi*;
+# as a day's reason is (Jack, ATT-6: A). Visitors still try every action.
+DEMO_NOTES = ("asked_them", "checked_laptop", "honest_mistake")
+
+
 class FlagNote(AppendOnly):
     # One step of a flag, in a person's own words (Jack, 29 Oct 2026; 02 v1.8): an explanation, or the note
     # that closes it. Who wrote it is `created_by` and when is `created_at`, from ShopScoped. AppendOnly

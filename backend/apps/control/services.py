@@ -50,6 +50,7 @@ from contextlib import contextmanager, nullcontext
 from decimal import Decimal
 from typing import Any
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import connection, models, transaction
@@ -59,6 +60,7 @@ from django.utils import timezone
 from apps.control.models import (
     ATTACHMENT_KINDS,
     CLOSED,
+    DEMO_NOTES,
     LARGEST_FILE,
     Attachment,
     AttachmentKind,
@@ -477,6 +479,8 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
     text = text.strip()
     if not text:
         raise ValidationError({"text": ValidationError("A note is required.", code="flag.note_required")})
+    if settings.DEMO_SEED and text not in DEMO_NOTES:
+        raise ValidationError({"text": ValidationError("On the demo, pick a ready note.", code="demo.ready_reasons")})
     with transaction.atomic():
         # Read again and locked until the transaction ends (SELECT ... FOR UPDATE). Two managers closing the same flag
         # at once take turns, and the second sees that the first has closed it, not the open copy still on their screen.
@@ -493,8 +497,11 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
             sent_before = FlagNote.objects.filter(pk=note_id).first()
             if sent_before is not None:
                 if sent_before.flag_id != fresh.pk:
-                    # Not this step sent again, but another flag's note.
-                    raise ValidationError("This id is already another flag's note.", code="id.taken")
+                    # Not this step sent again, but another flag's note. Filed under the id, as another shop's note's
+                    # is (the route): the two answers are one, so neither tells whose it is (03 §5.4).
+                    raise ValidationError(
+                        {"id": ValidationError("This id is already another flag's note.", code="id.taken")}
+                    )
                 return fresh
         # The status only moves forward: every step leads to explained or to a final status, and a closed
         # flag takes none.
