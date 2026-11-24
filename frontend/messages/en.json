@@ -939,6 +939,17 @@
       "explained": "Explained",
       "resolved": "Resolved",
       "dismissed": "Not a problem"
+    },
+    "filter": {
+      "title": "Filter",
+      "side": "Side",
+      "everySide": "Every side",
+      "kind": "Kind",
+      "everyKind": "Every kind",
+      "show": "Show",
+      "on": "Filtered: {what}",
+      "both": "{side} · {kind}",
+      "clear": "Show all"
     }
   },
   "needsAttention": {

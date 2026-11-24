@@ -57,17 +57,60 @@ export function mayReviewFlags(me: WhoIsHere): boolean {
   return sidesWhere(me, REVIEWS_FLAGS).length > 0;
 }
 
-/** One tab's flags, a page after another, from the store of server answers. Asked only while `on`: the closed ones wait
- * until their tab is opened. */
-export function useFlags(state: FlagState, on: boolean) {
+/** What *Chuja* keeps the list to: a side by its id, or the whole shop's own, and a kind; null for each left open. */
+export interface FlagFilter {
+  side: string | null;
+  kind: RaisedKind | null;
+}
+
+/** The whole shop's own flags, in a filter's `side` and in the address: no side's id is this word. */
+export const WHOLE_SHOP = "shop";
+
+/** The sides a person may choose between in *Chuja*: those whose flags they may close, by id, and the whole shop's own
+ * for someone who may close those too, as attendance's flags are. */
+export function sidesToFilter(me: WhoIsHere): {
+  sides: { id: string; name: string }[];
+  wholeShop: boolean;
+} {
+  return {
+    sides: sidesWhere(me, REVIEWS_FLAGS),
+    wholeShop: me.permissions.whole_shop.includes(REVIEWS_FLAGS),
+  };
+}
+
+/** The filter the address names, kept to what the person may choose: an old link to a side since gone, or a kind no
+ * longer known, filters by neither, rather than show an empty list that looks like good news. */
+export function filterFrom(
+  me: WhoIsHere,
+  side: string | null,
+  kind: string | null,
+): FlagFilter {
+  const { sides, wholeShop } = sidesToFilter(me);
+  const known =
+    side === WHOLE_SHOP ? wholeShop : sides.some((each) => each.id === side);
+  return {
+    side: known ? side : null,
+    kind: RAISED_KINDS.find((each) => each === kind) ?? null,
+  };
+}
+
+/** One tab's flags, kept to the filter, a page after another, from the store of server answers. Asked only while `on`:
+ * the closed ones wait until their tab is opened. */
+export function useFlags(state: FlagState, filter: FlagFilter, on: boolean) {
   return useInfiniteQuery({
-    queryKey: [...FLAGS, "list", state],
+    queryKey: [...FLAGS, "list", state, filter.side, filter.kind],
     queryFn: ({ pageParam }): Promise<FlagsAnswer> =>
       answerOf(
         api.GET("/api/v1/control/flags/", {
           params: {
             query: {
               state,
+              ...(filter.side === null
+                ? {}
+                : filter.side === WHOLE_SHOP
+                  ? { whole_shop: true }
+                  : { side: filter.side }),
+              ...(filter.kind === null ? {} : { kind: filter.kind }),
               ...(pageParam === null ? {} : { cursor: pageParam }),
             },
           },

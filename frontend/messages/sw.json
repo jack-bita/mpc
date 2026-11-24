@@ -939,6 +939,17 @@
       "explained": "Imeelezwa",
       "resolved": "Imetatuliwa",
       "dismissed": "Si tatizo"
+    },
+    "filter": {
+      "title": "Chuja",
+      "side": "Upande",
+      "everySide": "Pande zote",
+      "kind": "Aina",
+      "everyKind": "Aina zote",
+      "show": "Onyesha",
+      "on": "Umechuja: {what}",
+      "both": "{side} · {kind}",
+      "clear": "Onyesha zote"
     }
   },
   "needsAttention": {
