@@ -19,7 +19,7 @@ import { FIRST_WAIT_MS, LONGEST_WAIT_MS, MOST_BYTES } from "./attachments";
 import { CURSOR, LAST_DEVICE_SEQ } from "./meta";
 import { noteCutOff } from "./outages";
 import { pagePlace } from "./page-place";
-import { fetchStaffPhotos } from "./staff-photos";
+import { fetchStaffPhotos, LONGEST_ROUND_MS } from "./staff-photos";
 import { syncShop } from "./sync";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -487,6 +487,52 @@ describe("the line", () => {
     await fetchStaffPhotos(db, pagePlace);
     expect((await held()).sort()).toEqual([...photos].sort());
     expect(asked()).toHaveLength(3);
+  });
+
+  it("asks for no more once it has run 20 seconds, and the rest at the next sync", async () => {
+    // The shop's first day of faces, on an evening line of 10 KB a second: each face takes 15 s. Asha's clock-in, saved
+    // meanwhile, must not wait behind all of them, whatever their size: the sync holds its lock while they come.
+    expect(LONGEST_ROUND_MS).toBe(20_000);
+    aClockByHand();
+    const photos = [aPhoto(), aPhoto(), aPhoto()];
+    await db.staff.bulkPut([
+      { ...ASHA, photo: photos[0]! },
+      { ...BARAKA, photo: photos[1]! },
+      { ...JUMA, photo: photos[2]! },
+    ]);
+    for (const photo of photos)
+      answer("GET", photoRoute(photo), async () => {
+        vi.setSystemTime(Date.now() + 15_000);
+        return new Response(await madeUpJpeg().arrayBuffer());
+      });
+
+    // After the first, 15 s have run: the second is asked for. After it, 30 s have: no more.
+    await fetchStaffPhotos(db, pagePlace);
+    expect(asked()).toHaveLength(2);
+
+    // Waiting for its turn is no failed try: it comes at once at the next sync.
+    await fetchStaffPhotos(db, pagePlace);
+    expect(asked()).toHaveLength(3);
+    expect((await held()).sort()).toEqual([...photos].sort());
+  });
+
+  it("goes on when the laptop's clock is put back meanwhile", async () => {
+    // A clock an hour back says the round has run for less than nothing: the share in bytes still ends it.
+    aClockByHand();
+    const [first, second] = [aPhoto(), aPhoto()];
+    await db.staff.bulkPut([
+      { ...ASHA, photo: first },
+      { ...BARAKA, photo: second },
+    ]);
+    for (const photo of [first, second])
+      answer("GET", photoRoute(photo), async () => {
+        vi.setSystemTime(Date.now() - 60 * 60_000);
+        return new Response(await madeUpJpeg().arrayBuffer());
+      });
+
+    await fetchStaffPhotos(db, pagePlace);
+
+    expect(asked()).toHaveLength(2);
   });
 
   it.each([

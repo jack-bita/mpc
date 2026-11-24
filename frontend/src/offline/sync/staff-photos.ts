@@ -25,7 +25,9 @@
 // the tile shows the names.
 //
 // Wi-Fi first, where the browser can tell, and no more is asked for once 1.5 MB came, both as for the photos going up
-// (attachments.ts): the rest come at the next sync, 30 s later. A shop's faces come once, some 150 KB each.
+// (attachments.ts); nor once 20 seconds went by, as on a slow line even a few hold the sync's lock for minutes, and a
+// record saved meanwhile waits behind it. The rest come at the next sync, 30 s later. A shop's faces come once, some
+// 150 KB each.
 //
 // In the page's sync alone, never the service worker's push: the pull brings the rows, and only a page pulls. A photo
 // is fetched before the transaction that keeps it, on purpose: a Dexie transaction ends at the first wait on anything
@@ -46,6 +48,11 @@ const ABOUT_THE_PHOTO = new Set([
   "attachment.file_removed",
 ]);
 
+/** How long a sync goes on asking for photos: past it, the one on its way is the round's last. A limit in bytes alone is
+ * none in time (PPL-14's review): 1.5 MB on an evening line of 10 KB a second is two and a half minutes of the sync's
+ * lock, and Asha's clock-in, or the owner's suspension of Juma, waits behind pictures. */
+export const LONGEST_ROUND_MS = 20_000;
+
 /** The photos asked for and not kept, by id: how many tries, and until when each waits, on this laptop's clock in ms. */
 const waits = new Map<string, { tries: number; until: number }>();
 
@@ -65,6 +72,7 @@ export async function fetchStaffPhotos(
   // The waits of photos no longer lacking say nothing any more, and would pile up for as long as the page is open.
   for (const id of waits.keys()) if (!lacking.has(id)) waits.delete(id);
   let cameBytes = 0;
+  const startedAt = Date.now();
   for (const id of lacking) {
     // Asked before each photo: a device that leaves the shop's Wi-Fi for mobile data mid-round stops at once. Waiting
     // for Wi-Fi is no failed try.
@@ -72,6 +80,7 @@ export async function fetchStaffPhotos(
     // A photo's size is known only once it is here, so the share is counted after: one photo may pass it, by less than
     // the largest a photo may be.
     if (cameBytes >= MOST_BYTES) return;
+    if (Date.now() - startedAt >= LONGEST_ROUND_MS) return;
     const waiting = waits.get(id);
     if (!waitIsOver(waiting?.until ?? null)) continue;
     // Its wait first, counted from when it is asked for, as a photo going up does, and taken back once it is kept. So
