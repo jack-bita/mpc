@@ -591,13 +591,15 @@ def test_a_notes_id_already_taken_says_nothing_of_whose(
     sent = note()
     assert step(baba, ours, "explain", sent).status_code == 200
 
-    for taken in (str(of_shop_b), sent["id"]):
-        refused = step(baba, waiting, "resolve", note(id=taken))
+    answers = [step(baba, waiting, "resolve", note(id=taken)) for taken in (str(of_shop_b), sent["id"])]
+    for refused in answers:
         assert (refused.status_code, refused.json()["code"], refused.json()["fields"]) == (
             400,
             "invalid",
             {"id": ["id.taken"]},
         )
+    # The whole answer, its English message for the logs included: a word of difference would tell the two apart.
+    assert answers[0].json() == answers[1].json()
     assert page_of(baba, waiting)["notes"] == []
 
 

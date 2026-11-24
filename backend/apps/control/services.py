@@ -499,9 +499,7 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
                 if sent_before.flag_id != fresh.pk:
                     # Not this step sent again, but another flag's note. Filed under the id, as another shop's note's
                     # is (the route): the two answers are one, so neither tells whose it is (03 §5.4).
-                    raise ValidationError(
-                        {"id": ValidationError("This id is already another flag's note.", code="id.taken")}
-                    )
+                    raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")})
                 return fresh
         # The status only moves forward: every step leads to explained or to a final status, and a closed
         # flag takes none.
