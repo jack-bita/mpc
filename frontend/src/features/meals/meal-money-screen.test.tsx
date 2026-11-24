@@ -125,6 +125,19 @@ describe("the month's meal money", () => {
     expect(spansAsked()).toEqual(["2026-11-01 2026-11-30"]);
   });
 
+  it("opens a day's own page from its line", async () => {
+    theShopHas({ "2026-11-01 2026-11-30": NOVEMBER });
+
+    render(<MealMoneyScreen />);
+
+    const monday = await screen.findByRole("link", { name: "Jumatatu 23/11" });
+    expect(monday.getAttribute("href")).toMatch(
+      /^\/meal-money\/day\/?\?date=2026-11-23$/,
+    );
+    // Every day, a forgotten one and today too: that is where it is written.
+    expect(screen.getAllByRole("link", { name: /\d\d\/11/ })).toHaveLength(4);
+  });
+
   it("says the whole of the month, up to today", async () => {
     theShopHas({ "2026-11-01 2026-11-30": NOVEMBER });
 

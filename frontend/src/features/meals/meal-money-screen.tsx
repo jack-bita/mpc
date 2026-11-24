@@ -41,6 +41,7 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
 import { Card } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
+import { TextLink } from "@/components/design/text-link";
 import { useWordInAddress } from "@/components/tab-in-address";
 import {
   isMonth,
@@ -65,6 +66,7 @@ import {
   LAST_PARAM,
   mayRecordMeals,
   type MealDay,
+  mealDayPage,
   type MealMoneyDays,
   monthSpan,
   type Span,
@@ -72,6 +74,7 @@ import {
   useMealMoney,
 } from "./meal-money";
 import { RecordMealMoney } from "./record-meal-money";
+import { Split } from "./split";
 
 export function MealMoneyScreen() {
   const t = useTranslations("mealMoney");
@@ -245,7 +248,8 @@ function TheDays({
           {answer.days.map((day) => (
             <li
               key={day.date}
-              className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 px-4 py-3"
+              // relative: the day's link stretches over its whole line.
+              className="relative grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 px-4 py-3"
             >
               <DayLine day={day} isToday={day.date === answer.today} />
             </li>
@@ -267,12 +271,19 @@ function DayLine({ day, isToday }: { day: MealDay; isToday: boolean }) {
   return (
     <>
       <p>
-        {t(isToday ? "today" : "day", {
-          weekday: monthWords(
-            `weekdays.${String(weekdayOf(day.date)) as Weekday}`,
-          ),
-          date: formatDayMonth(day.date),
-        })}
+        {/* The whole line opens the day's own page, an empty box laid over it (after:absolute), so a finger anywhere on
+            it works (flags-screen.tsx). */}
+        <TextLink
+          href={mealDayPage(day.date)}
+          className="after:absolute after:inset-0"
+        >
+          {t(isToday ? "today" : "day", {
+            weekday: monthWords(
+              `weekdays.${String(weekdayOf(day.date)) as Weekday}`,
+            ),
+            date: formatDayMonth(day.date),
+          })}
+        </TextLink>
       </p>
       <p className="text-right tabular-nums">
         {typed ? formatMoney(amount) : t("notTyped")}
@@ -280,28 +291,4 @@ function DayLine({ day, isToday }: { day: MealDay; isToday: boolean }) {
       {typed ? <Split day={day} /> : null}
     </>
   );
-}
-
-/** How a day's money is split: not yet, today; among how many, and each one's share; and how many wait. */
-function Split({ day }: { day: MealDay }) {
-  const t = useTranslations("mealMoney");
-  const said = [
-    !day.over
-      ? t("notSplitYet")
-      : day.sharers > 0
-        ? t("split", {
-            count: day.sharers,
-            share: formatMoney(new Decimal(day.share)),
-          })
-        : day.waiting > 0
-          ? // Nobody shares it yet, but someone may: only who waits is said, below.
-            null
-          : t("nobodyShares"),
-    day.waiting > 0 ? t("waiting", { count: day.waiting }) : null,
-  ].filter((each) => each !== null);
-  return said.map((each) => (
-    <p key={each} className="col-span-2 text-muted-foreground">
-      {each}
-    </p>
-  ));
 }

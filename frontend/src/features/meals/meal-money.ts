@@ -27,6 +27,14 @@ export const MEAL_MONEY = ["staffpay", "meal-money"] as const;
 /** The list's own address, and the office home's button's. */
 export const MEAL_MONEY_PAGE = "/meal-money/";
 
+/** The address's name for one day's page: /meal-money/day/?date=2026-11-23. */
+export const DAY_PARAM = "date";
+
+/** One day's own page. */
+export function mealDayPage(day: string): string {
+  return `${MEAL_MONEY_PAGE}day/?${DAY_PARAM}=${day}`;
+}
+
 /** Whether the person may open it: meals.record on the whole shop, not on one side, as the workers of both sides eat
  * together. */
 export function mayRecordMeals(me: WhoIsHere): boolean {
@@ -50,7 +58,7 @@ export const LAST_PARAM = "last";
 
 /** Whether `text` is a day as a date box and the address write one, "2026-11-20", a day that exists, and one the server
  * takes, from 2000 on: 31 November, read and written back, comes out as 1 December, so it is none. */
-function isDay(text: string): boolean {
+export function isDay(text: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || text < "2000-01-01") return false;
   const read = new Date(`${text}T00:00:00Z`);
   return (

@@ -791,6 +791,24 @@
     "daysChosenLabel": "Siku ulizochagua",
     "span": "{first} hadi {last}",
     "wholeMonth": "Mwezi mzima",
+    "dayPage": {
+      "noDay": "Hakuna siku iliyochaguliwa.",
+      "total": "Jumla {amount}",
+      "rowsLabel": "Hela iliyoandikwa siku hii",
+      "rowWithNote": "{amount} · {note}",
+      "typedBy": "{by} · {date} {time}",
+      "voidedBy": "Imebatilishwa na {by}, {date}",
+      "reason": "Sababu: {reason}"
+    },
+    "void": {
+      "title": "Batilisha {amount}",
+      "about": "{day} · {note}",
+      "reason": "Sababu",
+      "action": "Batilisha"
+    },
+    "readyReason": {
+      "wrong_amount": "Kiasi kimekosewa"
+    },
     "record": {
       "title": "Andika hela ya chakula",
       "date": "Siku",
