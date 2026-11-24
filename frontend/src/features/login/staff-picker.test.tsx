@@ -260,6 +260,8 @@ describe("the staff picker", () => {
       face!.compareDocumentPosition(words) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(asha.textContent).toBe("Asha Mfano Asha");
+    // Its place never shrinks to fit a long name beside it: a tile lays its parts out in a column that may.
+    expect(face!.parentElement!.className.split(" ")).toContain("shrink-0");
 
     const juma = screen.getByRole("button", { name: "Juma Mfano Juma" });
     expect(facesOn(juma)).toEqual([]);

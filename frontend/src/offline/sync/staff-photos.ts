@@ -40,12 +40,14 @@ import { isAboutTheDevice, syncAnswer, syncCallLimit } from "./answer";
 import { MOST_BYTES, onCostlyLine, waitAfter, waitIsOver } from "./attachments";
 import type { SyncPlace } from "./place";
 
-/** The refusals about one photo, never the line or the server: no row names it any more, or its file went as the row
- * was read. Asked by the code, not the status: a 404 of another code (`not_found`) is a server with no such route, one
- * older than this app, and stops the round. */
+/** The refusals about one photo, never the line or the server: no row names it any more, its file went as the row was
+ * read, or hasn't come yet (which no worker's photo meets today, as its row and its file are kept together: PPL-9).
+ * Asked by the code, not the status: a 404 of another code (`not_found`) is a server with no such route, one older than
+ * this app, and stops the round. */
 const ABOUT_THE_PHOTO = new Set([
   "attachment.not_found",
   "attachment.file_removed",
+  "attachment.file_waiting",
 ]);
 
 /** How long a sync goes on asking for photos: past it, the one on its way is the round's last. A limit in bytes alone is
@@ -116,7 +118,8 @@ async function dropThenFindLacking(db: ShopDatabase): Promise<Set<string>> {
   });
 }
 
-/** Keeps a photo that came, if a row still names it: a pull in another tab may have changed the row meanwhile. */
+/** Keeps a photo that came, if a row still names it. Where the browser has the sync's lock, as the shop's do (lock.ts),
+ * no pull can change a row meanwhile; in one without it, two tabs sync at once, and the other's pull may have. */
 async function keep(db: ShopDatabase, photo: StaffPhotoRow): Promise<void> {
   await db.transaction("rw", [db.staff, db.staff_photos], async () => {
     const naming = await db.staff

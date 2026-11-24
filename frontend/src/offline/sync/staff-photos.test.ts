@@ -258,28 +258,29 @@ describe("the workers' photos", () => {
 });
 
 describe("a photo that doesn't come", () => {
-  it.each(["attachment.not_found", "attachment.file_removed"])(
-    "waits when the server says %s, and the others come",
-    async (code) => {
-      // Changed since the pull: the next one says to what. Asked again at every sync till then, it would cost a call
-      // each 30 s for nothing.
-      const [lost, next] = [aPhoto(), aPhoto()];
-      await db.staff.bulkPut([
-        { ...ASHA, photo: lost },
-        { ...BARAKA, photo: next },
-      ]);
-      answer("GET", photoRoute(lost), refusal(404, code));
-      hasPhoto(next);
+  it.each([
+    "attachment.not_found",
+    "attachment.file_removed",
+    "attachment.file_waiting",
+  ])("waits when the server says %s, and the others come", async (code) => {
+    // Changed since the pull: the next one says to what. Asked again at every sync till then, it would cost a call
+    // each 30 s for nothing.
+    const [lost, next] = [aPhoto(), aPhoto()];
+    await db.staff.bulkPut([
+      { ...ASHA, photo: lost },
+      { ...BARAKA, photo: next },
+    ]);
+    answer("GET", photoRoute(lost), refusal(404, code));
+    hasPhoto(next);
 
-      // In one round, the lost one first, as the rows come by id: a second round would hide a stop.
-      await fetchStaffPhotos(db, pagePlace);
-      expect(asked()).toEqual([lost, next]);
-      expect(await held()).toEqual([next]);
+    // In one round, the lost one first, as the rows come by id: a second round would hide a stop.
+    await fetchStaffPhotos(db, pagePlace);
+    expect(asked()).toEqual([lost, next]);
+    expect(await held()).toEqual([next]);
 
-      await fetchStaffPhotos(db, pagePlace);
-      expect(asked()).toEqual([lost, next]);
-    },
-  );
+    await fetchStaffPhotos(db, pagePlace);
+    expect(asked()).toEqual([lost, next]);
+  });
 
   it.each([
     { when: "the network drops", how: null },

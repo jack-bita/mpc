@@ -58,8 +58,9 @@ export function TileFace({
   // Nothing at all for a photo that can't be opened: a tile with a broken picture says less than one with none.
   if (broken) return null;
   return (
-    // Its place is kept from the first moment, so the tiles don't jump as the faces come, a blink after the names.
-    <span className="size-28 overflow-hidden rounded-lg">
+    // Its place is kept from the first moment, and never shrinks (shrink-0: a tile lays its parts out in a column that
+    // may), so the tiles don't jump as the faces come, a blink after the names.
+    <span className="size-28 shrink-0 overflow-hidden rounded-lg">
       {address !== null && (
         <Image
           // Not shrunk by Next.js, which a static app can't: the phone shrank it already (worker-photo.tsx).

@@ -26,7 +26,7 @@
 //
 // A tile shows the worker's face, then the full name in large letters with the nickname under it (Jack, PPL-14; 02
 // §5). The face comes from the laptop's own copy too (tile-face.tsx), so it shows with no network; a worker with no
-// photo, or whose photo a sync hasn't brought yet, has the two names alone, on a tile of the same height.
+// photo, or whose photo a sync hasn't brought yet, has the two names alone, on a tile as tall as its row.
 // On the demo, a seller's tile shows their PIN too, as Jaribu demo handed it over (OPS-3, demo-pins.ts):
 // a visitor can't guess it, and this is where they need it; the manager's shows *Ingia kwa nenosiri*,
 // where his PIN would be. Never on a real shop's laptop, which keeps no demo PINs or logins, and never one
