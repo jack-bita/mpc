@@ -260,6 +260,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/control/flags/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["control_flags_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/devices/": {
         parameters: {
             query?: never;
@@ -1145,6 +1161,44 @@ export interface components {
             /** Format: uuid */
             role_given: string;
         };
+        Flag: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FlagKindEnum"];
+            status: components["schemas"]["FlagStatusEnum"];
+            /** @description The side's name; none for a flag of the whole shop. */
+            side: string | null;
+            /** @description The nicknames of those it names. */
+            people: string[];
+            /** @description The laptop's name. */
+            device: string | null;
+            /**
+             * Format: date-time
+             * @description When its record was made, by the laptop's clock.
+             */
+            made_at: string | null;
+            /**
+             * Format: date-time
+             * @description When the server found it.
+             */
+            raised_at: string;
+            /** Format: decimal */
+            expected: string | null;
+            /** Format: decimal */
+            actual: string | null;
+            /** Format: decimal */
+            difference: string | null;
+            tap: components["schemas"]["FlaggedTap"] | null;
+            /** @description Why the record was refused: a code, or empty. */
+            refused_for: string;
+            /** @description The laptop that made a record a rescue file brought. */
+            brought_from: string | null;
+            /** @description Who loaded that rescue file. */
+            loaded_by: string | null;
+            notes: components["schemas"]["FlagNote"][];
+            /** @description Whether it names the person looking, who may only explain it. */
+            names_you: boolean;
+        };
         /**
          * @description * `cash_difference` - Cash difference
          *     * `count_difference` - Count difference
@@ -1189,6 +1243,16 @@ export interface components {
              */
             raised_at: string;
         };
+        FlagNote: {
+            /** Format: uuid */
+            id: string;
+            step: components["schemas"]["FlagStepEnum"];
+            text: string;
+            /** @description A nickname; none for the system's own note. */
+            by: string | null;
+            /** Format: date-time */
+            at: string;
+        };
         FlagRaised: {
             /** Format: uuid */
             id: string;
@@ -1202,6 +1266,26 @@ export interface components {
          * @enum {string}
          */
         FlagStatusEnum: "open" | "explained" | "resolved" | "dismissed";
+        /**
+         * @description * `explained` - Explained
+         *     * `resolved` - Resolved
+         *     * `dismissed` - Dismissed
+         * @enum {string}
+         */
+        FlagStepEnum: "explained" | "resolved" | "dismissed";
+        FlaggedTap: {
+            /**
+             * Format: uuid
+             * @description The worker's job.
+             */
+            staff: string;
+            kind: components["schemas"]["ClockKindEnum"];
+            /**
+             * Format: date
+             * @description Its day on the shop's calendar.
+             */
+            day: string;
+        };
         /**
          * @description * `default` - Default
          *     * `second` - Second, easy to read
@@ -2528,6 +2612,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedFlagLineList"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    control_flags_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this flag. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Flag"];
                 };
             };
             default: {

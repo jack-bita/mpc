@@ -4,7 +4,8 @@ flag_names says whether a flag names a person: the services ask it before a flag
 asks it for the person looking. One question in one place, so the page and the service can't answer it differently.
 
 flags_asked and in_state keep a list of flags to what the page asks, and flag_lines says each in the words of a line:
-who it names, and the laptop and time of the record it is about (CTRL-4).
+who it names, and the laptop and time of the record it is about. flag_detail says one flag whole: those, what its record
+says of itself (apps/control/facts.py), and every note (CTRL-4).
 
 `control` is layer 0 and may not import `people`, nor the apps whose records a flag is about (ADR-0043), so it reaches
 their tables by their type codes (apps/core/links.py), at run time, as a flag's subject is, and reads only what `core`
@@ -16,11 +17,13 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from django.db import models
 
-from apps.control.models import CLOSED, Flag, FlagPerson
+from apps.control.facts import FlagFacts, SaysItsFacts
+from apps.control.models import CLOSED, Flag, FlagNote, FlagPerson
 from apps.core.links import table_of
 from apps.core.models import CounterRecord
 from apps.core.tenancy import Actor
@@ -82,22 +85,72 @@ def flag_lines(flags: Sequence[Flag]) -> list[FlagLine]:
     and one per table for the records they are about, however many flags there are (CTRL-1's note)."""
     named = people_named(flags)
     records = _records(flags)
-    lines = []
-    for flag in flags:
-        record = records.get(flag.subject_id)
-        lines.append(
-            FlagLine(
-                id=flag.pk,
-                kind=flag.kind,
-                status=flag.status,
-                side=None if flag.side is None else flag.side.name,
-                people=named[flag.pk],
-                device=None if record is None or record.device_id is None else record.device.name,
-                made_at=None if record is None else record.client_time,
-                raised_at=flag.created_at,
+    return [_line(flag, named[flag.pk], records.get(flag.subject_id)) for flag in flags]
+
+
+def _line(flag: Flag, people: list[str], record: CounterRecord | None) -> FlagLine:
+    return FlagLine(
+        id=flag.pk,
+        kind=flag.kind,
+        status=flag.status,
+        side=None if flag.side is None else flag.side.name,
+        people=people,
+        # A tap entered in the office has no laptop and no laptop's time (ATT-13).
+        device=None if record is None or record.device_id is None else record.device.name,
+        made_at=None if record is None else record.client_time,
+        raised_at=flag.created_at,
+    )
+
+
+@dataclass(frozen=True)
+class NoteLine:
+    # One note of a flag, as its page shows it: what it did, its words, who and when. `by` is none for the system's own,
+    # whose words are a code (SYSTEM_NOTES, apps/control/services.py).
+    id: uuid.UUID
+    step: str
+    text: str
+    by: str | None
+    at: datetime
+
+
+@dataclass(frozen=True)
+class FlagDetail(FlagLine):
+    # One flag whole, as its page shows it: its line, its numbers if it has them, what its record says of itself, its
+    # notes, and whether it names the one looking, who may then only explain it (02 §13).
+    expected: Decimal | None
+    actual: Decimal | None
+    difference: Decimal | None
+    facts: FlagFacts
+    notes: list[NoteLine]
+    names_you: bool
+
+
+def flag_detail(flag: Flag, *, viewer: Actor) -> FlagDetail:
+    """`flag`, loaded with its side, whole, for its page, as `viewer` sees it: the person looking."""
+    record = _records([flag]).get(flag.subject_id)
+    # Oldest first, as they were written: an explanation before the close that followed it. Who wrote each is read in
+    # the same query.
+    notes = FlagNote.objects.filter(flag=flag).select_related("created_by").order_by("created_at", "id")
+    return FlagDetail(
+        # Its line's own fields, so the page and the list can't say them differently.
+        **vars(_line(flag, people_named([flag])[flag.pk], record)),
+        expected=flag.expected,
+        actual=flag.actual,
+        difference=flag.difference,
+        # A record of a table that says nothing of itself, or none at all: the flag's own facts alone.
+        facts=record.flag_facts() if isinstance(record, SaysItsFacts) else FlagFacts(),
+        notes=[
+            NoteLine(
+                id=note.pk,
+                step=note.step,
+                text=note.text,
+                by=None if note.created_by is None else note.created_by.display_name,
+                at=note.created_at,
             )
-        )
-    return lines
+            for note in notes
+        ],
+        names_you=flag_names(flag, viewer),
+    )
 
 
 def people_named(flags: Sequence[Flag]) -> dict[uuid.UUID, list[str]]:

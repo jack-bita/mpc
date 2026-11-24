@@ -38,9 +38,14 @@ and the old one stays, so a month with a raise on the 15th pays each day at its 
     Juma   15 Nov      12,000.00   yes
 """
 
+from datetime import datetime
+from typing import cast
+from zoneinfo import ZoneInfo
+
 from django.db import models
 from django.db.models.functions import Floor
 
+from apps.control.facts import FlagFacts, FlaggedTap
 from apps.core.models import AppendOnly, CounterRecord, ShopScoped
 
 
@@ -309,6 +314,14 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
 
     def __str__(self) -> str:
         return f"{self.kind} {self.client_time:%Y-%m-%d %H:%M}"
+
+    def flag_facts(self) -> FlagFacts:
+        # What a flag about this tap says on its page (CTRL-4): whose, which, and the day to open, on the shop's own
+        # calendar: 00:30 on Monday in Arusha is still Sunday in UTC. By the time trusted, else the laptop's, the only
+        # one an unverified tap has, as the book of days reads it (ATT-10).
+        at = cast(datetime, self.trusted_time or self.client_time)
+        day = at.astimezone(ZoneInfo(self.shop.timezone)).date()
+        return FlagFacts(tap=FlaggedTap(staff=self.staff_id, kind=self.kind, day=day))
 
 
 class AttendanceDay(ShopScoped):

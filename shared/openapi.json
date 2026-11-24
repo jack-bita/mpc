@@ -729,6 +729,53 @@
                 }
             }
         },
+        "/api/v1/control/flags/{id}/": {
+            "get": {
+                "operationId": "control_flags_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this flag.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "control"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Flag"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/people/devices/": {
             "get": {
                 "operationId": "people_devices_list",
@@ -3756,6 +3803,118 @@
                     "role_given"
                 ]
             },
+            "Flag": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/FlagKindEnum"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/FlagStatusEnum"
+                    },
+                    "side": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "The side's name; none for a flag of the whole shop."
+                    },
+                    "people": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "The nicknames of those it names."
+                    },
+                    "device": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "The laptop's name."
+                    },
+                    "made_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true,
+                        "description": "When its record was made, by the laptop's clock."
+                    },
+                    "raised_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the server found it."
+                    },
+                    "expected": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,3})?$",
+                        "nullable": true
+                    },
+                    "actual": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,3})?$",
+                        "nullable": true
+                    },
+                    "difference": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,13}(?:\\.\\d{0,3})?$",
+                        "nullable": true
+                    },
+                    "tap": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FlaggedTap"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "refused_for": {
+                        "type": "string",
+                        "description": "Why the record was refused: a code, or empty."
+                    },
+                    "brought_from": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "The laptop that made a record a rescue file brought."
+                    },
+                    "loaded_by": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Who loaded that rescue file."
+                    },
+                    "notes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FlagNote"
+                        }
+                    },
+                    "names_you": {
+                        "type": "boolean",
+                        "description": "Whether it names the person looking, who may only explain it."
+                    }
+                },
+                "required": [
+                    "actual",
+                    "brought_from",
+                    "device",
+                    "difference",
+                    "expected",
+                    "id",
+                    "kind",
+                    "loaded_by",
+                    "made_at",
+                    "names_you",
+                    "notes",
+                    "people",
+                    "raised_at",
+                    "refused_for",
+                    "side",
+                    "status",
+                    "tap"
+                ]
+            },
             "FlagKindEnum": {
                 "enum": [
                     "cash_difference",
@@ -3833,6 +3992,37 @@
                     "status"
                 ]
             },
+            "FlagNote": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "step": {
+                        "$ref": "#/components/schemas/FlagStepEnum"
+                    },
+                    "text": {
+                        "type": "string"
+                    },
+                    "by": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "A nickname; none for the system's own note."
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "at",
+                    "by",
+                    "id",
+                    "step",
+                    "text"
+                ]
+            },
             "FlagRaised": {
                 "type": "object",
                 "properties": {
@@ -3858,6 +4048,38 @@
                 ],
                 "type": "string",
                 "description": "* `open` - Open\n* `explained` - Explained\n* `resolved` - Resolved\n* `dismissed` - Dismissed"
+            },
+            "FlagStepEnum": {
+                "enum": [
+                    "explained",
+                    "resolved",
+                    "dismissed"
+                ],
+                "type": "string",
+                "description": "* `explained` - Explained\n* `resolved` - Resolved\n* `dismissed` - Dismissed"
+            },
+            "FlaggedTap": {
+                "type": "object",
+                "properties": {
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The worker's job."
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/ClockKindEnum"
+                    },
+                    "day": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Its day on the shop's calendar."
+                    }
+                },
+                "required": [
+                    "day",
+                    "kind",
+                    "staff"
+                ]
             },
             "FontEnum": {
                 "enum": [

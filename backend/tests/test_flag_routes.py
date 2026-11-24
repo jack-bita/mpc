@@ -2,6 +2,7 @@
 
     GET  /api/v1/control/flags/?state=waiting     what waits, newest found first, in pages, and how many wait
     GET  /api/v1/control/flags/?state=closed      the closed ones
+    GET  /api/v1/control/flags/{id}/              one flag: what happened, and every note
 
 Each flag shows only to whoever may close it: `flag.review` on its side, or on the whole shop for a flag of no side, as
 attendance's are. The rest are "not found". The rule itself, a side's rows shown behind a key of their own, is the
@@ -19,22 +20,26 @@ import datetime as dt
 import uuid
 from collections.abc import Callable
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.control.api.pagination import FlagPage
-from apps.control.models import Flag, FlagKind
+from apps.control.models import Flag, FlagKind, FlagNote
 from apps.control.services import dismiss_flag, explain_flag, raise_flag, resolve_flag
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
-from apps.people.services import grant_permission
+from apps.people.services import grant_permission, hire_again, mark_left, suspend
 from apps.shops.models import Shop, Side
+from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
 from apps.sync.models import PushedDocument, PushedStatus
+from apps.sync.push import Carried, Sent, push
 
 pytestmark = pytest.mark.django_db
 
@@ -255,3 +260,220 @@ def test_the_list_costs_the_same_queries_for_many(
         flagged(pushed(device_a, number), FlagKind.SUSPENDED_STAFF_ACTIVITY, staff_a, side=side_a)
 
     assert queries() == for_one
+
+
+# --- One flag
+
+
+ARUSHA = ZoneInfo("Africa/Dar_es_Salaam")
+
+
+def clock(number: int, maker: StaffMember, tapped: dt.datetime, *, kind: str = "in", **parts: Any) -> Sent:
+    # One tap of Ingia or Toka, as a laptop pushes it; `parts` override the envelope.
+    return Sent(
+        **{
+            "id": uuid.uuid7(),
+            "type": "clock",
+            "schema_version": 1,
+            "device_seq": number,
+            "client_time": tapped,
+            "created_by": maker.pk,
+            "payload": {"kind": kind, "last_server_time": (tapped - dt.timedelta(hours=1)).isoformat()},
+            **parts,
+        }
+    )
+
+
+def send(device: Device, *documents: Sent, sent_at: dt.datetime, received_at: dt.datetime | None = None) -> None:
+    # The push as the route runs it, inside the laptop's shop. A right clock, unless `received_at` says otherwise.
+    with shop_context(device.shop_id):
+        push(
+            device,
+            documents,
+            received_at=received_at or sent_at,
+            sent_at=sent_at,
+            unsent_count=0,
+            app_version="2026.11.1",
+            outages=[],
+        )
+
+
+def only_flag(shop: Shop, kind: FlagKind) -> Flag:
+    with shop_context(shop):
+        return Flag.objects.get(kind=kind)
+
+
+def page_of(viewer: StaffMember, flag: Flag) -> dict[str, Any]:
+    answer = client_for(viewer).get(f"{FLAGS}{flag.pk}/")
+    assert answer.status_code == 200, answer.json()
+    return answer.json()  # type: ignore[no-any-return]
+
+
+def test_a_flag_about_a_tap_names_the_day_to_open(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, baba: StaffMember
+) -> None:
+    # Asha tapped Toka at 00:30 on Monday in Arusha, Sunday still in UTC, on a laptop whose clock was 40 minutes slow as
+    # it sent the tap hours later: no time is trusted, and the flag is the whole shop's. Its page opens her Monday, the
+    # shop's own day, as the book reads an untrusted tap by the laptop's time.
+    tapped = dt.datetime(2026, 11, 23, 0, 30, tzinfo=ARUSHA)
+    sent_at = tapped + dt.timedelta(hours=8)
+    send(
+        device_a,
+        clock(1, staff_a, tapped, kind="out"),
+        sent_at=sent_at,
+        received_at=sent_at + dt.timedelta(minutes=40),
+    )
+    flag = only_flag(shop_a, FlagKind.UNVERIFIED_TIME)
+
+    page = page_of(baba, flag)
+
+    assert page["tap"] == {"staff": str(staff_a.pk), "kind": "out", "day": "2026-11-23"}
+    assert (page["kind"], page["side"], page["people"], page["device"]) == (
+        "unverified_time",
+        None,
+        ["Staff A"],
+        "Laptop ya Dawa",
+    )
+    assert page["made_at"] == "2026-11-22T21:30:00Z"
+    assert (page["refused_for"], page["brought_from"], page["loaded_by"]) == ("", None, None)
+
+
+def test_a_suspended_workers_tap_names_its_day(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, baba: StaffMember
+) -> None:
+    # The flag is about the tap's line in the answer log, as the push's checks are, so the tap is found by it.
+    with shop_context(shop_a):
+        suspend(staff_a, by=None, reason="Hakuja kazini siku 3")
+    tapped = timezone.now() + dt.timedelta(minutes=1)
+    send(device_a, clock(1, staff_a, tapped), sent_at=tapped)
+
+    page = page_of(baba, only_flag(shop_a, FlagKind.SUSPENDED_STAFF_ACTIVITY))
+
+    day = tapped.astimezone(ARUSHA).date().isoformat()
+    assert page["tap"] == {"staff": str(staff_a.pk), "kind": "in", "day": day}
+    assert (page["side"], page["device"]) == ("Dawa", "Laptop ya Dawa")
+
+
+def test_a_device_gap_says_its_numbers_and_the_systems_note(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, baba: StaffMember
+) -> None:
+    # Record 1, then 4: numbers 2 and 3 are missing. They came late, so the system closed the flag with a note of its
+    # own, naming nobody (SYNC-5), whose text is a code the page says in words.
+    first = dt.datetime(2026, 11, 23, 7, 0, tzinfo=ARUSHA)
+    minute = dt.timedelta(minutes=1)
+    send(device_a, clock(1, staff_a, first), sent_at=first)
+    send(device_a, clock(4, staff_a, first + 4 * minute), sent_at=first + 4 * minute)
+    flag = only_flag(shop_a, FlagKind.DEVICE_GAP)
+
+    page = page_of(baba, flag)
+    assert (page["expected"], page["actual"], page["difference"]) == ("2.000", "4.000", "2.000")
+    assert (page["people"], page["notes"], page["status"]) == ([], [], "open")
+
+    send(device_a, clock(2, staff_a, first + 2 * minute), sent_at=first + 5 * minute)
+    send(device_a, clock(3, staff_a, first + 3 * minute), sent_at=first + 6 * minute)
+    closed = page_of(baba, flag)
+    assert closed["status"] == "resolved"
+    (note,) = closed["notes"]
+    assert (note["step"], note["text"], note["by"]) == ("resolved", "flag.device_gap_filled", None)
+
+
+def test_a_refused_record_says_why(shop_a: Shop, device_a: Device, staff_a: StaffMember, baba: StaffMember) -> None:
+    at = dt.datetime(2026, 11, 23, 7, 0, tzinfo=ARUSHA)
+    send(device_a, clock(1, staff_a, at, type="no_such_record"), sent_at=at)
+
+    page = page_of(baba, only_flag(shop_a, FlagKind.INVALID_DOCUMENT))
+
+    assert page["refused_for"] == "document.type_unknown"
+    assert (page["tap"], page["people"], page["device"]) == (None, ["Staff A"], "Laptop ya Dawa")
+
+
+def test_a_carried_record_says_where_it_was_made_and_who_loaded_it(
+    shop_a: Shop, device_a: Device, foods_laptop: Device, staff_a: StaffMember, baba: StaffMember
+) -> None:
+    # Asha, who holds no device.manage, loaded the dying Dawa laptop's file on the Vyakula laptop (SYNC-12).
+    at = dt.datetime(2026, 11, 23, 7, 0, tzinfo=ARUSHA)
+    carried = Carried(device=device_a.pk, device_seq=5, loaded_by=staff_a.pk)
+    send(foods_laptop, clock(1, baba, at, carried_from=carried), sent_at=at)
+
+    page = page_of(baba, only_flag(shop_a, FlagKind.PERMISSION_BREAK))
+
+    assert (page["device"], page["brought_from"], page["loaded_by"]) == (
+        "Laptop ya Vyakula",
+        "Laptop ya Dawa",
+        "Staff A",
+    )
+    assert (page["people"], page["side"]) == (["Staff A"], "Vyakula")
+    assert page["tap"]["staff"] == str(baba.pk)
+
+
+def test_every_note_shows_with_who_and_when(
+    shop_a: Shop, side_a: Side, device_a: Device, staff_a: StaffMember, baba: StaffMember
+) -> None:
+    # Oldest first, as they were written; none replaces another (02 §13).
+    flag = flagged(pushed(device_a, 1), FlagKind.SUSPENDED_STAFF_ACTIVITY, staff_a, side=side_a)
+    with shop_context(shop_a):
+        explain_flag(flag, text="Nilikuja kuchukua vitu vyangu", by=staff_a)
+        explain_flag(flag, text="Ni kweli, nilimwona", by=baba)
+        resolve_flag(flag, text="Nimezungumza naye", by=baba)
+        times = list(FlagNote.objects.order_by("created_at").values_list("created_at", flat=True))
+
+    notes = page_of(baba, flag)["notes"]
+
+    assert [(note["step"], note["text"], note["by"]) for note in notes] == [
+        ("explained", "Nilikuja kuchukua vitu vyangu", "Staff A"),
+        ("explained", "Ni kweli, nilimwona", "Staff A2"),
+        ("resolved", "Nimezungumza naye", "Staff A2"),
+    ]
+    assert [dt.datetime.fromisoformat(note["at"]) for note in notes] == times
+
+
+def test_a_flag_says_whether_it_names_the_viewer(
+    shop_a: Shop, side_a: Side, device_a: Device, staff_a: StaffMember, baba: StaffMember, give_role: GiveRole
+) -> None:
+    # So the page shows *Eleza* alone to the one it names, whom the services refuse a close; under an old job too
+    # (PPL-11), as they read the person.
+    flag = flagged(pushed(device_a, 1), FlagKind.PERMISSION_BREAK, staff_a, side=side_a)
+    give_role(staff_a, RoleTemplate.MANAGER, None)
+    assert page_of(staff_a, flag)["names_you"] is True
+    assert page_of(baba, flag)["names_you"] is False
+
+    with shop_context(shop_a):
+        mark_left(StaffMember.objects.get(pk=staff_a.pk), left_on=shop_today(shop_a), by=None, reason="Ameacha kazi")
+        again = hire_again(StaffMember.objects.get(pk=staff_a.pk), display_name="Staff A Again", by=None)
+    give_role(again, RoleTemplate.MANAGER, None)
+    assert page_of(again, flag)["names_you"] is True
+
+
+def test_a_flag_about_a_row_no_laptop_made_shows_its_own_facts(shop_a: Shop, side_a: Side, baba: StaffMember) -> None:
+    # As a later card's may be: no laptop, no time, no tap; what the flag itself says, and never a broken page.
+    with shop_context(shop_a):
+        flag = raise_flag(kind=FlagKind.TOTAL_MISMATCH, subject=side_a, side=side_a, by=None)
+
+    page = page_of(baba, flag)
+
+    assert (page["side"], page["device"], page["made_at"], page["tap"]) == ("Dawa", None, None, None)
+    assert shown(client_for(baba)) == ids(flag)
+
+
+def test_a_flag_the_viewer_may_not_close_is_not_found(
+    shop_a: Shop,
+    side_a: Side,
+    foods: Side,
+    device_a: Device,
+    foods_laptop: Device,
+    staff_a: StaffMember,
+    baba: StaffMember,
+) -> None:
+    # `flag.review` on Dawa alone opens neither Vyakula's flag nor the whole shop's, alike, as an id no shop has: none
+    # of the three answers tells that a flag is there (03 §5.4).
+    vyakula = flagged(pushed(foods_laptop, 1), FlagKind.PERMISSION_BREAK, baba, side=foods)
+    whole = flagged(pushed(foods_laptop, 2), FlagKind.INVALID_DOCUMENT, baba, side=None)
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.FLAG_REVIEW, side=side_a, by=None)
+    asha = client_for(staff_a)
+    dawa = flagged(pushed(device_a, 1), FlagKind.PERMISSION_BREAK, baba, side=side_a)
+    assert asha.get(f"{FLAGS}{dawa.pk}/").status_code == 200
+
+    for hidden in (vyakula.pk, whole.pk, uuid.uuid7()):
+        answer = asha.get(f"{FLAGS}{hidden}/")
+        assert (answer.status_code, answer.json()["code"]) == (404, "not_found")

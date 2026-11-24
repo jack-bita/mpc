@@ -12,7 +12,9 @@ and a repeat always finds it. A ledger: never changed, never deleted (ADR-0021).
 
 from django.db import models
 
+from apps.control.facts import FlagFacts
 from apps.core.models import AppendOnly, CounterRecord
+from apps.staffpay.models import AttendanceEvent
 
 
 class PushedStatus(models.TextChoices):
@@ -118,3 +120,15 @@ class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
 
     def __str__(self) -> str:
         return f"{self.type} {self.document_id}: {self.status}"
+
+    def flag_facts(self) -> FlagFacts:
+        # What a flag about this record says on its page (CTRL-4): the tap it is, read by the document's own id, which
+        # is the tap's; why it was refused, when it saved nothing; and for a carried record, where it was made and who
+        # loaded it.
+        tap = AttendanceEvent.objects.filter(pk=self.document_id).first()
+        return FlagFacts(
+            tap=None if tap is None else tap.flag_facts().tap,
+            refused_for=self.reason,
+            brought_from=None if self.carried_from is None else self.carried_from.name,
+            loaded_by=None if self.loaded_by is None else self.loaded_by.display_name,
+        )

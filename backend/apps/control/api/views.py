@@ -24,21 +24,21 @@ from rest_framework.response import Response
 
 from apps.control.api.downloads import PHOTO_ANSWER, photo_answer
 from apps.control.api.pagination import FlagPage
-from apps.control.api.serializers import FlagLineSerializer, FlagsQuery
+from apps.control.api.serializers import FlagLineSerializer, FlagSerializer, FlagsQuery
 from apps.control.models import ATTACHMENT_KINDS, Attachment, AttachmentKind, Flag
-from apps.control.selectors import FlagState, flag_lines, flags_asked, in_state
+from apps.control.selectors import FlagState, flag_detail, flag_lines, flags_asked, in_state
 from apps.core.api.base import SEES_THE_SIDE, ShopViewSet, Sight
 from apps.core.permissions import Permission
 
 
 class FlagViewSet(ShopViewSet[Flag]):
-    # GET flags/?state=waiting&kind=…&side=…: the list of *Tofauti* (CTRL-4).
+    # GET flags/?state=waiting&kind=…&side=…: the list of *Tofauti*; GET flags/{id}/: one flag's page (CTRL-4).
     model = Flag
     # A flag keeps its side in `side`: empty for a flag of the whole shop, as attendance's are (02 §12).
     side_field = "side"
     # A flag shows only to whoever may close it (02 §13), so even reading it is behind `flag.review`: the base keeps
     # every read to the sides where the person holds it, and to the whole shop's flags only for the key on every side.
-    action_permissions = {"list": Permission.FLAG_REVIEW}
+    action_permissions = {"list": Permission.FLAG_REVIEW, "retrieve": Permission.FLAG_REVIEW}
     serializer_class = FlagLineSerializer
     pagination_class = FlagPage
 
@@ -59,6 +59,11 @@ class FlagViewSet(ShopViewSet[Flag]):
         pages.waiting = in_state(flags, FlagState.WAITING).count()
         page = cast("list[Flag]", self.paginate_queryset(in_state(flags, asked["state"])))
         return self.get_paginated_response(FlagLineSerializer(flag_lines(page), many=True).data)
+
+    @extend_schema(responses=FlagSerializer)
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # One the person may not close, another shop's, or an id no shop has: "not found", alike (get_object).
+        return Response(FlagSerializer(flag_detail(self.get_object(), viewer=self.actor)).data)
 
 
 class AttachmentViewSet(ShopViewSet[Attachment]):

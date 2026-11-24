@@ -514,9 +514,9 @@ def test_attachment_routes_name_their_permissions() -> None:
 
 
 def test_flag_routes_name_their_permissions() -> None:
-    # A flag shows only to whoever may close it, so even its list is behind `flag.review` (CTRL-4). Written out in full,
-    # as above.
-    assert FlagViewSet.action_permissions == {"list": Permission.FLAG_REVIEW}
+    # A flag shows only to whoever may close it, so even its list and its page are behind `flag.review` (CTRL-4).
+    # Written out in full, as above.
+    assert FlagViewSet.action_permissions == {"list": Permission.FLAG_REVIEW, "retrieve": Permission.FLAG_REVIEW}
 
 
 def test_settings_routes_name_their_permissions() -> None:
