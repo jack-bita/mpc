@@ -89,7 +89,11 @@ export function FlagNoteSheet({
   const write = useMutation({
     mutationFn: (words: string) =>
       answerOf(SEND[action](flag.id, { id: noteId, text: words })),
-    onSuccess: (moved) => {
+    onSuccess: async (moved) => {
+      // First, any read of the flag still on its way, as a lost send asks for one: the server may have read it before
+      // this note, and its answer, landing later, would put a closed flag back with its three buttons (my-settings.tsx,
+      // UI-9's review; CTRL-4's). Cancelled, its answer is dropped.
+      await store.cancelQueries({ queryKey: flagKey(flag.id) });
       // The flag on its page at once, from the server's own answer; the lists read again, as it may have moved from
       // one tab to the other.
       store.setQueryData<Flag>(flagKey(flag.id), moved);

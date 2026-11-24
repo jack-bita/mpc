@@ -1,7 +1,13 @@
 // flag-note.test.tsx — Eleza, Imetatuliwa and Si tatizo, each a note in a sheet over the flag's page (CTRL-4): what each
 // sends, what the page shows after, and every way it can be refused. Fake people and words.
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { makeQueryClient } from "@/api/query-client";
@@ -259,6 +265,47 @@ describe("the sheet", () => {
     await waitFor(async () => expect(await notesSent()).toHaveLength(2));
     const [first, second] = await notesSent();
     expect(second?.body).toEqual(first?.body);
+  });
+
+  it("never lets an older read put a closed flag back", async () => {
+    // The first send is lost, so the page asks for the flag again; the answer is slow. The second send closes the flag.
+    // Then the older answer lands, from before the close: the page goes on showing the closed flag.
+    const { one } = show();
+    const closing = `${flagRoute(one.id)}resolve/`;
+    answer("POST", closing, () => {
+      throw new TypeError("the network dropped");
+    });
+    render(<FlagScreen id={one.id} />);
+    const sheet = await openSheet("Imetatuliwa");
+    type(sheet, WORDS);
+    let landLate: (older: Response) => void = () => {};
+    answer(
+      "GET",
+      flagRoute(one.id),
+      () =>
+        new Promise<Response>((resolve) => {
+          landLate = resolve;
+        }),
+    );
+    fireEvent.click(save(sheet));
+    await within(sheet).findByRole("alert");
+    const closed = { ...one, status: "resolved" as const };
+    answer("POST", closing, { status: 200, body: closed });
+    const late = landLate;
+    // Every read from here on answers the flag as it now is.
+    answer("GET", flagRoute(one.id), { status: 200, body: closed });
+
+    fireEvent.click(save(sheet));
+    await screen.findByText("Tofauti imefungwa: imetatuliwa.");
+    await act(async () => {
+      late(Response.json(one));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(screen.getByText("Hali").nextElementSibling?.textContent).toBe(
+      "Imetatuliwa",
+    );
+    expect(screen.queryByRole("button", { name: "Si tatizo" })).toBeNull();
   });
 
   it("forgets what was typed on Ghairi, and gives the keyboard back to its button", async () => {
