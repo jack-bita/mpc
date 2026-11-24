@@ -28,7 +28,8 @@ A photo writes none: the edit history keeps each change of it, with who, and the
 A shared laptop keeps a copy of the shop's people at work (apps/sync/registry.py): names, photo, status, PIN time and
 keys, all on their staff row. So each action that changes one of those saves inside `recording_changes(shop)`
 (apps/core/changes.py), in place of a plain transaction, and names the person's job with record_change, last, after
-every other write of the save: `archive` when they leave, as a laptop then drops them (SYNC-15). A role or an extra key
+every other write of the save (but a new photo's file, set_worker_photo): `archive` when they leave, as a laptop then
+drops them (SYNC-15). A role or an extra key
 travels on the person's row, so giving one names the person. The refusals that need no transaction come first, so a
 refused action opens nothing.
 
@@ -668,7 +669,7 @@ def set_worker_photo(
     # One transaction for the photo's row, its file, the job that names it and the laptops' line: all, or none.
     # acting_as(by): the edit history names the same person on the photo's lines as on the job's, even outside an office
     # visit (02 v1.7).
-    with recording_changes(staff.shop_id), acting_as(by):
+    with transaction.atomic(), acting_as(by):
         staff, by = _locked_for_a_photo(staff, by)
         # Sent before? Read with both jobs locked: of two copies of one photo sent at the same moment, the second waits
         # for the first, then finds its row here. Through the guarded manager, so another shop's row is not seen: its id
@@ -690,21 +691,28 @@ def set_worker_photo(
         if staff.photo_id != instead_of:
             raise VersionConflict()
         old = staff.photo
-        # The photo's row, then the job that names it, then the old photo's end, and the new photo's file last, as the
-        # block ends: a failure before it leaves no file that no row names.
-        with adding_attachment(
-            id=photo_id, kind=AttachmentKind.STAFF_PHOTO, subject=staff, content=content, by=by
-        ) as photo:
+        # The photo's row, then the job that names it, then the old photo's end, then the laptops' line, whose block
+        # numbers it as it ends, and the new photo's file last, as its own block ends: a failure before it leaves no
+        # file that no row names. So the line's block is inside the photo's, not around it, and holds the shop's counter
+        # from there to the commit, through the writing of one file of 1 MB at most. It can't wait for a save that waits
+        # for it: the one lock taken after it is the new photo's own row, which nobody else can see yet (PPL-14's
+        # review).
+        with (
+            adding_attachment(
+                id=photo_id, kind=AttachmentKind.STAFF_PHOTO, subject=staff, content=content, by=by
+            ) as photo,
+            recording_changes(staff.shop_id),
+        ):
             _save_photo(staff, photo, by=by)
             if old is not None:
                 # Personal data is kept only as long as it is needed (03 §10): the old face isn't, once a newer one
                 # shows. Its file is deleted after the commit, so a rollback never leaves the old row naming a file that
                 # is gone.
                 remove_attachment_file(old, reason=PHOTO_REPLACED, by=by)
-        # The laptops' tiles show the new face (PPL-14): each hears of it at its next pull, once this is committed, its
-        # file with it. After the block above, never inside it: record_change refuses it there (SYNC-1). The job's line,
-        # in this shop alone, as the photo is the job's, not the person's: her other shop's tiles show that shop's own.
-        record_change(staff)
+            # The laptops' tiles show the new face (PPL-14): each hears of it at its next pull, once this is committed,
+            # its file with it. The job's line, in this shop alone, as the photo is the job's, not the person's: her
+            # other shop's tiles show that shop's own.
+            record_change(staff)
     return staff
 
 

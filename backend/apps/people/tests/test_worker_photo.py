@@ -299,23 +299,36 @@ def test_an_id_of_another_record_is_taken(asha: StaffMember, baba: StaffMember, 
     assert row_of(staff_a2, theirs).subject_id == staff_a2.pk
 
 
+@pytest.mark.parametrize(
+    "step",
+    [
+        pytest.param("apps.people.services.remove_attachment_file", id="the old photo's removal"),
+        pytest.param("apps.core.changes.next_numbers", id="the laptops' line"),
+    ],
+)
 def test_a_photo_is_kept_whole_or_not_at_all(
     asha: StaffMember,
     baba: StaffMember,
     monkeypatch: pytest.MonkeyPatch,
     django_capture_on_commit_callbacks: CommitSteps,
+    step: str,
 ) -> None:
-    # The last step fails, the old photo's removal: the new photo's row is undone with the rest, and its file was never
-    # written, as a file no row names is a face that nothing would ever find to delete (PPL-9's review). The old photo
-    # still shows, its file too.
+    # A late step fails, the old photo's removal, or the number of the line that tells the laptops (PPL-14), as when the
+    # wait for the shop's counter runs out: the new photo's row is undone with the rest, and its file was never written,
+    # as a file no row names is a face that nothing would ever find to delete (PPL-9's review). The old photo still
+    # shows, its file too.
     shown = set_photo(asha, by=baba)
     new = uuid.uuid7()
 
     def fails(*args: Any, **kwargs: Any) -> None:
-        raise RuntimeError("the old photo could not be removed")
+        raise RuntimeError("a late step failed")
 
-    monkeypatch.setattr("apps.people.services.remove_attachment_file", fails)
-    with django_capture_on_commit_callbacks(execute=True), pytest.raises(RuntimeError):
+    monkeypatch.setattr(step, fails)
+    with (
+        lines_written(asha.shop_id) as lines,
+        django_capture_on_commit_callbacks(execute=True),
+        pytest.raises(RuntimeError, match="a late step failed"),
+    ):
         set_photo(asha, by=baba, content=BETTER_FACE, photo_id=new)
 
     assert photo_of(asha) == shown
@@ -323,6 +336,7 @@ def test_a_photo_is_kept_whole_or_not_at_all(
     with shop_context(asha.shop_id):
         assert not Attachment.objects.filter(pk=new).exists()
         assert not default_storage.exists(f"{asha.shop_id}/{new}")
+    assert lines == []
 
 
 @pytest.mark.parametrize(
