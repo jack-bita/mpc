@@ -31,8 +31,8 @@ remove_attachment_file is the hook for retention rules: it takes the file away a
 why (rule 7). ATT-7's nightly job calls it for clock-in photos 90 days after their pay run is approved (03 §5.13).
 
 A broken rule is a ValidationError with a code (ADR-0032), which the API's error handler
-(apps/core/api/errors.py) will turn into its error shape when the review screen comes (CTRL-4); a bug in the
-calling code, such as a row of another shop, is ShopMismatch, a server error.
+(apps/core/api/errors.py) turns into its error shape for the flags' pages (CTRL-4); a bug in the calling code, such as a
+row of another shop, is ShopMismatch, a server error.
 
 `control` is layer 0 and may import only `core` (ADR-0035), so the services can't name a Side or a
 StaffMember. The caller passes in what they need, as ADR-0035 says: the subject and the side as rows
@@ -83,8 +83,8 @@ from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop
 
 # The kinds the system closes by itself, each with the code of the note it writes (Jack, SYNC-5; 02 v1.22): a
 # missing-number flag, once every record it waited for has come. A code, not words: a person's note is kept as they
-# wrote it, in their language, but the system has no language of its own, so the review screen shows the code's
-# sentence in the reader's (ADR-0040; the sentences come with that screen, CTRL-4). Every other kind waits for a person.
+# wrote it, in their language, but the system has no language of its own, so a flag's page shows the code's sentence in
+# the reader's (ADR-0040; `flags.systemNote` in the word books, CTRL-4). Every other kind waits for a person.
 SYSTEM_NOTES = {FlagKind.DEVICE_GAP: "flag.device_gap_filled"}
 
 
