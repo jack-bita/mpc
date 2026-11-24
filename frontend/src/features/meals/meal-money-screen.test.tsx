@@ -16,6 +16,7 @@ import {
   mealDay,
   mealDays,
   type MealMoneyDays,
+  row,
   TODAY,
   WITH_THE_KEY,
 } from "@/test/meals";
@@ -241,6 +242,52 @@ describe("the month's meal money", () => {
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Mwezi uliopita" })).toBeNull();
     expect(screen.queryByText(/Jumla/)).toBeNull();
+  });
+
+  it("shows money typed at once, the days asked again", async () => {
+    // Baba types today's 9,000 from the list: the server's own new total and line, never one worked out on the phone.
+    const before = mealDays([
+      mealDay({
+        date: TODAY,
+        amount: "0.00",
+        over: false,
+        sharers: 0,
+        share: "0.00",
+      }),
+    ]);
+    theShopHas({ "2026-11-01 2026-11-30": before });
+    render(<MealMoneyScreen />);
+    expect(await lines()).toEqual(["Jumanne 24/11 (leo) | Haijaandikwa"]);
+
+    answer("POST", MEAL_MONEY, {
+      status: 201,
+      body: row({ date: TODAY, amount: "9000.00" }),
+    });
+    theShopHas({ "2026-11-01 2026-11-30": NOVEMBER });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Andika hela ya chakula" }),
+    );
+    const sheet = screen.getByRole("dialog");
+    fireEvent.change(within(sheet).getByLabelText("Kiasi (TSh)"), {
+      target: { value: "9000" },
+    });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Hifadhi" }));
+
+    await waitFor(async () => expect((await lines()).length).toBe(4));
+    expect(screen.getByText(/^Imeandikwa: TSh/)).toBeTruthy();
+  });
+
+  it("offers nothing to type or choose to someone without the key", async () => {
+    answer("GET", ME, { status: 200, body: whoIsHere([]) });
+    answer("GET", MEAL_MONEY, refusal(403, "permission_denied"));
+
+    render(<MealMoneyScreen />);
+
+    await screen.findByRole("alert");
+    expect(
+      screen.queryByRole("button", { name: "Andika hela ya chakula" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Chagua siku" })).toBeNull();
   });
 
   it("keeps the month last read when a later read fails, with the reason above it", async () => {

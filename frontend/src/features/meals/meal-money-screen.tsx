@@ -2,6 +2,7 @@
 // (WAGE-7, 03 §5.10), as Jack pictured it (24 Nov 2026):
 //
 //   ←  Hela ya chakula
+//   [      Andika hela ya chakula      ]
 //   [           Chagua siku            ]
 //    ‹          Novemba 2026          ›
 //   Jumla hadi leo, 24/11     TSh 24,000
@@ -22,7 +23,7 @@
 //   20/11/2026 hadi 23/11/2026  [ Mwezi mzima ]
 //   Jumla                           TSh 15,000
 //
-// Which days are listed, their sums and each one's share are the server's
+// Andika hela ya chakula types a day's money in a sheet (record-meal-money.tsx). Which days are listed, their sums and each one's share are the server's
 // (meal_money_days); the page adds nothing up. Haijaandikwa: a day someone came and nobody typed its money, so a
 // forgotten day is easy to see.
 //
@@ -70,6 +71,7 @@ import {
   spanFrom,
   useMealMoney,
 } from "./meal-money";
+import { RecordMealMoney } from "./record-meal-money";
 
 export function MealMoneyScreen() {
   const t = useTranslations("mealMoney");
@@ -121,6 +123,13 @@ export function MealMoneyScreen() {
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
       {/* Only for someone who may see it, so no ‹ › only asks to be refused again (the month page's review). */}
+      {/* Today, the shop's, as the server last said it, or the phone's own count until it answers. */}
+      {who.data && may ? (
+        <RecordMealMoney
+          day={answer.data?.today ?? shopToday(who.data.shop.timezone, now)}
+          today={answer.data?.today ?? shopToday(who.data.shop.timezone, now)}
+        />
+      ) : null}
       {may ? (
         <Button
           ref={chooseButton}

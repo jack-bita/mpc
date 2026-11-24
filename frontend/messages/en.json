@@ -791,6 +791,14 @@
     "daysChosenLabel": "The days you chose",
     "span": "{first} to {last}",
     "wholeMonth": "Whole month",
+    "record": {
+      "title": "Record meal money",
+      "date": "Day",
+      "amount": "Amount (TSh)",
+      "note": "Note (optional)",
+      "save": "Save",
+      "saved": "Recorded: {amount}, {weekday} {date}."
+    },
     "choose": {
       "title": "Choose days",
       "first": "From",

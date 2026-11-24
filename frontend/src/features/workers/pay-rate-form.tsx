@@ -44,14 +44,10 @@ import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { Decimal } from "@/lib/decimal";
 import { formatDay, formatMoney } from "@/lib/format";
 import { newId } from "@/lib/ids";
+import { typedAmount } from "@/lib/typed-amount";
 import { useOnline } from "@/offline/network";
 
-import {
-  PAY_RATES,
-  type PayRates,
-  startingAmount,
-  typedAmount,
-} from "./pay-rates";
+import { PAY_RATES, type PayRates, startingAmount } from "./pay-rates";
 import type { Worker } from "./workers";
 
 type Sent = components["schemas"]["PayRateCreateRequest"];

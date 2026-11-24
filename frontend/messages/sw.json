@@ -791,6 +791,14 @@
     "daysChosenLabel": "Siku ulizochagua",
     "span": "{first} hadi {last}",
     "wholeMonth": "Mwezi mzima",
+    "record": {
+      "title": "Andika hela ya chakula",
+      "date": "Siku",
+      "amount": "Kiasi (TSh)",
+      "note": "Maelezo (si lazima)",
+      "save": "Hifadhi",
+      "saved": "Imeandikwa: {amount}, {weekday} {date}."
+    },
     "choose": {
       "title": "Chagua siku",
       "first": "Kuanzia",

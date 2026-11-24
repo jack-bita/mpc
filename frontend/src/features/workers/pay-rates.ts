@@ -1,5 +1,5 @@
 // pay-rates.ts — a worker's daily pay rates, for Malipo kwa siku on their page (WAGE-1): the rates' place in the store
-// of server answers, the read of one worker's, who may see them, and how a rate's amount is typed.
+// of server answers, the read of one worker's, and who may see them.
 //
 // The server answers a worker's rates newest first, the shop's today, and which rate is in force today, worked out on
 // the shop's own date there, as a phone's date can be wrong (GET /api/v1/staffpay/pay-rates/?staff=…). Its route asks
@@ -60,19 +60,6 @@ export function usePayRates(id: string | null, enabled: boolean) {
       ),
     enabled: enabled && id !== null,
   });
-}
-
-/** Whole shillings, as Baba types them, "10,000", "10 000" or "10000": the digits, as the server takes them, or null
- * for anything else. The same shapes as a money rule's box (setting-form.tsx): a point and cents are refused, as a
- * day's pay has none (Jack, 16 Nov 2026). */
-const WHOLE = /^(\d+|[1-9]\d{0,2}([, ]\d{3})+)$/;
-export function typedAmount(typed: string): string | null {
-  const trimmed = typed.trim();
-  if (!WHOLE.test(trimmed)) return null;
-  const digits = trimmed.replace(/[, ]/g, "");
-  // Above nothing, as the server asks (pay_rate.amount_invalid): "0" and "000" are no pay. "0" as text: the shared
-  // Decimal is strict, and refuses a plain number, so no float ever reaches money (rule 3).
-  return new Decimal(digits).gt("0") ? digits : null;
 }
 
 /** A rate's amount as its box starts with it, on Badilisha malipo: "10000.00" → "10000", so a raise to 12,000 is a
