@@ -1370,6 +1370,15 @@
       "in_future": "This time hasn't come yet.",
       "reason_missing": "Write why."
     },
+    "meal_money": {
+      "amount_invalid": "Type a whole number of shillings, above 0.",
+      "amount_too_big": "This amount is too big. Check its zeros.",
+      "in_future": "This day hasn't come yet.",
+      "not_working_day": "This isn't a working day, so it has no meal money.",
+      "reason_missing": "Write why.",
+      "days_backwards": "To is before From.",
+      "too_many_days": "Choose at most a year of days."
+    },
     "flag": {
       "note_required": "Write a note.",
       "closed": "This flag is already closed.",

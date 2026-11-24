@@ -876,6 +876,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staffpay/meal-money/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        get: operations["staffpay_meal_money_list"];
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_meal_money_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffpay/meal-money/{id}/void/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_meal_money_void_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/pay-rates/": {
         parameters: {
             query?: never;
@@ -1440,6 +1499,71 @@ export interface components {
             readonly language: components["schemas"]["LanguageEnum"];
             readonly font: components["schemas"]["FontEnum"];
         };
+        MealDay: {
+            /** Format: date */
+            date: string;
+            /**
+             * Format: decimal
+             * @description The rows that count, added up.
+             */
+            amount: string;
+            /** @description Whether the day is over: today is not, so its money isn't split yet. */
+            over: boolean;
+            /** @description How many workers share the day's money. */
+            sharers: number;
+            /**
+             * Format: decimal
+             * @description What each of them pays, as the book kept it.
+             */
+            share: string;
+            /** @description How many workers' days still wait for a decision. */
+            waiting: number;
+            rows: components["schemas"]["MealMoneyLine"][];
+        };
+        MealMoneyAnswer: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            date: string;
+            /** Format: decimal */
+            amount: string;
+            note: string;
+            by: string;
+            /** Format: date-time */
+            at: string;
+            voided: components["schemas"]["VoidedMealMoney"] | null;
+        };
+        MealMoneyDaysAnswer: {
+            /** Format: date */
+            first: string;
+            /** Format: date */
+            last: string;
+            /** Format: date */
+            today: string;
+            /** Format: decimal */
+            total: string;
+            days: components["schemas"]["MealDay"][];
+            /** @description On the demo, the ready reasons a row may be crossed out with, as codes; elsewhere none. */
+            ready_void_reasons: components["schemas"]["MealMoneyDaysAnswerReadyVoidReasonsEnum"][];
+        };
+        /**
+         * @description * `wrong_amount` - wrong_amount
+         * @enum {string}
+         */
+        MealMoneyDaysAnswerReadyVoidReasonsEnum: "wrong_amount";
+        MealMoneyLine: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            date: string;
+            /** Format: decimal */
+            amount: string;
+            note: string;
+            by: string;
+            /** Format: date-time */
+            at: string;
+            voided: components["schemas"]["VoidedMealMoney"] | null;
+        };
         /**
          * @description * `no_camera` - No camera
          *     * `blocked` - Camera blocked
@@ -1778,11 +1902,6 @@ export interface components {
          */
         ReadyReasonsEnum: "forgot_toka" | "away_on_work" | "owner_allowed";
         /**
-         * @description * `wrong_tap` - wrong_tap
-         * @enum {string}
-         */
-        ReadyVoidReasonsEnum: "wrong_tap";
-        /**
          * @description * `outside_job` - Outside the job's days
          *     * `closed_day` - The shop was closed
          *     * `not_working` - Suspended or gone
@@ -1795,6 +1914,16 @@ export interface components {
          * @enum {string}
          */
         ReasonEnum: "outside_job" | "closed_day" | "not_working" | "clock_disagrees" | "time_unknown" | "no_in" | "came_late" | "no_out" | "left_early";
+        RecordMealMoneyRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            date: string;
+            /** Format: decimal */
+            amount: string;
+            /** @default  */
+            note: string;
+        };
         RemovePhotoRequest: {
             reason: string;
             /** Format: uuid */
@@ -2116,7 +2245,16 @@ export interface components {
             password: string;
             reason: string;
         };
+        VoidMealMoneyRequest: {
+            reason: string;
+        };
         VoidTapRequest: {
+            reason: string;
+        };
+        VoidedMealMoney: {
+            by: string;
+            /** Format: date-time */
+            at: string;
             reason: string;
         };
         WhoIsHere: {
@@ -2148,8 +2286,13 @@ export interface components {
             /** @description On the demo, the ready reasons a tap added may take, as codes; elsewhere none (ATT-13). */
             ready_add_reasons: components["schemas"]["ReadyAddReasonsEnum"][];
             /** @description On the demo, the ready reasons a tap crossed out may take, as codes; elsewhere none (ATT-13). */
-            ready_void_reasons: components["schemas"]["ReadyVoidReasonsEnum"][];
+            ready_void_reasons: components["schemas"]["WorkerAttendanceAnswerReadyVoidReasonsEnum"][];
         };
+        /**
+         * @description * `wrong_tap` - wrong_tap
+         * @enum {string}
+         */
+        WorkerAttendanceAnswerReadyVoidReasonsEnum: "wrong_tap";
         WorkerDay: {
             /** Format: uuid */
             id: string;
@@ -4027,6 +4170,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerAttendanceAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_meal_money_list: {
+        parameters: {
+            query: {
+                /** @description The first day, as 2026-11-01. */
+                first: string;
+                /** @description The last day, counted, as 2026-11-30. */
+                last: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealMoneyDaysAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_meal_money_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordMealMoneyRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealMoneyAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_meal_money_void_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this meal money. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidMealMoneyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealMoneyAnswer"];
                 };
             };
             default: {

@@ -1370,6 +1370,15 @@
       "in_future": "Saa hii bado haijafika.",
       "reason_missing": "Andika sababu."
     },
+    "meal_money": {
+      "amount_invalid": "Andika kiasi cha shilingi nzima, zaidi ya sifuri.",
+      "amount_too_big": "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
+      "in_future": "Siku hii bado haijafika.",
+      "not_working_day": "Siku hii si siku ya kazi, kwa hiyo haina hela ya chakula.",
+      "reason_missing": "Andika sababu.",
+      "days_backwards": "Hadi iko kabla ya Kuanzia.",
+      "too_many_days": "Chagua siku zisizozidi mwaka mmoja."
+    },
     "flag": {
       "note_required": "Andika maelezo.",
       "closed": "Tofauti hii imeshafungwa.",

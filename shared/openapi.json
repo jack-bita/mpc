@@ -2906,6 +2906,166 @@
                 }
             }
         },
+        "/api/v1/staffpay/meal-money/": {
+            "get": {
+                "operationId": "staffpay_meal_money_list",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "first",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "description": "The first day, as 2026-11-01.",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "last",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "description": "The last day, counted, as 2026-11-30.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MealMoneyDaysAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "staffpay_meal_money_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecordMealMoneyRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MealMoneyAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/staffpay/meal-money/{id}/void/": {
+            "post": {
+                "operationId": "staffpay_meal_money_void_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this meal money.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VoidMealMoneyRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MealMoneyAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/staffpay/pay-rates/": {
             "get": {
                 "operationId": "staffpay_pay_rates_list",
@@ -4639,6 +4799,194 @@
                     "language"
                 ]
             },
+            "MealDay": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "description": "The rows that count, added up."
+                    },
+                    "over": {
+                        "type": "boolean",
+                        "description": "Whether the day is over: today is not, so its money isn't split yet."
+                    },
+                    "sharers": {
+                        "type": "integer",
+                        "description": "How many workers share the day's money."
+                    },
+                    "share": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "description": "What each of them pays, as the book kept it."
+                    },
+                    "waiting": {
+                        "type": "integer",
+                        "description": "How many workers' days still wait for a decision."
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MealMoneyLine"
+                        }
+                    }
+                },
+                "required": [
+                    "amount",
+                    "date",
+                    "over",
+                    "rows",
+                    "share",
+                    "sharers",
+                    "waiting"
+                ]
+            },
+            "MealMoneyAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "note": {
+                        "type": "string"
+                    },
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/VoidedMealMoney"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "amount",
+                    "at",
+                    "by",
+                    "date",
+                    "id",
+                    "note",
+                    "voided"
+                ]
+            },
+            "MealMoneyDaysAnswer": {
+                "type": "object",
+                "properties": {
+                    "first": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "last": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "today": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "total": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "days": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MealDay"
+                        }
+                    },
+                    "ready_void_reasons": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MealMoneyDaysAnswerReadyVoidReasonsEnum"
+                        },
+                        "description": "On the demo, the ready reasons a row may be crossed out with, as codes; elsewhere none."
+                    }
+                },
+                "required": [
+                    "days",
+                    "first",
+                    "last",
+                    "ready_void_reasons",
+                    "today",
+                    "total"
+                ]
+            },
+            "MealMoneyDaysAnswerReadyVoidReasonsEnum": {
+                "enum": [
+                    "wrong_amount"
+                ],
+                "type": "string",
+                "description": "* `wrong_amount` - wrong_amount"
+            },
+            "MealMoneyLine": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "note": {
+                        "type": "string"
+                    },
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/VoidedMealMoney"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "amount",
+                    "at",
+                    "by",
+                    "date",
+                    "id",
+                    "note",
+                    "voided"
+                ]
+            },
             "NoPhotoEnum": {
                 "enum": [
                     "no_camera",
@@ -5398,13 +5746,6 @@
                 "type": "string",
                 "description": "* `forgot_toka` - forgot_toka\n* `away_on_work` - away_on_work\n* `owner_allowed` - owner_allowed"
             },
-            "ReadyVoidReasonsEnum": {
-                "enum": [
-                    "wrong_tap"
-                ],
-                "type": "string",
-                "description": "* `wrong_tap` - wrong_tap"
-            },
             "ReasonEnum": {
                 "enum": [
                     "outside_job",
@@ -5419,6 +5760,34 @@
                 ],
                 "type": "string",
                 "description": "* `outside_job` - Outside the job's days\n* `closed_day` - The shop was closed\n* `not_working` - Suspended or gone\n* `clock_disagrees` - A later tap disagrees\n* `time_unknown` - Time not trusted\n* `no_in` - No Ingia\n* `came_late` - Came late\n* `no_out` - No Toka\n* `left_early` - Left early"
+            },
+            "RecordMealMoneyRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "note": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "amount",
+                    "date",
+                    "id"
+                ]
             },
             "RemovePhotoRequest": {
                 "type": "object",
@@ -6521,6 +6890,18 @@
                     "reason"
                 ]
             },
+            "VoidMealMoneyRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "reason"
+                ]
+            },
             "VoidTapRequest": {
                 "type": "object",
                 "properties": {
@@ -6530,6 +6911,26 @@
                     }
                 },
                 "required": [
+                    "reason"
+                ]
+            },
+            "VoidedMealMoney": {
+                "type": "object",
+                "properties": {
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "at",
+                    "by",
                     "reason"
                 ]
             },
@@ -6639,7 +7040,7 @@
                     "ready_void_reasons": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/ReadyVoidReasonsEnum"
+                            "$ref": "#/components/schemas/WorkerAttendanceAnswerReadyVoidReasonsEnum"
                         },
                         "description": "On the demo, the ready reasons a tap crossed out may take, as codes; elsewhere none (ATT-13)."
                     }
@@ -6657,6 +7058,13 @@
                     "worker",
                     "yours"
                 ]
+            },
+            "WorkerAttendanceAnswerReadyVoidReasonsEnum": {
+                "enum": [
+                    "wrong_tap"
+                ],
+                "type": "string",
+                "description": "* `wrong_tap` - wrong_tap"
             },
             "WorkerDay": {
                 "type": "object",

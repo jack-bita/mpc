@@ -1344,8 +1344,9 @@ class VoidedMealMoney:
 @dataclass(frozen=True)
 class MealMoneyLine:
     # One row of a day's meal money, as the day's page shows it: "TSh 5,000 · Unga na maharage", who typed it and when,
-    # and who crossed it out, or None while it counts.
+    # and who crossed it out, or None while it counts. Its day too, as the sheet's answer is the row alone.
     id: uuid.UUID
+    date: dt.date
     amount: Decimal
     note: str
     by: str
@@ -1446,18 +1447,25 @@ def _meal_day(
         sharers=len(shares),
         share=shares[0] if shares else NO_MEAL_SHARE,
         waiting=sum(part is MealPart.WAITS for part, _ in parts),
-        rows=[_meal_line(row) for row in rows],
+        rows=[meal_line(row) for row in rows],
     )
 
 
-def _meal_line(row: MealMoney) -> MealMoneyLine:
-    # A row as the day's page shows it. Who typed it is always there, as the table holds.
+def meal_line(row: MealMoney) -> MealMoneyLine:
+    """A row of meal money as the day's page shows it, which the sheets' answers are too. Who typed it is always there,
+    as the table holds."""
     by = cast(StaffMember, row.created_by)
     voided = None
     if row.voided_at is not None and row.voided_by is not None:
         voided = VoidedMealMoney(by=row.voided_by.display_name, at=row.voided_at, reason=row.void_reason)
     return MealMoneyLine(
-        id=row.pk, amount=row.amount, note=row.note, by=by.display_name, at=row.created_at, voided=voided
+        id=row.pk,
+        date=row.date,
+        amount=row.amount,
+        note=row.note,
+        by=by.display_name,
+        at=row.created_at,
+        voided=voided,
     )
 
 
