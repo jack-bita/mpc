@@ -300,6 +300,8 @@ SPECTACULAR_SETTINGS = {
         # its own list, not after the field that holds it (`first`, `kind`, `status`), as another field of that name
         # would rename them both, and the app's types with them.
         "FlagKindEnum": "apps.control.models.FlagKind",
+        # A flag's status on its pages (CTRL-4), named after its own list, not after the first answer that holds it.
+        "FlagStatusEnum": "apps.control.models.FlagStatus",
         "PushAnswerStatusEnum": "apps.sync.api.serializers.PUSH_ANSWER_STATUSES",
         "PushedStatusEnum": "apps.sync.models.PushedStatus",
         # A side's band (SHOP-4): one name for the office's side, the laptop's copy and `me`, which all carry it.

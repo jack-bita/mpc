@@ -244,6 +244,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/control/flags/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["control_flags_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/devices/": {
         parameters: {
             query?: never;
@@ -1151,11 +1167,41 @@ export interface components {
          * @enum {string}
          */
         FlagKindEnum: "cash_difference" | "count_difference" | "delivery_difference" | "transfer_difference" | "negative_stock" | "duplicate_code" | "late_record" | "unverified_time" | "missing_clock_out" | "suspended_staff_activity" | "device_gap" | "balance_mismatch" | "open_bag_difference" | "production_loss" | "total_mismatch" | "permission_break" | "drawer_conflict" | "invalid_document";
+        FlagLine: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FlagKindEnum"];
+            status: components["schemas"]["FlagStatusEnum"];
+            /** @description The side's name; none for a flag of the whole shop. */
+            side: string | null;
+            /** @description The nicknames of those it names. */
+            people: string[];
+            /** @description The laptop's name. */
+            device: string | null;
+            /**
+             * Format: date-time
+             * @description When its record was made, by the laptop's clock.
+             */
+            made_at: string | null;
+            /**
+             * Format: date-time
+             * @description When the server found it.
+             */
+            raised_at: string;
+        };
         FlagRaised: {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["FlagKindEnum"];
         };
+        /**
+         * @description * `open` - Open
+         *     * `explained` - Explained
+         *     * `resolved` - Resolved
+         *     * `dismissed` - Dismissed
+         * @enum {string}
+         */
+        FlagStatusEnum: "open" | "explained" | "resolved" | "dismissed";
         /**
          * @description * `default` - Default
          *     * `second` - Second, easy to read
@@ -1307,6 +1353,21 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Device"][];
+        };
+        PaginatedFlagLineList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["FlagLine"][];
+            /** @description How many flags wait, under the filters asked. */
+            waiting: number;
         };
         PaginatedRoleList: {
             /**
@@ -2403,6 +2464,70 @@ export interface operations {
                 content: {
                     "image/jpeg": string;
                     "image/webp": string;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    control_flags_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /**
+                 * @description One kind of flag.
+                 *
+                 *     * `cash_difference` - Cash difference
+                 *     * `count_difference` - Count difference
+                 *     * `delivery_difference` - Delivery difference
+                 *     * `transfer_difference` - Transfer difference
+                 *     * `negative_stock` - Negative stock
+                 *     * `duplicate_code` - Duplicate transaction code
+                 *     * `late_record` - Late record
+                 *     * `unverified_time` - Unverified time
+                 *     * `missing_clock_out` - Missing clock-out
+                 *     * `suspended_staff_activity` - Suspended staff activity
+                 *     * `device_gap` - Device gap
+                 *     * `balance_mismatch` - Balance mismatch
+                 *     * `open_bag_difference` - Open bag difference
+                 *     * `production_loss` - Production loss
+                 *     * `total_mismatch` - Total mismatch
+                 *     * `permission_break` - Permission break
+                 *     * `drawer_conflict` - Drawer conflict
+                 *     * `invalid_document` - Invalid document
+                 */
+                kind?: "cash_difference" | "count_difference" | "delivery_difference" | "transfer_difference" | "negative_stock" | "duplicate_code" | "late_record" | "unverified_time" | "missing_clock_out" | "suspended_staff_activity" | "device_gap" | "balance_mismatch" | "open_bag_difference" | "production_loss" | "total_mismatch" | "permission_break" | "drawer_conflict" | "invalid_document";
+                /** @description The flags of one side. */
+                side?: string;
+                /**
+                 * @description What waits, or what is closed.
+                 *
+                 *     * `waiting` - Waiting
+                 *     * `closed` - Closed
+                 */
+                state?: "waiting" | "closed";
+                /** @description Only the flags of the whole shop. */
+                whole_shop?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFlagLineList"];
                 };
             };
             default: {

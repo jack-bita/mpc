@@ -43,7 +43,7 @@ from rest_framework.response import Response
 from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIClient
 
-from apps.control.api.views import AttachmentViewSet
+from apps.control.api.views import AttachmentViewSet, FlagViewSet
 from apps.control.models import AttachmentKind, AttachmentType
 from apps.control.services import expect_attachment, receive_attachment_file
 from apps.core.api import base
@@ -511,6 +511,12 @@ def test_attachment_routes_name_their_permissions() -> None:
     # inside the action, on the whole shop (CTRL-3, ATTACHMENT_KINDS), as the key depends on the photo. Written out in
     # full, as above.
     assert AttachmentViewSet.action_permissions == {"file": base.SEES_THE_SIDE}
+
+
+def test_flag_routes_name_their_permissions() -> None:
+    # A flag shows only to whoever may close it, so even its list is behind `flag.review` (CTRL-4). Written out in full,
+    # as above.
+    assert FlagViewSet.action_permissions == {"list": Permission.FLAG_REVIEW}
 
 
 def test_settings_routes_name_their_permissions() -> None:

@@ -58,6 +58,7 @@ from django.utils import timezone
 
 from apps.control.models import (
     ATTACHMENT_KINDS,
+    CLOSED,
     LARGEST_FILE,
     Attachment,
     AttachmentKind,
@@ -77,9 +78,6 @@ from apps.core.acting import acting_as, current_device_id
 from apps.core.links import link_type_of
 from apps.core.models import ShopScoped
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop_context
-
-# A flag in one of these takes no more notes: it is closed for good.
-_CLOSED = {FlagStatus.RESOLVED, FlagStatus.DISMISSED}
 
 # The kinds the system closes by itself, each with the code of the note it writes (Jack, SYNC-5; 02 v1.22): a
 # missing-number flag, once every record it waited for has come. A code, not words: a person's note is kept as they
@@ -225,7 +223,7 @@ def resolve_flag_by_system(flag: Flag) -> Flag:
         # Read again and locked, as a person's step is (_step): a manager closing it at this moment takes turns with
         # the system, and the second finds it closed.
         fresh = Flag.objects.select_for_update().get(pk=flag.pk)
-        if fresh.status in _CLOSED:
+        if fresh.status in CLOSED:
             return fresh
         # No `created_by`: the system acted. The note is kept for good, like every note (ADR-0021), so the owner sees
         # why the flag closed, and when.
@@ -500,7 +498,7 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
                 return fresh
         # The status only moves forward: every step leads to explained or to a final status, and a closed
         # flag takes none.
-        if fresh.status in _CLOSED:
+        if fresh.status in CLOSED:
             raise ValidationError("This flag is closed.", code="flag.closed")
         # A person the flag names may explain it, but never decide it (Jack, at CTRL-1's review; 02 v1.8):
         # Asha closing her own drawer's shortage with "no problem" would hide it from the owner. Someone else
