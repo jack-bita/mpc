@@ -131,4 +131,6 @@ class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
             refused_for=self.reason,
             brought_from=None if self.carried_from is None else self.carried_from.name,
             loaded_by=None if self.loaded_by is None else self.loaded_by.display_name,
+            loader=self.loaded_by_id,
+            maker=self.created_by_id,
         )

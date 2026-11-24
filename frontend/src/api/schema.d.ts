@@ -1243,6 +1243,8 @@ export interface components {
             brought_from: string | null;
             /** @description Who loaded that rescue file. */
             loaded_by: string | null;
+            /** @description Whether it is about loading that rescue file, not about the record in it. */
+            about_loading: boolean;
             notes: components["schemas"]["FlagNote"][];
             /** @description Whether it names the person looking, who may only explain it. */
             names_you: boolean;

@@ -28,9 +28,13 @@ class FlagFacts:
     tap: FlaggedTap | None = None
     # Why the server refused the record: an error's code, which the page says in words. Empty when it kept it.
     refused_for: str = ""
-    # For a record brought in a rescue file (SYNC-12): the laptop that made it, and who loaded the file.
+    # For a record brought in a rescue file (SYNC-12): the laptop that made it, and who loaded the file, by name and by
+    # their job's id; and who made the record, by theirs, so the page can tell a flag about the loading from one about
+    # the record (flag_detail), as both are about the same line.
     brought_from: str | None = None
     loaded_by: str | None = None
+    loader: uuid.UUID | None = None
+    maker: uuid.UUID | None = None
 
 
 @runtime_checkable

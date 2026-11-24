@@ -65,6 +65,7 @@ export function flag(fields: Partial<Flag> = {}): Flag {
     refused_for: "",
     brought_from: null,
     loaded_by: null,
+    about_loading: false,
     notes: [],
     names_you: false,
     ready_notes: [],

@@ -115,8 +115,18 @@ describe("one flag's page", () => {
     ],
     [
       "a file loaded while suspended",
-      { loaded_by: "Juma", brought_from: "Laptop Vyakula" },
+      {
+        loaded_by: "Juma",
+        brought_from: "Laptop Vyakula",
+        about_loading: true,
+      },
       "Juma alipakia faili la kumbukumbu akiwa amesimamishwa, au baada ya kuondoka kazini.",
+    ],
+    [
+      // Two people of one nickname, or one who loaded their own: the server tells them apart, never the names.
+      "a tap in a file loaded by someone of the same nickname",
+      { loaded_by: "Juma", brought_from: "Laptop Vyakula" },
+      "Juma alibonyeza Ingia kazini akiwa amesimamishwa, au baada ya kuondoka kazini.",
     ],
     [
       "a record by someone with no key",
@@ -125,7 +135,7 @@ describe("one flag's page", () => {
     ],
     [
       "a file loaded by someone with no key",
-      { kind: "permission_break", loaded_by: "Juma" },
+      { kind: "permission_break", loaded_by: "Juma", about_loading: true },
       "Juma alipakia faili la kumbukumbu bila ruhusa.",
     ],
     [

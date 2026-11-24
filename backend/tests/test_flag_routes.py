@@ -37,8 +37,8 @@ from apps.control.models import Flag, FlagKind, FlagNote
 from apps.control.services import dismiss_flag, explain_flag, raise_flag, resolve_flag
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import Device, StaffMember
-from apps.people.services import grant_permission, hire_again, mark_left, suspend
+from apps.people.models import Device, StaffMember, User
+from apps.people.services import add_staff, grant_permission, hire_again, mark_left, suspend
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
@@ -412,6 +412,49 @@ def test_a_carried_record_says_where_it_was_made_and_who_loaded_it(
     assert (page["people"], page["side"]) == (["Staff A"], "Vyakula")
     # It names Asha, who loaded the file: the tap in it is Baba's, whose day says nothing of her.
     assert page["tap"] is None
+    assert page["about_loading"] is True
+
+
+def test_a_flag_says_whether_it_is_about_loading_a_file_or_the_record_in_it(
+    shop_a: Shop, device_a: Device, foods_laptop: Device, staff_a: StaffMember, baba: StaffMember, give_role: GiveRole
+) -> None:
+    # Two flags about one record, its maker's and its loader's, of one kind: told apart by the people, never by their
+    # nicknames, which are unique among current workers alone. Juma, suspended, tapped; Neema, suspended too, loaded the
+    # file. And a manager who loaded a record of her own, suspended: both of hers read as the record's.
+    with shop_context(shop_a):
+        juma, neema = (
+            add_staff(shop=shop_a, user=User.objects.create_user(full_name=name), display_name=name, by=None)
+            for name in ("Juma", "Neema")
+        )
+        give_role(neema, RoleTemplate.MANAGER, None)
+        for worker in (juma, neema):
+            suspend(worker, by=None, reason="Hakuja kazini siku 3")
+    at = timezone.now() + dt.timedelta(minutes=1)
+    theirs = Carried(device=device_a.pk, device_seq=5, loaded_by=neema.pk)
+    send(foods_laptop, clock(1, juma, at, carried_from=theirs), sent_at=at)
+    with shop_context(shop_a):
+        flags = {
+            flag.people.get().display_name: flag for flag in Flag.objects.filter(kind=FlagKind.SUSPENDED_STAFF_ACTIVITY)
+        }
+    assert {name: page_of(baba, flag)["about_loading"] for name, flag in flags.items()} == {
+        "Juma": False,
+        "Neema": True,
+    }
+
+    her_own = Carried(device=device_a.pk, device_seq=6, loaded_by=neema.pk)
+    send(foods_laptop, clock(2, neema, at, carried_from=her_own), sent_at=at)
+    with shop_context(shop_a):
+        hers = list(
+            Flag.objects.filter(kind=FlagKind.SUSPENDED_STAFF_ACTIVITY).exclude(
+                pk__in=[flag.pk for flag in flags.values()]
+            )
+        )
+    assert [page_of(baba, flag)["about_loading"] for flag in hers] == [False, False]
+
+    # A missing number, about the line of a carried record: it names nobody, so it is about nobody's loading.
+    late = Carried(device=device_a.pk, device_seq=7, loaded_by=neema.pk)
+    send(foods_laptop, clock(9, juma, at, carried_from=late), sent_at=at)
+    assert page_of(baba, only_flag(shop_a, FlagKind.DEVICE_GAP))["about_loading"] is False
 
 
 def test_every_note_shows_with_who_and_when(

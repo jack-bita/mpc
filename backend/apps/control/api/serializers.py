@@ -76,6 +76,9 @@ class FlagSerializer(FlagLineSerializer):
     loaded_by = serializers.CharField(
         allow_null=True, source="facts.loaded_by", help_text="Who loaded that rescue file."
     )
+    about_loading = serializers.BooleanField(
+        help_text="Whether it is about loading that rescue file, not about the record in it."
+    )
     notes = FlagNoteSerializer(many=True)
     names_you = serializers.BooleanField(help_text="Whether it names the person looking, who may only explain it.")
     ready_notes = serializers.ListField(

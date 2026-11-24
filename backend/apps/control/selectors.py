@@ -122,6 +122,9 @@ class FlagDetail(FlagLine):
     actual: Decimal | None
     difference: Decimal | None
     facts: FlagFacts
+    # Whether it is about loading a rescue file, not about the record in it (SYNC-12): it names whoever loaded it, and
+    # not the record's maker. One who loaded a record of their own has both in one person, and it reads as the record's.
+    about_loading: bool
     notes: list[NoteLine]
     names_you: bool
     # On the demo, the ready notes an action may take (DEMO_NOTES), as codes the page says in words; elsewhere none, and
@@ -150,6 +153,8 @@ def flag_detail(flag: Flag, *, viewer: Actor) -> FlagDetail:
         actual=flag.actual,
         difference=flag.difference,
         facts=facts,
+        # By the people, never by their nicknames, which are unique among current workers alone.
+        about_loading=facts.loader in named and facts.maker not in named,
         notes=[
             NoteLine(
                 id=note.pk,

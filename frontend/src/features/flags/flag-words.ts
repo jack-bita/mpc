@@ -35,8 +35,8 @@ export function useWhatHappened(): (flag: Flag) => {
   return (flag) => {
     // Whom it is about: the tap's own worker first (ATT-1), the one who loaded a file, the record's maker.
     const name = flag.people[0] ?? t("someone");
-    // About loading a rescue file, not about the record in it: it names whoever loaded it (SYNC-12).
-    const loaded = flag.loaded_by !== null && flag.people[0] === flag.loaded_by;
+    // About loading a rescue file, not about the record in it (SYNC-12): the server says so, by the people themselves.
+    const loaded = flag.about_loading;
     const why = flag.refused_for === "" ? null : refusedFor(flag.refused_for);
     const said = (sentence: string) => ({ sentence, why });
     const { kind } = flag;

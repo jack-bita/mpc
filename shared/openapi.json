@@ -4055,6 +4055,10 @@
                         "nullable": true,
                         "description": "Who loaded that rescue file."
                     },
+                    "about_loading": {
+                        "type": "boolean",
+                        "description": "Whether it is about loading that rescue file, not about the record in it."
+                    },
                     "notes": {
                         "type": "array",
                         "items": {
@@ -4074,6 +4078,7 @@
                     }
                 },
                 "required": [
+                    "about_loading",
                     "actual",
                     "brought_from",
                     "device",
