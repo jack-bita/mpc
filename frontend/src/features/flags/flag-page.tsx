@@ -40,6 +40,7 @@ import {
   useKindWords,
   useMomentWords,
   useNames,
+  waits,
 } from "./flags";
 import { useNoteWords, useWhatHappened } from "./flag-words";
 
@@ -154,9 +155,9 @@ function Actions({ flag }: { flag: Flag }) {
   const afterChange = useRef(false);
   const doneLine = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<FlagAction, HTMLButtonElement>());
-  const waits = flag.status === "open" || flag.status === "explained";
+  const waiting = waits(flag);
   // One the flag names says why, and someone else closes it (02 §13): the server refuses theirs too.
-  const offered: readonly FlagAction[] = !waits
+  const offered: readonly FlagAction[] = !waiting
     ? []
     : flag.names_you
       ? ["explain"]
@@ -175,7 +176,7 @@ function Actions({ flag }: { flag: Flag }) {
           {done ? <AlertDescription>{done}</AlertDescription> : null}
         </Alert>
       </div>
-      {waits && flag.names_you ? <p>{t("namesYou")}</p> : null}
+      {waiting && flag.names_you ? <p>{t("namesYou")}</p> : null}
       {offered.length === 0 ? null : (
         <div className="flex flex-wrap gap-3">
           {offered.map((action) => (
@@ -212,7 +213,7 @@ function Actions({ flag }: { flag: Flag }) {
           }}
           onClose={() => {
             setOpen(null);
-            if (waits) {
+            if (waiting) {
               // Asked again: a send whose answer was lost may have moved the flag.
               void store.invalidateQueries({ queryKey: FLAGS });
               return;

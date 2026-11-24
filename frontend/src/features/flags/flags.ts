@@ -18,6 +18,7 @@ import { sidesWhere, type WhoIsHere } from "@/features/people/who-is-here";
 import {
   dayPart,
   formatDate,
+  formatDay,
   formatDayMonth,
   formatTime,
   weekdayOf,
@@ -67,6 +68,11 @@ export const FLAGS_PAGE = "/flags/";
 /** A flag's own page, by its id: a query string, as the app is plain files with no page per id (ADR-0016). */
 export function flagPage(id: string): string {
   return `/flags/view/?id=${id}`;
+}
+
+/** Whether a flag still waits for a person: open, or explained; a close, one way or the other, is final (02 §13). */
+export function waits(flag: { status: FlagLine["status"] }): boolean {
+  return flag.status === "open" || flag.status === "explained";
 }
 
 /** Whether the person may open Tofauti: flag.review on some side. Held on the whole shop, it is on every side too. */
@@ -174,15 +180,18 @@ export function useNames(): (people: string[]) => string {
   return (people) => format.list(people, { type: "conjunction" });
 }
 
-/** The day a moment falls on, "Jumapili 22/11", on the shop's own calendar, never the phone's. */
-export function useDayWords(timezone: string): (at: string) => string {
+/** The day a moment falls on, "Jumapili 22/11", on the shop's own calendar, never the phone's; with its year,
+ * "Jumapili 22/11/2026", for a closed flag, which stays on the list for good and may be years old. */
+export function useDayWords(
+  timezone: string,
+): (at: string, withYear: boolean) => string {
   const t = useTranslations("flags");
   const weekdays = useTranslations("attendanceMonth.weekdays");
-  return (at) => {
+  return (at, withYear) => {
     const day = shopToday(timezone, Date.parse(at));
     return t("day", {
       weekday: weekdays(String(weekdayOf(day)) as Weekday),
-      date: formatDayMonth(day),
+      date: withYear ? formatDay(day) : formatDayMonth(day),
     });
   };
 }

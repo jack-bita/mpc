@@ -37,6 +37,7 @@ import {
   useFlags,
   useKindWords,
   useNames,
+  waits,
 } from "./flags";
 
 /** The address's names for Chuja's two choices: /flags/?side=…&kind=device_gap. */
@@ -264,7 +265,7 @@ function Line({ flag, timezone }: { flag: FlagLine; timezone: string }) {
   const where = flag.side ?? t("wholeShop");
   // The day its record was made, as the flag's own page says it; for one about something no laptop made, the day the
   // server found it.
-  const when = day(flag.made_at ?? flag.raised_at);
+  const when = day(flag.made_at ?? flag.raised_at, !waits(flag));
   // Who it names; naming nobody, as a laptop's missing records do, the laptop.
   const who = flag.people.length > 0 ? names(flag.people) : flag.device;
   return (

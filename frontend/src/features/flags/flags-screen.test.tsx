@@ -174,6 +174,10 @@ describe("its two tabs", () => {
     const [resolved, dismissed] = await lines();
     expect(within(resolved!).getByText("Imetatuliwa")).toBeTruthy();
     expect(within(dismissed!).getByText("Si tatizo")).toBeTruthy();
+    // With its year, as a closed flag stays on the list for good; one that waits is of these days.
+    expect(
+      within(resolved!).getByText("Asha · Dawa · Jumapili 22/11/2026"),
+    ).toBeTruthy();
     expect(statesAsked()).toEqual(["waiting", "closed"]);
     expect(window.location.search).toBe("?tab=closed");
     // What waits is still counted, whichever tab is open.
