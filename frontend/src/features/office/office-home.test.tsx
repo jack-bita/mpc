@@ -9,6 +9,7 @@ import { makeQueryClient } from "@/api/query-client";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
+import { WITH_THE_KEY } from "@/test/meals";
 import { render } from "@/test/render";
 import { MANAGER } from "@/test/workers";
 
@@ -188,6 +189,32 @@ describe("the office's home page", () => {
       await screen.findByRole("link", { name: "Mipangilio ya duka" });
       expect(
         screen.queryByRole("link", { name: "Mahudhurio ya mwezi" }),
+      ).toBeNull();
+      shown.unmount();
+    }
+  });
+
+  it("opens Hela ya chakula for whoever the owner gave its key on the whole shop (WAGE-7)", async () => {
+    answer("GET", ME, { status: 200, body: WITH_THE_KEY });
+
+    render(<OfficeHome />);
+
+    const link = await screen.findByRole("link", { name: "Hela ya chakula" });
+    expect(link.getAttribute("href")).toMatch(/^\/meal-money\/?$/);
+  });
+
+  it("offers no Hela ya chakula without its key, nor for the key on one side alone", async () => {
+    // A manager the owner hasn't given it: it is his to give (Jack, 15 Nov 2026). And the meals are the whole shop's, so
+    // the server would refuse a key held on Dawa alone.
+    for (const permissions of [["attendance.manage"], ["meals.record"]]) {
+      answer("GET", ME, {
+        status: 200,
+        body: whoIsHere([{ side: DAWA, permissions }]),
+      });
+      const shown = render(<OfficeHome />);
+      await screen.findByRole("link", { name: "Mipangilio ya duka" });
+      expect(
+        screen.queryByRole("link", { name: "Hela ya chakula" }),
       ).toBeNull();
       shown.unmount();
     }

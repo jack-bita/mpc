@@ -774,6 +774,20 @@
     },
     "nobody": "Hakuna mfanyakazi anayelipwa kwa siku katika mwezi huu."
   },
+  "mealMoney": {
+    "title": "Hela ya chakula",
+    "total": "Jumla",
+    "totalToToday": "Jumla hadi leo, {day}",
+    "daysLabel": "Siku za mwezi",
+    "day": "{weekday} {date}",
+    "today": "{weekday} {date} (leo)",
+    "notTyped": "Haijaandikwa",
+    "notSplitYet": "Itagawanywa siku ikiisha",
+    "split": "{count, plural, one {Mtu 1 · {share}} other {Watu # · {share} kila mmoja}}",
+    "nobodyShares": "Hakuna wa kuchangia",
+    "waiting": "{count, plural, one {1 anasubiri uamuzi} other {# wanasubiri uamuzi}}",
+    "none": "Hakuna siku ya kuonyesha katika mwezi huu."
+  },
   "attendanceWorker": {
     "title": "Mahudhurio ya mfanyakazi",
     "intro": "Siku za mfanyakazi mmoja, mwezi mzima.",

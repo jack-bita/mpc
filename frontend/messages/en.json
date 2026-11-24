@@ -774,6 +774,20 @@
     },
     "nobody": "No worker paid by the day in this month."
   },
+  "mealMoney": {
+    "title": "Meal money",
+    "total": "Total",
+    "totalToToday": "Total up to today, {day}",
+    "daysLabel": "The month's days",
+    "day": "{weekday} {date}",
+    "today": "{weekday} {date} (today)",
+    "notTyped": "Not written",
+    "notSplitYet": "Will be split when the day is over",
+    "split": "{count, plural, one {1 person · {share}} other {# people · {share} each}}",
+    "nobodyShares": "Nobody to share it",
+    "waiting": "{count, plural, one {1 waits for a decision} other {# wait for a decision}}",
+    "none": "No day to show in this month."
+  },
   "attendanceWorker": {
     "title": "A worker's attendance",
     "intro": "One worker's days, the whole month.",

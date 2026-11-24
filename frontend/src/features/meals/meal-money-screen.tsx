@@ -1,0 +1,204 @@
+// meal-money-screen.tsx — Hela ya chakula, the day's meal money on the phone of whoever the owner gave its key to
+// (WAGE-7, 03 §5.10), as Jack pictured it (24 Nov 2026):
+//
+//   ←  Hela ya chakula
+//    ‹          Novemba 2026          ›
+//   Jumla hadi leo, 24/11     TSh 24,000
+//
+//   Jumanne 24/11 (leo)        TSh 9,000
+//     Itagawanywa siku ikiisha
+//   Jumatatu 23/11             TSh 8,000
+//     Watu 8 · TSh 1,000 kila mmoja
+//   Jumamosi 21/11          Haijaandikwa
+//   Ijumaa 20/11               TSh 7,000
+//     Watu 7 · TSh 1,000 kila mmoja
+//     1 anasubiri uamuzi
+//
+// The month: this one, on the shop's clock, unless the address names an earlier one (?month=2026-10), as on Mahudhurio
+// ya mwezi, whose switch it wears. Which days are listed, their sums and each one's share are the server's
+// (meal_money_days); the page adds nothing up. Haijaandikwa: a day someone came and nobody typed its money, so a
+// forgotten day is easy to see.
+//
+// An office screen: it asks the server through the store of server answers (rule 5), and needs the internet, which the
+// office area says while it is gone. Its routes ask meals.record on the whole shop; someone without it has no button,
+// and opening the address shows the server's refusal.
+//
+// "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
+"use client";
+
+import { useTranslations } from "use-intl";
+
+import { ApiErrorAlert } from "@/components/api-error-alert";
+import { Card } from "@/components/design/card";
+import { PageHeader } from "@/components/design/page-header";
+import { useWordInAddress } from "@/components/tab-in-address";
+import {
+  isMonth,
+  MONTH_PARAM,
+  monthOf,
+  type Weekday,
+} from "@/features/attendance/attendance-month";
+import { MonthSwitch, usePagesClock } from "@/features/attendance/month-switch";
+import { useWhoIsHere } from "@/features/people/who-is-here";
+import { Decimal } from "@/lib/decimal";
+import { formatDayMonth, formatMoney, weekdayOf } from "@/lib/format";
+import { shopToday } from "@/offline/rules";
+
+import {
+  mayRecordMeals,
+  type MealDay,
+  type MealMoneyDays,
+  monthSpan,
+  useMealMoney,
+} from "./meal-money";
+
+export function MealMoneyScreen() {
+  const t = useTranslations("mealMoney");
+  // The PIN login's book, for its "Subiri kidogo…", which the office says the same way.
+  const loginWords = useTranslations("login");
+  const who = useWhoIsHere();
+  const [asked, choose] = useWordInAddress(MONTH_PARAM);
+  // The page's clock, as the month page keeps it (month-screen.tsx): the month it opened on, kept until the person
+  // moves, and this month, as it is now, which › stops at.
+  const { openedAt, now } = usePagesClock();
+  const openedOn = who.data
+    ? monthOf(shopToday(who.data.shop.timezone, openedAt))
+    : null;
+  const thisMonth = who.data
+    ? monthOf(shopToday(who.data.shop.timezone, now))
+    : null;
+  // The month the address names, if it is one and not one to come; else the month the page opened on.
+  const month =
+    openedOn === null || thisMonth === null
+      ? null
+      : asked !== null && isMonth(asked) && asked <= thisMonth
+        ? asked
+        : openedOn;
+  const answer = useMealMoney(month === null ? null : monthSpan(month));
+  // "Subiri kidogo…", through the store's own tries too, and only once there is something to wait for, as on the month
+  // page.
+  const waiting = who.isPending || (month !== null && answer.isPending);
+
+  return (
+    <div className="grid max-w-2xl gap-6">
+      <PageHeader title={t("title")} />
+      <p role="status" className={waiting ? "text-lg" : "sr-only"}>
+        {waiting ? loginWords("waiting") : null}
+      </p>
+      {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
+      <ApiErrorAlert error={who.error} />
+      {/* Only for someone who may see it, so no ‹ › only asks to be refused again (the month page's review). */}
+      {month !== null &&
+      thisMonth !== null &&
+      who.data &&
+      mayRecordMeals(who.data) ? (
+        <MonthSwitch month={month} thisMonth={thisMonth} onChoose={choose} />
+      ) : null}
+      {/* Asked here alone and handed down, never by the part that shows it (frontend rules). A failed read shows its
+          reason; a refresh that fails keeps the days last read, with the reason above them. */}
+      <ApiErrorAlert error={answer.error} />
+      {month !== null && answer.data && !answer.isPending ? (
+        <TheDays
+          answer={answer.data}
+          // This month's total is counted up to today; a month gone by, to its end. Whether it is this month is the
+          // server's to say, from its own today: a phone's date can be wrong.
+          totalLabel={
+            monthOf(answer.data.today) === month
+              ? t("totalToToday", { day: formatDayMonth(answer.data.today) })
+              : t("total")
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** The whole of the days' money, then a line per day. */
+function TheDays({
+  answer,
+  totalLabel,
+}: {
+  answer: MealMoneyDays;
+  totalLabel: string;
+}) {
+  const t = useTranslations("mealMoney");
+  if (answer.days.length === 0) return <p>{t("none")}</p>;
+  return (
+    <>
+      <p className="flex flex-wrap justify-between gap-x-4 text-lg font-semibold">
+        <span>{totalLabel}</span>
+        <span className="tabular-nums">
+          {formatMoney(new Decimal(answer.total))}
+        </span>
+      </p>
+      <Card className="py-0">
+        {/* A list, so a screen reader says how many days there are. role="list" written out: Safari with VoiceOver stops
+            calling a <ul> a list once its bullets are styled away (workers-screen.tsx). */}
+        <ul
+          role="list"
+          aria-label={t("daysLabel")}
+          className="divide-y divide-border"
+        >
+          {answer.days.map((day) => (
+            <li
+              key={day.date}
+              className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 px-4 py-3"
+            >
+              <DayLine day={day} isToday={day.date === answer.today} />
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </>
+  );
+}
+
+/** "Jumatatu 23/11 … TSh 8,000", then how it is split. */
+function DayLine({ day, isToday }: { day: MealDay; isToday: boolean }) {
+  const t = useTranslations("mealMoney");
+  const monthWords = useTranslations("attendanceMonth");
+  const amount = new Decimal(day.amount);
+  // "0" as text: the shared Decimal refuses a plain number, so no float ever reaches money (rule 3). Nothing that counts
+  // was typed: the day's rows are none, or all crossed out.
+  const typed = amount.gt("0");
+  return (
+    <>
+      <p>
+        {t(isToday ? "today" : "day", {
+          weekday: monthWords(
+            `weekdays.${String(weekdayOf(day.date)) as Weekday}`,
+          ),
+          date: formatDayMonth(day.date),
+        })}
+      </p>
+      <p className="text-right tabular-nums">
+        {typed ? formatMoney(amount) : t("notTyped")}
+      </p>
+      {typed ? <Split day={day} /> : null}
+    </>
+  );
+}
+
+/** How a day's money is split: not yet, today; among how many, and each one's share; and how many wait. */
+function Split({ day }: { day: MealDay }) {
+  const t = useTranslations("mealMoney");
+  const said = [
+    !day.over
+      ? t("notSplitYet")
+      : day.sharers > 0
+        ? t("split", {
+            count: day.sharers,
+            share: formatMoney(new Decimal(day.share)),
+          })
+        : day.waiting > 0
+          ? // Nobody shares it yet, but someone may: only who waits is said, below.
+            null
+          : t("nobodyShares"),
+    day.waiting > 0 ? t("waiting", { count: day.waiting }) : null,
+  ].filter((each) => each !== null);
+  return said.map((each) => (
+    <p key={each} className="col-span-2 text-muted-foreground">
+      {each}
+    </p>
+  ));
+}
