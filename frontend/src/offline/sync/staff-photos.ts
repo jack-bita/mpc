@@ -19,9 +19,10 @@
 //   no answer, a server error, any other refusal → it waits, and the round stops
 //   401 device.blocked or not_authenticated → kept by answer.ts and thrown on, as the sync must ask nothing more
 //
-// A photo that didn't come waits before it is asked for again, as one going up does: 1 minute, then twice as long each
-// time, at most an hour, or a photo whose file the server lost would be asked for 2,880 times a day. The waits live in
-// the page's memory: a reload asks once more, which costs one call; and until it comes, the tile shows the names.
+// A photo that didn't come, or came and couldn't be kept, waits before it is asked for again, as one going up does: 1
+// minute, then twice as long each time, at most an hour, or a photo whose file the server lost would be asked for 2,880
+// times a day. The waits live in the page's memory: a reload asks once more, which costs one call; and until it comes,
+// the tile shows the names.
 //
 // Wi-Fi first, where the browser can tell, and no more is asked for once 1.5 MB came, both as for the photos going up
 // (attachments.ts): the rest come at the next sync, 30 s later. A shop's faces come once, some 150 KB each.
@@ -45,7 +46,7 @@ const ABOUT_THE_PHOTO = new Set([
   "attachment.file_removed",
 ]);
 
-/** The photos that didn't come, by id: how many tries, and until when each waits, on this laptop's clock in ms. */
+/** The photos asked for and not kept, by id: how many tries, and until when each waits, on this laptop's clock in ms. */
 const waits = new Map<string, { tries: number; until: number }>();
 
 /** What came back for one photo: the photo; or none, and whether that is about this photo alone. */
@@ -73,17 +74,18 @@ export async function fetchStaffPhotos(
     if (cameBytes >= MOST_BYTES) return;
     const waiting = waits.get(id);
     if (!waitIsOver(waiting?.until ?? null)) continue;
-    // The wait counts from when it was asked for, not from when its answer came, as a photo going up does.
-    const askedAt = Date.now();
+    // Its wait first, counted from when it is asked for, as a photo going up does, and taken back once it is kept. So
+    // whatever goes wrong below, it waits: one that came and couldn't be kept too, as on a disk too full for it, which
+    // throws out of here. With no wait it would come down again at every sync, and the ones after it never (PPL-14's
+    // review).
+    const tries = (waiting?.tries ?? 0) + 1;
+    waits.set(id, { tries, until: Date.now() + waitAfter(tries) });
     const heard = await ask(id, place);
     if (heard.photo !== null) {
       cameBytes += heard.photo.bytes.byteLength;
       await keep(db, heard.photo);
-      continue;
-    }
-    const tries = (waiting?.tries ?? 0) + 1;
-    waits.set(id, { tries, until: askedAt + waitAfter(tries) });
-    if (!heard.aloneInThis) return;
+      waits.delete(id);
+    } else if (!heard.aloneInThis) return;
   }
 }
 

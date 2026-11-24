@@ -386,6 +386,37 @@ describe("a photo that doesn't come", () => {
     expect(await held()).toEqual([photo]);
   });
 
+  it("waits too when it came but could not be kept, and the next person's comes", async () => {
+    // The Dawa laptop's disk is nearly full: the pull's small rows fit, and Asha's 150 KB don't. Asked for again at
+    // every sync, her face would come down 2,880 times a day, some 430 MB of the shop's bundle, and Baraka's never.
+    aClockByHand();
+    const [ashas, barakas] = [aPhoto(), aPhoto()];
+    await db.staff.bulkPut([
+      { ...ASHA, photo: ashas },
+      { ...BARAKA, photo: barakas },
+    ]);
+    hasPhoto(ashas);
+    hasPhoto(barakas);
+    vi.spyOn(db.staff_photos, "put").mockRejectedValueOnce(
+      new Error("disk full"),
+    );
+
+    await expect(fetchStaffPhotos(db, pagePlace)).rejects.toThrow("disk full");
+    expect(asked()).toEqual([ashas]);
+
+    // The next sync, 30 s later.
+    vi.setSystemTime(Date.now() + 30_000);
+    await fetchStaffPhotos(db, pagePlace);
+    expect(asked()).toEqual([ashas, barakas]);
+    expect(await held()).toEqual([barakas]);
+
+    // Her wait over, with room again: hers comes, and is kept.
+    vi.setSystemTime(Date.now() + 30_000);
+    await fetchStaffPhotos(db, pagePlace);
+    expect(asked()).toEqual([ashas, barakas, ashas]);
+    expect((await held()).sort()).toEqual([ashas, barakas].sort());
+  });
+
   it("is asked for when the laptop's clock was put far back", async () => {
     // No real wait is over an hour: more left means the clock moved, and the face would wait for as long as it did.
     aClockByHand();
