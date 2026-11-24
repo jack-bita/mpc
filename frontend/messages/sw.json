@@ -989,6 +989,38 @@
     },
     "systemNote": {
       "deviceGapFilled": "Kumbukumbu zote zilizokosekana zimefika."
+    },
+    "act": {
+      "text": "Maelezo",
+      "textHint": "Itahifadhiwa pamoja na jina lako na muda.",
+      "readyHint": "Kwenye demo, chagua maelezo yaliyo tayari.",
+      "namesYou": "Tofauti hii inakutaja, kwa hiyo mtu mwingine ndiye anayeifunga.",
+      "explain": {
+        "button": "Eleza",
+        "title": "Eleza tofauti hii",
+        "about": "Andika kwa nini ilitokea. Tofauti itaendelea kusubiri.",
+        "save": "Hifadhi maelezo",
+        "done": "Maelezo yamehifadhiwa."
+      },
+      "resolve": {
+        "button": "Imetatuliwa",
+        "title": "Imetatuliwa",
+        "about": "Ilikuwa tatizo la kweli, na limeshughulikiwa. Ikifungwa, tofauti hii haifunguliwi tena.",
+        "save": "Funga tofauti",
+        "done": "Tofauti imefungwa: imetatuliwa."
+      },
+      "dismiss": {
+        "button": "Si tatizo",
+        "title": "Si tatizo",
+        "about": "Hakukuwa na tatizo. Ikifungwa, tofauti hii haifunguliwi tena.",
+        "save": "Funga tofauti",
+        "done": "Tofauti imefungwa: si tatizo."
+      }
+    },
+    "ready": {
+      "askedThem": "Nimewauliza wahusika.",
+      "checkedLaptop": "Nimeikagua kompyuta.",
+      "honestMistake": "Walikosea, si kwa makusudi."
     }
   },
   "needsAttention": {

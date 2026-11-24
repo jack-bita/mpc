@@ -989,6 +989,38 @@
     },
     "systemNote": {
       "deviceGapFilled": "Every missing record has arrived."
+    },
+    "act": {
+      "text": "Note",
+      "textHint": "Kept with your name and the time.",
+      "readyHint": "On the demo, pick a ready note.",
+      "namesYou": "This flag names you, so someone else closes it.",
+      "explain": {
+        "button": "Explain",
+        "title": "Explain this flag",
+        "about": "Write why it happened. The flag will go on waiting.",
+        "save": "Save the note",
+        "done": "The note is saved."
+      },
+      "resolve": {
+        "button": "Resolved",
+        "title": "Resolved",
+        "about": "It was a real problem, and it is dealt with. Once closed, this flag is never opened again.",
+        "save": "Close the flag",
+        "done": "The flag is closed: resolved."
+      },
+      "dismiss": {
+        "button": "Not a problem",
+        "title": "Not a problem",
+        "about": "There was no problem. Once closed, this flag is never opened again.",
+        "save": "Close the flag",
+        "done": "The flag is closed: not a problem."
+      }
+    },
+    "ready": {
+      "askedThem": "I asked those involved.",
+      "checkedLaptop": "I checked the laptop.",
+      "honestMistake": "They made a mistake, not on purpose."
     }
   },
   "needsAttention": {

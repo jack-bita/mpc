@@ -82,12 +82,30 @@ export function useWhatHappened(): (flag: Flag) => {
   };
 }
 
-/** A note's words: as the person wrote them, in their language; or the system's code, said in the reader's. */
+/** The demo's ready notes (DEMO_NOTES, apps/control/models.py), each a code, with the words it is said in. */
+const READY_NOTES = {
+  asked_them: "askedThem",
+  checked_laptop: "checkedLaptop",
+  honest_mistake: "honestMistake",
+} as const;
+
+/** A ready note's words; one newer than this app, its code, which a person can still read out. */
+export function useReadyNoteWords(): (code: string) => string {
+  const t = useTranslations("flags.ready");
+  return (code) =>
+    code in READY_NOTES
+      ? t(READY_NOTES[code as keyof typeof READY_NOTES])
+      : code;
+}
+
+/** A note's words: as the person wrote them, in their language; or a code, said in the reader's: the system's own, or
+ * on the demo, where every note is a ready one. */
 export function useNoteWords(): (note: FlagNote, flag: Flag) => string {
   const t = useTranslations("flags.systemNote");
-  return (note) => {
+  const ready = useReadyNoteWords();
+  return (note, flag) => {
     if (note.by === null && note.text in SYSTEM_NOTES)
       return t(SYSTEM_NOTES[note.text as keyof typeof SYSTEM_NOTES]);
-    return note.text;
+    return flag.ready_notes.includes(note.text) ? ready(note.text) : note.text;
   };
 }

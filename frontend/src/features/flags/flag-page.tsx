@@ -1,7 +1,8 @@
 // flag-page.tsx — one flag's own page, opened by tapping its line on Tofauti (CTRL-4, 02 §13), as Jack pictured it
 // (24 Nov 2026): what happened in a sentence, who it names, where, which laptop and when, and everything written about
 // it, oldest first. A flag about a tap opens that tap's day, where its pay is decided (ATT-6): deciding a day closes no
-// flag (Jack: A).
+// flag (Jack: A). While it waits, three buttons, each a sheet: Eleza, Imetatuliwa and Si tatizo (flag-note.tsx); someone
+// the flag names has Eleza alone, as they never close their own (02 §13).
 //
 // At /flags/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address. It
 // asks GET /api/v1/control/flags/{id}/; one the person may not close is "not found", as another shop's is. The back
@@ -10,11 +11,13 @@
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
-import { type ReactNode, useId } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { type ReactNode, useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
-import { ButtonLink } from "@/components/design/button";
+import { Alert, AlertDescription } from "@/components/design/alert";
+import { Button, ButtonLink } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
 import {
@@ -23,10 +26,15 @@ import {
 } from "@/features/attendance/attendance-month";
 import { workerMonthAddress } from "@/features/attendance/worker-month";
 import { useWhoIsHere, type WhoIsHere } from "@/features/people/who-is-here";
+import { codeMessage, useCodeWords } from "@/i18n/codes";
 
+import { FlagNoteSheet } from "./flag-note";
 import {
   type Flag,
+  FLAG_ACTIONS,
+  type FlagAction,
   type FlagNote,
+  FLAGS,
   FLAGS_PAGE,
   useFlag,
   useKindWords,
@@ -65,6 +73,9 @@ export function FlagScreen({ id }: { id: string | null }) {
         <>
           <WhatHappened flag={flag.data} me={who.data} />
           <Notes flag={flag.data} timezone={who.data.shop.timezone} />
+          {/* A flag of its own: on another's page, as the browser's back and forward move the address, a sheet open on
+              the last one closes, its words with it. */}
+          <Actions key={flag.data.id} flag={flag.data} />
         </>
       ) : null}
     </div>
@@ -127,6 +138,99 @@ function WhatHappened({ flag, me }: { flag: Flag; me: WhoIsHere }) {
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+/** Eleza, Imetatuliwa and Si tatizo, each in a sheet, while the flag waits; and the line that says what one did. */
+function Actions({ flag }: { flag: Flag }) {
+  const t = useTranslations("flags.act");
+  const codes = useCodeWords();
+  const store = useQueryClient();
+  const [open, setOpen] = useState<FlagAction | null>(null);
+  // What the last one did, said on a line the keyboard goes to: after a close, the buttons are gone.
+  const [done, setDone] = useState<string | null>(null);
+  // Whether the last sheet ended in a change, read as it goes, which is after the draw that took it away: a ref, not
+  // the state (worker-actions.tsx).
+  const afterChange = useRef(false);
+  const doneLine = useRef<HTMLDivElement>(null);
+  const buttons = useRef(new Map<FlagAction, HTMLButtonElement>());
+  const waits = flag.status === "open" || flag.status === "explained";
+  // One the flag names says why, and someone else closes it (02 §13): the server refuses theirs too.
+  const offered: readonly FlagAction[] = !waits
+    ? []
+    : flag.names_you
+      ? ["explain"]
+      : FLAG_ACTIONS;
+
+  return (
+    <div className="grid gap-4">
+      {/* Always on the page, empty and hidden until something happens: Alert's role="status" is read when its words
+          change, and one that comes with its words already in it may go unsaid (worker-actions.tsx). */}
+      <div
+        ref={doneLine}
+        tabIndex={-1}
+        className={done ? "outline-none" : "sr-only"}
+      >
+        <Alert kind="info">
+          {done ? <AlertDescription>{done}</AlertDescription> : null}
+        </Alert>
+      </div>
+      {waits && flag.names_you ? <p>{t("namesYou")}</p> : null}
+      {offered.length === 0 ? null : (
+        <div className="flex flex-wrap gap-3">
+          {offered.map((action) => (
+            <Button
+              key={action}
+              ref={(button) => {
+                if (button) buttons.current.set(action, button);
+                else buttons.current.delete(action);
+              }}
+              // The main green for the way most end, Imetatuliwa; the other two beside it.
+              kind={action === "resolve" ? "main" : "second"}
+              size="normal"
+              onClick={() => {
+                afterChange.current = false;
+                setDone(null);
+                setOpen(action);
+              }}
+            >
+              {t(`${action}.button`)}
+            </Button>
+          ))}
+        </div>
+      )}
+      {/* Drawn only while open, so a sheet closed with Ghairi forgets what was typed. Open still when the flag is closed
+          by someone else meanwhile, to say so; Ghairi then leaves a page with no buttons. */}
+      {open === null ? null : (
+        <FlagNoteSheet
+          flag={flag}
+          action={open}
+          onDone={() => {
+            afterChange.current = true;
+            setOpen(null);
+            setDone(t(`${open}.done`));
+          }}
+          onClose={() => {
+            setOpen(null);
+            if (waits) {
+              // Asked again: a send whose answer was lost may have moved the flag.
+              void store.invalidateQueries({ queryKey: FLAGS });
+              return;
+            }
+            // Closed while the sheet was open, by someone else, or by a send whose answer was lost: the buttons went,
+            // so the page says why, on the line the keyboard goes to.
+            afterChange.current = true;
+            setDone(codeMessage(codes, "flag.closed"));
+          }}
+          // After a change, the done line; after Ghairi, the very button that opened it.
+          finalFocus={() =>
+            afterChange.current
+              ? doneLine.current
+              : (buttons.current.get(open) ?? null)
+          }
+        />
+      )}
+    </div>
   );
 }
 

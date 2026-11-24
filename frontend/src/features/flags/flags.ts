@@ -52,6 +52,15 @@ export const REVIEWS_FLAGS = "flag.review";
 /** The flags' place in the store of server answers. Each action asks them again. */
 export const FLAGS = ["control", "flags"] as const;
 
+/** What a person may do to a flag that waits: say why, or close it one way or the other. */
+export const FLAG_ACTIONS = ["explain", "resolve", "dismiss"] as const;
+export type FlagAction = (typeof FLAG_ACTIONS)[number];
+
+/** One flag's place in the store of server answers. */
+export function flagKey(id: string | null) {
+  return [...FLAGS, "one", id] as const;
+}
+
 /** Tofauti, the list. */
 export const FLAGS_PAGE = "/flags/";
 
@@ -136,7 +145,7 @@ export function useFlags(state: FlagState, filter: FlagFilter, on: boolean) {
  * who is here. */
 export function useFlag(id: string | null, on: boolean) {
   return useQuery({
-    queryKey: [...FLAGS, "one", id],
+    queryKey: flagKey(id),
     queryFn: () =>
       answerOf(
         api.GET("/api/v1/control/flags/{id}/", {
