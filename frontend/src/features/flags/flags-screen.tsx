@@ -153,7 +153,12 @@ export function FlagsScreen() {
                 state={state}
                 timezone={who.data.shop.timezone}
                 flags={lists[state].data?.pages.flatMap((page) => page.results)}
-                error={lists[state].error}
+                error={
+                  lists[state].isFetchNextPageError ? null : lists[state].error
+                }
+                moreError={
+                  lists[state].isFetchNextPageError ? lists[state].error : null
+                }
                 hasMore={lists[state].hasNextPage}
                 loadingMore={lists[state].isFetchingNextPage}
                 showMore={() => void lists[state].fetchNextPage()}
@@ -172,6 +177,7 @@ function FlagList({
   timezone,
   flags,
   error,
+  moreError,
   hasMore,
   loadingMore,
   showMore,
@@ -180,6 +186,8 @@ function FlagList({
   timezone: string;
   flags: FlagLine[] | undefined;
   error: Error | null;
+  /** Why Onyesha zaidi brought nothing: said beside the button, where the person is, not above fifty lines. */
+  moreError: Error | null;
   hasMore: boolean;
   loadingMore: boolean;
   showMore: () => void;
@@ -191,10 +199,16 @@ function FlagList({
   const firstNew = useRef<number | null>(null);
   const shown = flags?.length ?? 0;
   useEffect(() => {
-    if (firstNew.current === null || shown <= firstNew.current) return;
-    list.current?.querySelectorAll("a")[firstNew.current]?.focus();
-    firstNew.current = null;
-  }, [shown]);
+    if (firstNew.current === null) return;
+    if (shown > firstNew.current) {
+      list.current?.querySelectorAll("a")[firstNew.current]?.focus();
+      firstNew.current = null;
+    } else if (moreError !== null) {
+      // Refused: no line of that press will come. Kept, the keyboard would jump to a line the next time the list grew by
+      // itself, wherever the person had gone by then (CTRL-4's review).
+      firstNew.current = null;
+    }
+  }, [shown, moreError]);
 
   return (
     <div className="grid gap-4">
@@ -232,6 +246,7 @@ function FlagList({
           </Button>
         </div>
       ) : null}
+      <ApiErrorAlert error={moreError} />
     </div>
   );
 }

@@ -1,8 +1,16 @@
 // flags-screen.test.tsx — Tofauti lists what waits and what is closed, each behind its tab, a line per flag in the
 // shop's words, that opens its own page (CTRL-4).
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { makeQueryClient } from "@/api/query-client";
 import { setLanguage } from "@/i18n/language";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { flagLine, flagsPage, FLAGS_ROUTE, REVIEWER } from "@/test/flags";
@@ -236,6 +244,75 @@ describe("Onyesha zaidi", () => {
       "cD0x",
       "waiting",
     ]);
+  });
+});
+
+describe("Onyesha zaidi, refused", () => {
+  /** Asha's line, and a second page the server refuses; then what `later` says, for every read after. */
+  function theSecondPageIsRefused(later: Page) {
+    let refused = false;
+    answer("GET", ME, { status: 200, body: REVIEWER });
+    answer("GET", FLAGS_ROUTE, (request) => {
+      if (new URL(request.url).searchParams.has("cursor")) {
+        refused = true;
+        return Response.json(refusal(404, "not_found").body, { status: 404 });
+      }
+      return Response.json(
+        refused
+          ? later
+          : flagsPage([flagLine({ people: ["Asha"] })], {
+              waiting: 2,
+              next: `http://shop.test${FLAGS_ROUTE}?cursor=cD0x&state=waiting`,
+            }),
+      );
+    });
+  }
+
+  it("says why beside its button, under the lines, where the person is", async () => {
+    theSecondPageIsRefused(flagsPage([]));
+    render(<FlagsScreen />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Onyesha zaidi" }),
+    );
+
+    const why = await screen.findByRole("alert");
+    // After the list on the page, not above its fifty lines; and the lines stay, with the button to try again.
+    expect(
+      screen.getByRole("list").compareDocumentPosition(why) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(await lines()).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Onyesha zaidi" })).toBeTruthy();
+  });
+
+  it("never moves the keyboard later, when lines come by themselves", async () => {
+    theSecondPageIsRefused(
+      flagsPage([
+        flagLine({ people: ["Baraka"] }),
+        flagLine({ people: ["Asha"] }),
+      ]),
+    );
+    const store = makeQueryClient();
+    render(
+      <QueryClientProvider client={store}>
+        <FlagsScreen />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Onyesha zaidi" }),
+    );
+    await screen.findByRole("alert");
+    const elsewhere = screen.getByRole("button", { name: "Chuja" });
+    elsewhere.focus();
+
+    // The window comes back to the front, and the list is read again: one more line than before.
+    await act(() => store.invalidateQueries());
+
+    await screen.findByText(/^Baraka/);
+    expect(await lines()).toHaveLength(2);
+    expect(document.activeElement).toBe(elsewhere);
   });
 });
 
