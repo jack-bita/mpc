@@ -1,6 +1,6 @@
 """apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12), the month the month
 page shows, worked out through it (ATT-5), a worker's own month (ATT-12), a person's decision on a day (ATT-6), a
-manager's fixes to the taps (ATT-13), and each worker's daily pay rate (WAGE-1).
+manager's fixes to the taps (ATT-13), each worker's daily pay rate (WAGE-1), and the day's meal money (WAGE-7).
 
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
@@ -90,12 +90,14 @@ from apps.staffpay.calculations import (
 )
 from apps.staffpay.models import (
     DECISION_OF,
+    MOST_MEAL_MONEY,
     AbsenceType,
     AttendanceDay,
     AttendanceEvent,
     ClockKind,
     DayChoice,
     DayStatus,
+    MealMoney,
     NoPhoto,
     PayRate,
     ReviewReason,
@@ -1230,3 +1232,95 @@ def set_pay_rate(
         rate.full_clean()
         rate.save()
     return rate
+
+
+# On the demo, the ready reason a wrong amount of meal money is crossed out with, kept as its code, which the page says
+# in words, *Kiasi kimekosewa* (as DEMO_VOID_REASONS): a typed one would show to every visitor after.
+DEMO_MEAL_VOID_REASONS = ("wrong_amount",)
+
+
+def record_meal_money(
+    shop: Shop, *, money_id: uuid.UUID, date: dt.date, amount: Decimal, note: str = "", by: StaffMember
+) -> MealMoney:
+    """Type what the shop spent on the workers' meals on one day (WAGE-7, 02 §12): Monday's flour, 5,000. A day may have
+    several, which add up; the book splits the sum among who came the next time it works the date out. `money_id`: the
+    client's (ADR-0007), so the route answers a request sent twice with the row it made (CreateOnceMixin). `by`: who
+    types it, with meals.record on the whole shop. Refuses, all together, each beside its box: an amount of 0 or less,
+    or with cents (meal_money.amount_invalid), or over ten million (meal_money.amount_too_big); a day to come
+    (meal_money.in_future), a Sunday, or a day attendance was off (meal_money.not_working_day); and on the demo, a note
+    (demo.no_note). Returns the row as saved."""
+    # A job of another shop typing into this shop's money is a bug in the calling code (T1), never a person's mistake:
+    # the route finds both in the one shop open. A server error, before anything is read.
+    if by.shop_id != shop.pk:
+        raise ShopMismatch("record_meal_money was given a person of another shop.")
+    # Spaces around a note say nothing, and "  " is no note.
+    note = note.strip()
+    # Not a recording_changes block: meal money writes no line in the change log, as no laptop gets one (03 §6.1). No
+    # lock either: the book reads the money inside its own lock each time a day is asked for (_share_meals), so money
+    # typed beside a run of it is in the next. WAGE-3 takes one, once an approved month refuses new money.
+    with transaction.atomic():
+        # First, so someone without it sets nothing to work; read afresh, so a key taken away a moment ago counts. On
+        # the whole shop, as the workers of both sides eat together.
+        require(by, Permission.MEALS_RECORD, None)
+        # The boxes, all together, so a person who got two wrong sees both at once, each beside its own (ADR-0040).
+        errors: dict[str, list[ValidationError]] = {}
+        # As the table's rules hold: named here, beside the amount's box, where the table's own would name the whole
+        # row. to_integral_value() drops the places without rounding the check away: 5000.50 is not whole.
+        if amount <= 0 or amount != amount.to_integral_value():
+            errors["amount"] = [
+                ValidationError("Meal money is a whole amount above 0.", code="meal_money.amount_invalid")
+            ]
+        elif amount > MOST_MEAL_MONEY:
+            errors["amount"] = [ValidationError("Meal money is at most ten million.", code="meal_money.amount_too_big")]
+        if date > shop_today(shop):
+            # Tomorrow's meals aren't cooked yet, so it is a wrong date. Today's are: typed as they are paid for.
+            errors["date"] = [ValidationError("A day to come has no meals yet.", code="meal_money.in_future")]
+        elif date.weekday() == SUNDAY or not get_setting(ATTENDANCE_ON, shop, on=date):
+            # A day the book answers for nobody: money typed there would be shared by nobody, a slip of the date. A
+            # closed day takes it: breakfast was cooked the morning of a funeral, and each day that came is decided.
+            errors["date"] = [ValidationError("Only a working day has meal money.", code="meal_money.not_working_day")]
+        # On the demo every visitor logs in as Meneja (OPS-3): a note would show to every visitor after them, signed by
+        # the shared manager, until the morning's seed, so it isn't kept, as for a rule (demo.no_note, set_setting).
+        if settings.DEMO_SEED and note:
+            errors["note"] = [ValidationError("On the demo, a note isn't kept.", code="demo.no_note")]
+        if errors:
+            raise ValidationError(errors)
+        row = MealMoney(id=money_id, shop=shop, date=date, amount=amount, note=note, created_by=by)
+        # The row's own checks last, as a guard on what the boxes above already asked: a note too long, an id taken.
+        row.full_clean()
+        # An INSERT, never an UPDATE: an id another row holds clashes, loudly, and never overwrites it (03 §5.4).
+        row.save(force_insert=True)
+    return row
+
+
+def void_meal_money(money: MealMoney, *, reason: str, by: StaffMember) -> MealMoney:
+    """Cross out meal money typed wrong (WAGE-7, 02 §12, T2): 30,000 for 3,000, "Sifuri moja zaidi". The row stays,
+    voided once with who, when and why, and counts for nothing; the right amount is typed again. Never brought back.
+    `by`: who crosses it out, with meals.record on the whole shop, whoever typed it. A row crossed out already, by this
+    request sent twice or by someone a moment before, is answered as it was crossed out, never stamped again (CORE-3's
+    Watch out). Refuses, beside the reason's box: no reason (meal_money.reason_missing), or on the demo a reason not the
+    ready one (demo.ready_reasons). Returns the row as saved."""
+    # Who voids is a staff member of the row's own shop (T1): the void rule in the database checks only that the stamp
+    # is filled whole, so this is the check it can't make with one column.
+    if by.shop_id != money.shop_id:
+        raise ShopMismatch("void_meal_money was given a person of another shop.")
+    reason = reason.strip()
+    with transaction.atomic():
+        require(by, Permission.MEALS_RECORD, None)
+        if not reason:
+            raise ValidationError(
+                {"reason": [ValidationError("Money crossed out says why.", code="meal_money.reason_missing")]}
+            )
+        if settings.DEMO_SEED and reason not in DEMO_MEAL_VOID_REASONS:
+            raise ValidationError(
+                {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
+            )
+        # The stamp, filled once, by one guarded UPDATE, as a tap's (void_tap): only while the row is not crossed out,
+        # so two voids never both write it. Never save(), which AppendOnly refuses; the void trigger lets this UPDATE
+        # change the stamp and nothing else (ADR-0021).
+        MealMoney.objects.filter(pk=money.pk, voided_at__isnull=True).update(
+            voided_at=timezone.now(), voided_by=by, void_reason=reason
+        )
+        # Read back as it is now: crossed out by this request, or by the same one sent before, its answer lost, or by
+        # someone a moment before, whose stamp the page is then shown.
+        return MealMoney.objects.get(pk=money.pk)

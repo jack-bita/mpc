@@ -575,6 +575,10 @@ class PayRate(AppendOnly):
         return f"{self.daily_rate} from {self.effective_from}"
 
 
+# The most one row of meal money may be (WAGE-7): see its rule below.
+MOST_MEAL_MONEY = Decimal("10000000.00")
+
+
 class MealMoney(AppendOnly):
     # What the shop spent on the workers' meals on one day (WAGE-7, 02 §12): the cook makes them at the shop, and the
     # workers pay for their own, out of their pay (spec §8.1). Typed each day by whoever holds meals.record, a key the
@@ -591,8 +595,8 @@ class MealMoney(AppendOnly):
     # The day of the meals, on the shop's own calendar: a business date, not a moment (02 §1). Today's or an earlier
     # working day's, which the service checks: a forgotten day is typed later.
     date = models.DateField()
-    # Money, so numeric(14,2) and a Decimal, never a float (rule 3, 03 §9); above 0 and in whole shillings, as the rules
-    # below hold.
+    # Money, so numeric(14,2) and a Decimal, never a float (rule 3, 03 §9); above 0, in whole shillings and at most ten
+    # million, as the rules below hold.
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     # What it bought, in the person's own words ("Unga na maharage"); optional.
     note = models.CharField(max_length=200, blank=True)
@@ -608,8 +612,8 @@ class MealMoney(AppendOnly):
 
     class Meta(AppendOnly.Meta):
         # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). The amount's
-        # two rules carry the code the page translates (ADR-0032), as the model's own checks (full_clean) name it to the
-        # person who typed it; the database holds the same rules for whatever writes past them.
+        # three rules carry the codes the page translates (ADR-0032), as the model's own checks (full_clean) name it to
+        # the person who typed it; the database holds the same rules for whatever writes past them.
         constraints = [
             # A day's meals cost more than nothing. A row below 0 would give the workers money back, and nobody could
             # tell why: a wrong row is voided instead.
@@ -623,6 +627,14 @@ class MealMoney(AppendOnly):
                 condition=models.Q(amount=Floor("amount")),
                 name="staffpay_mealmoney_whole_shillings",
                 violation_error_code="meal_money.amount_invalid",
+            ),
+            # No more than ten million: more than any day's meals, so a slip of the zeros, and an amount so big that the
+            # sum of a few could pass what a column of money holds and stop the month from opening. A technical guard,
+            # never a shop's rule: a day that truly costs more is typed in two rows.
+            models.CheckConstraint(
+                condition=models.Q(amount__lte=MOST_MEAL_MONEY),
+                name="staffpay_mealmoney_at_most",
+                violation_error_code="meal_money.amount_too_big",
             ),
             # Every worker pays a share of it, so it never stands with nobody's name on it. No code, here or on the next
             # rule: the route always knows who sent the request, so such a row is a bug in our code, never a person's

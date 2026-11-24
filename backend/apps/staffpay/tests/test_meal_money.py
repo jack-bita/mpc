@@ -67,6 +67,19 @@ def test_the_database_refuses_such_money_too(shop_a: Shop, staff_a: StaffMember,
         _row(shop_a, staff_a, amount).save()
 
 
+def test_meal_money_is_at_most_ten_million(shop_a: Shop, staff_a: StaffMember) -> None:
+    # More than any day's meals, so a slip of the zeros; and a few such rows could add up to more than a column of money
+    # holds, and stop the month from opening. Named with its own code by the model's check; held in PostgreSQL too.
+    row = _row(shop_a, staff_a, "10000001.00")
+    with shop_context(shop_a):
+        with pytest.raises(ValidationError) as refused:
+            row.full_clean()
+        assert [error.code for error in refused.value.error_dict["__all__"]] == ["meal_money.amount_too_big"]
+        with pytest.raises(IntegrityError, match="staffpay_mealmoney_at_most"), transaction.atomic():
+            row.save()
+        _row(shop_a, staff_a, "10000000.00").save()
+
+
 def test_meal_money_says_who_typed_it(shop_a: Shop) -> None:
     # Every worker pays a share of it, so it never stands with nobody's name on it: not even the system types one.
     with (
