@@ -1,7 +1,9 @@
 // meals.ts — a made-up shop's meal money, for tests: days and rows as the server answers them (WAGE-7), and who may
 // open them. Tests only. Fake data: every name, amount and id is made up.
 import type { components } from "@/api/schema";
+import { useMealMoney } from "@/features/meals/meal-money";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
+import { answer, sent } from "@/test/fake-server";
 
 export type MealMoneyDays = components["schemas"]["MealMoneyDaysAnswer"];
 export type MealDay = components["schemas"]["MealDay"];
@@ -67,4 +69,20 @@ export function mealDays(
     ready_void_reasons: [],
     ...fields,
   };
+}
+
+const MEAL_MONEY = "/api/v1/staffpay/meal-money/";
+
+/** Hela ya chakula open somewhere else on the page's store, as a tab's list is: for a test of what asks it again. */
+export function MealMoneyAsked() {
+  useMealMoney({ first: "2026-11-01", last: "2026-11-30" });
+  return null;
+}
+
+/** The server answers MealMoneyAsked's question, and how many times it was asked so far. */
+export function mealMoneyIsAnswered(): () => number {
+  answer("GET", MEAL_MONEY, { status: 200, body: mealDays([]) });
+  return () =>
+    sent.filter((request) => new URL(request.url).pathname === MEAL_MONEY)
+      .length;
 }

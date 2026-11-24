@@ -217,6 +217,9 @@ class WorkerDaySerializer(serializers.Serializer[Any]):
     status = serializers.ChoiceField(choices=DayStatus.choices)
     reason = serializers.ChoiceField(choices=ReviewReason.choices, allow_null=True)
     fine = serializers.DecimalField(max_digits=14, decimal_places=2)
+    meal_share = serializers.DecimalField(
+        max_digits=14, decimal_places=2, help_text="The worker's share of the day's meal money, as the book kept it."
+    )
     first_in = serializers.TimeField(format="%H:%M", allow_null=True)
     first_out = serializers.TimeField(format="%H:%M", allow_null=True)
     # A person's decision, beside what the book said, which stays (A2), or null; and what the day may be decided as,
@@ -273,7 +276,8 @@ class WorkerAttendanceAnswer(serializers.Serializer[Any]):
     # A worker's month, as their calendar shows it (ATT-12): which month; the shop's today, which the calendar marks
     # (•), on the shop's own date; the worker's line, as the month page counts it; their first and last day, for a
     # day outside them to say why; each day the book answers for them, up to yesterday; and each tap of the month,
-    # today's too. No amount but the fines: a manager who fixes attendance sees no one's pay (WAGE-1's review).
+    # today's too. No amount but the fines and the meals' shares, the same for everyone who came: a manager who fixes
+    # attendance sees no one's pay (WAGE-1's review).
     month = MonthField()
     today = serializers.DateField()
     worker = WorkerMonthSerializer()

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
 import { answer, refusal, sent } from "@/test/fake-server";
+import { MealMoneyAsked, mealMoneyIsAnswered } from "@/test/meals";
 import { render } from "@/test/render";
 
 import { choiceOf, DecideDay } from "./decide-day";
@@ -37,6 +38,7 @@ const THURSDAYS: WorkerDay = {
   status: "needs_review",
   reason: "no_out",
   fine: NOTHING,
+  meal_share: NOTHING,
   first_in: "07:50",
   first_out: null,
   decision: null,
@@ -198,6 +200,25 @@ describe("Amua siku hii", () => {
         replaces: "2026-11-20T06:00:00.123456Z",
       },
     ]);
+  });
+
+  it("asks the meal money again, as the date is split again with the decision (WAGE-7)", async () => {
+    // Juma's waiting day decided a full day: he shares the date's meals too, so everyone's share moves.
+    answer("POST", DECIDE, { status: 200, body: DECIDED });
+    const asked = mealMoneyIsAnswered();
+    render(
+      <>
+        <MealMoneyAsked />
+        <DecideDay day={THURSDAYS} answer={month()} open onClose={vi.fn()} />
+      </>,
+    );
+    await waitFor(() => expect(asked()).toBe(1));
+
+    fireEvent.click(within(choices()).getByText("Siku kamili"));
+    fireEvent.change(reasonBox(), { target: { value: "Alisahau Toka" } });
+    fireEvent.click(save());
+
+    await waitFor(() => expect(asked()).toBe(2));
   });
 
   it("sends the decision on the screen as it opened, though the month brings a newer one meanwhile", async () => {

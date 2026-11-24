@@ -7096,6 +7096,12 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
                     },
+                    "meal_share": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "description": "The worker's share of the day's meal money, as the book kept it."
+                    },
                     "first_in": {
                         "type": "string",
                         "format": "time",
@@ -7133,6 +7139,7 @@
                     "first_in",
                     "first_out",
                     "id",
+                    "meal_share",
                     "reason",
                     "status",
                     "taps_changed"

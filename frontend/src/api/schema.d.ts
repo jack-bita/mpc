@@ -2302,6 +2302,11 @@ export interface components {
             reason: (components["schemas"]["ReasonEnum"] | components["schemas"]["NullEnum"]) | null;
             /** Format: decimal */
             fine: string;
+            /**
+             * Format: decimal
+             * @description The worker's share of the day's meal money, as the book kept it.
+             */
+            meal_share: string;
             /** Format: time */
             first_in: string | null;
             /** Format: time */

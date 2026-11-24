@@ -869,6 +869,7 @@
       "off": "Shop closed"
     },
     "statusWithFine": "{status} · fine {amount}",
+    "meals": "Meals: {amount}",
     "why": "Why: {why}",
     "jobFrom": "Their work days: from {first}.",
     "jobBetween": "Their work days: {first} to {last}.",

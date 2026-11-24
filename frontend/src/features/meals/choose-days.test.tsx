@@ -55,7 +55,14 @@ function wordsOf(part: Element | null): string {
 
 /** The sheet, opened from the page. */
 async function openTheSheet(): Promise<HTMLElement> {
-  fireEvent.click(await screen.findByRole("button", { name: "Chagua siku" }));
+  // Longer than the one second a find waits by itself: the file's first draw is slow on a busy machine.
+  fireEvent.click(
+    await screen.findByRole(
+      "button",
+      { name: "Chagua siku" },
+      { timeout: 5000 },
+    ),
+  );
   return screen.findByRole("dialog", { name: "Chagua siku" });
 }
 

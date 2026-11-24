@@ -56,7 +56,8 @@ def test_the_workers_month_as_the_page_reads_it(
 ) -> None:
     # Asha came at 09:10 on Friday 2 October, from the Dawa laptop, which kept no photo (the demo's reason): her day
     # waits for a decision, and says why with the book's code; her tap is a minute on the shop's clock, which the page
-    # turns into "Ingia 09:10 asubuhi · Laptop ya Dawa". Her line counts her October; no amount but the fine travels.
+    # turns into "Ingia 09:10 asubuhi · Laptop ya Dawa". Her line counts her October; no amount but the fine
+    # and the meals' share travels.
     moment = dt.datetime(2026, 10, 2, 9, 10, 25, tzinfo=ARUSHA)
     with shop_context(shop_a):
         ingia = AttendanceEvent.objects.create(
@@ -123,6 +124,8 @@ def test_the_workers_month_as_the_page_reads_it(
         "status": "needs_review",
         "reason": "came_late",
         "fine": "0.00",
+        # No meal money in this shop's October, and a day that waits has no share of any (WAGE-7).
+        "meal_share": "0.00",
         "first_in": "09:10",
         "first_out": None,
         "decision": None,
@@ -139,6 +142,7 @@ def test_the_workers_month_as_the_page_reads_it(
         "status": "absent",
         "reason": None,
         "fine": "0.00",
+        "meal_share": "0.00",
         "first_in": None,
         "first_out": None,
         "decision": None,

@@ -673,14 +673,16 @@ class DayOption:
 class WorkerDay:
     # One of a worker's days, as their calendar marks it and the day says it: what it was, why it waits for a decision
     # on a day to decide, and its fine. The fine is the shop's own rule, which anyone working there may read on the
-    # rules page, never the worker's rate or the day's pay (WAGE-1). And the two taps the rule read, the first Ingia and
-    # the first Toka after it, for the reason that names one, "alifika saa 09:10", as the month page's list says it.
-    # Its id: the address a decision on it is sent to (attendance-days/{id}/decide/, ATT-6).
+    # rules page, never the worker's rate or the day's pay (WAGE-1). Its share of the date's meals too, as the book kept
+    # it, the same for everyone who came (WAGE-7, as Jack drew the day), 0 for none. And the two taps the rule read, the
+    # first Ingia and the first Toka after it, for the reason that names one, "alifika saa 09:10", as the month page's
+    # list says it. Its id: the address a decision on it is sent to (attendance-days/{id}/decide/, ATT-6).
     id: uuid.UUID
     date: dt.date
     status: DayStatus
     reason: ReviewReason | None
     fine: Decimal
+    meal_share: Decimal
     first_in: dt.time | None
     first_out: dt.time | None
     # A person's decision on the day, or None (ATT-6), shown beside what the book said, which stays (A2).
@@ -786,6 +788,7 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
                 # The table keeps "no reason" as empty (ATT-5): said as None.
                 reason=ReviewReason(day.review_reason) if day.review_reason else None,
                 fine=day.fine,
+                meal_share=day.meal_share,
                 first_in=day.first_in,
                 first_out=day.first_out,
                 decision=decision_of(day, deciders),

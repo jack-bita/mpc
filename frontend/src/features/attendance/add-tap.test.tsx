@@ -7,6 +7,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { answer, refusal, sent } from "@/test/fake-server";
+import { MealMoneyAsked, mealMoneyIsAnswered } from "@/test/meals";
 import { render } from "@/test/render";
 
 import { AddTap } from "./add-tap";
@@ -163,6 +164,23 @@ describe("Ongeza Ingia au Toka", () => {
       time: "18:45",
       reason: "Alisahau kubonyeza Toka",
     });
+  });
+
+  it("asks the meal money again, as the date is split again with the tap (WAGE-7)", async () => {
+    answer("POST", TAPS, { status: 201, body: ADDED });
+    const asked = mealMoneyIsAnswered();
+    render(
+      <>
+        <MealMoneyAsked />
+        <AddTap day={THURSDAY} answer={month()} onClose={vi.fn()} />
+      </>,
+    );
+    await waitFor(() => expect(asked()).toBe(1));
+
+    fill("18:45", "Alisahau kubonyeza Toka");
+    fireEvent.click(add());
+
+    await waitFor(() => expect(asked()).toBe(2));
   });
 
   it("sends the same id on a try again, so the tap is added once", async () => {

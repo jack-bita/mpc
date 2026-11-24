@@ -869,6 +869,7 @@
       "off": "Duka limefungwa"
     },
     "statusWithFine": "{status} · faini {amount}",
+    "meals": "Chakula: {amount}",
     "why": "Kwa nini: {why}",
     "jobFrom": "Siku zake za kazi: kuanzia {first}.",
     "jobBetween": "Siku zake za kazi: {first} hadi {last}.",

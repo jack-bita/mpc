@@ -8,7 +8,8 @@
 //   [ the photo ]
 //   Hakuna Toka.
 //
-// Its status, and its fine on a day with one; why it waits, on a day to decide, with the worker's working days for a
+// Its status, and its fine on a day with one; their share of the day's meal money, *Chakula: TSh 1,000*, where there is
+// one (WAGE-7); why it waits, on a day to decide, with the worker's working days for a
 // day outside them; then each tap, Ingia or Toka, its time on the shop's clock with its part of the day (SYNC-11),
 // the laptop, why the tap itself is in doubt, and its photo, or why there is none. Today says it isn't over, and shows
 // its taps as they came.
@@ -184,7 +185,7 @@ const SUNDAY = 0;
 
 /** The day as the book kept it, or as someone decided it: the decision first, who and when, its reason, and what the
  * system said beside it (A2); else its status and fine, then why it waits, and the worker's days for one outside them.
- * Then the way to decide it, where the server offers one. */
+ * Then their share of the day's meals, and the way to decide it, where the server offers one. */
 function Kept({
   day,
   answer,
@@ -204,6 +205,13 @@ function Kept({
       ) : (
         <BookSays day={day} answer={answer} />
       )}
+      {/* Their share of the day's meal money, as the book kept it (WAGE-7), on a day with one, whether the system or a
+          person said what the day was: the same for everyone who came. */}
+      {new Decimal(day.meal_share).gt("0") ? (
+        <p>
+          {t("meals", { amount: formatMoney(new Decimal(day.meal_share)) })}
+        </p>
+      ) : null}
       {day.choices.length > 0 ? (
         <Button
           kind={day.decision === null ? "main" : "second"}
