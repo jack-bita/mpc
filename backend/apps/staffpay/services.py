@@ -44,6 +44,11 @@ reads both the next time it works the day out, as it reads every tap.
 A pay rate is typed by a person, the owner (set_pay_rate): from 10 Nov, Juma earns 10,000 a day. Whoever sets it sets a
 worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No line in the change log either: a
 worker's pay never sits on a shared device (03 §6.1).
+
+The day's meal money is typed by whoever the owner gave the key to (record_meal_money, WAGE-7): Monday's flour, 5,000,
+and its meat, 3,000. A wrong one is crossed out, with who, when and why (void_meal_money), and the book splits what
+counts among who came, as above. Hela ya chakula asks for any days of it, and the whole of them, through
+meal_money_days, which works them out through the book too, so it writes as the month's page does.
 """
 
 import calendar
@@ -52,7 +57,7 @@ import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -77,6 +82,7 @@ from apps.shops.models import Shop
 from apps.shops.selectors import closed_days, get_setting, shop_settings_between, shop_today
 from apps.staffpay.calculations import (
     NO_FINE,
+    NO_MEAL_SHARE,
     TIME_IN_DOUBT,
     DayResult,
     MealPart,
@@ -1324,3 +1330,142 @@ def void_meal_money(money: MealMoney, *, reason: str, by: StaffMember) -> MealMo
         # Read back as it is now: crossed out by this request, or by the same one sent before, its answer lost, or by
         # someone a moment before, whose stamp the page is then shown.
         return MealMoney.objects.get(pk=money.pk)
+
+
+@dataclass(frozen=True)
+class VoidedMealMoney:
+    # Who crossed out a row of meal money, by nickname; when; and why. On the demo the reason is a ready one's code
+    # (`wrong_amount`), which the page says in words.
+    by: str
+    at: dt.datetime
+    reason: str
+
+
+@dataclass(frozen=True)
+class MealMoneyLine:
+    # One row of a day's meal money, as the day's page shows it: "TSh 5,000 · Unga na maharage", who typed it and when,
+    # and who crossed it out, or None while it counts.
+    id: uuid.UUID
+    amount: Decimal
+    note: str
+    by: str
+    at: dt.datetime
+    voided: VoidedMealMoney | None
+
+
+@dataclass(frozen=True)
+class MealDay:
+    # One day of Hela ya chakula (WAGE-7): its money, the sum of the rows that count; whether it is over, as today is
+    # not, so its money isn't split yet; how many workers share it, each one's share as the book kept it, and how many
+    # wait for a decision; and its rows, oldest first, the crossed-out ones too. No money and someone who came:
+    # Haijaandikwa. Money and nobody to share it: Hakuna wa kuchangia.
+    date: dt.date
+    amount: Decimal
+    over: bool
+    sharers: int
+    share: Decimal
+    waiting: int
+    rows: list[MealMoneyLine]
+
+
+@dataclass(frozen=True)
+class MealMoneyDays:
+    # The page's answer: the span, up to the shop's today; today itself; the whole of its money; and its days, newest
+    # first. On the demo, the ready reason a row may be crossed out with; elsewhere none.
+    first: dt.date
+    last: dt.date
+    today: dt.date
+    total: Decimal
+    days: list[MealDay]
+    ready_void_reasons: list[str]
+
+
+# No money: a day nobody typed, or a span of them. Two places, as every amount.
+NO_MONEY = Decimal("0.00")
+
+
+def meal_money_days(shop: Shop, first: dt.date, last: dt.date) -> MealMoneyDays:
+    """The meal money from `first` to `last`, both counted and up to the shop's today, as Hela ya chakula shows it
+    (WAGE-7): each day with money typed for it, or with a worker who came and shares it, or who may have, and today; and
+    the whole of it. Worked out through the book (work_out_days), so it writes as the book does, and asked twice writes
+    nothing the second time. The shop must be open, as for the book."""
+    today = shop_today(shop)
+    last = min(last, today)
+    ready = list(DEMO_MEAL_VOID_REASONS) if settings.DEMO_SEED else []
+    if last < first:
+        # Days to come alone, when nobody has eaten yet: nothing to read.
+        return MealMoneyDays(first, last, today, NO_MONEY, [], ready)
+    # The book first, so each day's share is as it is now: the money typed a moment ago, a tap that came late, a day
+    # decided. It answers every job's day up to yesterday. The rows are read after it, so money typed between the two
+    # shows with the split before it, until the page asks again (as a tap does, worker_attendance).
+    book: dict[dt.date, list[AttendanceDay]] = defaultdict(list)
+    for worked_out in work_out_days(shop, first, last):
+        book[worked_out.date].append(worked_out)
+    rates = rates_between(shop, first, last)
+    rows: dict[dt.date, list[MealMoney]] = defaultdict(list)
+    # Who typed each and who crossed it out come in the same read. Oldest first, as they were typed; then the id, for
+    # two typed at the very same moment.
+    for row in (
+        MealMoney.objects.filter(shop=shop, date__range=(first, last))
+        .select_related("created_by", "voided_by")
+        .order_by("date", "created_at", "id")
+    ):
+        rows[row.date].append(row)
+    days: list[MealDay] = []
+    date = last
+    while date >= first:
+        day = _meal_day(date, today, book[date], rows[date], rates)
+        # A day to show: one with a row, crossed out or not; one whose meals someone ate, or may have; and today, while
+        # it is a working day, as that is when its money is typed.
+        if day.rows or day.sharers or day.waiting or (date == today and _works_today(shop, today)):
+            days.append(day)
+        date -= dt.timedelta(days=1)
+    return MealMoneyDays(first, last, today, sum((day.amount for day in days), NO_MONEY), days, ready)
+
+
+def _meal_day(
+    date: dt.date,
+    today: dt.date,
+    worked_out: list[AttendanceDay],
+    rows: list[MealMoney],
+    rates: dict[tuple[uuid.UUID, dt.date], PayRate],
+) -> MealDay:
+    # One date of Hela ya chakula, from its jobs' days as the book answered them, its rows, and the rates in force.
+    parts = []
+    for day in worked_out:
+        rate = rates.get((day.staff_id, date))
+        part = meal_part(day.status, day.decided_status, shares_meals=rate.shares_meals if rate is not None else None)
+        parts.append((part, day.meal_share))
+    # The share as the book kept it, the same for everyone who shares the date's meals: never worked out a second time
+    # here, so the page and the pay can't differ (WAGE-2).
+    shares = [share for part, share in parts if part is MealPart.SHARES]
+    return MealDay(
+        date=date,
+        amount=sum((row.amount for row in rows if row.voided_at is None), NO_MONEY),
+        over=date < today,
+        sharers=len(shares),
+        share=shares[0] if shares else NO_MEAL_SHARE,
+        waiting=sum(part is MealPart.WAITS for part, _ in parts),
+        rows=[_meal_line(row) for row in rows],
+    )
+
+
+def _meal_line(row: MealMoney) -> MealMoneyLine:
+    # A row as the day's page shows it. Who typed it is always there, as the table holds.
+    by = cast(StaffMember, row.created_by)
+    voided = None
+    if row.voided_at is not None and row.voided_by is not None:
+        voided = VoidedMealMoney(by=row.voided_by.display_name, at=row.voided_at, reason=row.void_reason)
+    return MealMoneyLine(
+        id=row.pk, amount=row.amount, note=row.note, by=by.display_name, at=row.created_at, voided=voided
+    )
+
+
+def _works_today(shop: Shop, today: dt.date) -> bool:
+    # Whether the shop works today, as the book will count it once it is over: not a Sunday, not a closed day, and while
+    # attendance is on.
+    return (
+        today.weekday() != SUNDAY
+        and today not in closed_days(shop, today, today)
+        and bool(get_setting(ATTENDANCE_ON, shop, on=today))
+    )
