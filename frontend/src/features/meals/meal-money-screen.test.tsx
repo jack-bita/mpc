@@ -10,7 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { whoIsHere } from "@/test/devices";
+import { DAWA_LAPTOP_ANSWER, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import {
   mealDay,
@@ -21,6 +21,7 @@ import {
   WITH_THE_KEY,
 } from "@/test/meals";
 import { render } from "@/test/render";
+import { router } from "@/test/router";
 
 import { MealMoneyScreen } from "./meal-money-screen";
 
@@ -301,6 +302,29 @@ describe("the month's meal money", () => {
       screen.queryByRole("button", { name: "Andika hela ya chakula" }),
     ).toBeNull();
     expect(screen.queryByRole("button", { name: "Chagua siku" })).toBeNull();
+  });
+
+  it.each([
+    ["the office's home page, in a password's session", null, "/office/"],
+    ["the PIN screen's welcome, on the shop's laptop", DAWA_LAPTOP_ANSWER, "/"],
+  ])("sends the arrow from a fresh tab to %s", async (_where, device, home) => {
+    vi.spyOn(window.history, "length", "get").mockReturnValue(1);
+    theShopHas({ "2026-11-01 2026-11-30": NOVEMBER });
+    answer("GET", ME, {
+      status: 200,
+      body: {
+        ...WITH_THE_KEY,
+        device: device?.device ?? null,
+        home_side: device?.home_side ?? null,
+      },
+    });
+    render(<MealMoneyScreen />);
+    await lines();
+
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
+
+    expect(router.push).toHaveBeenCalledWith(home);
+    vi.restoreAllMocks();
   });
 
   it("keeps the month last read when a later read fails, with the reason above it", async () => {

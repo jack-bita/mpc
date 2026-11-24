@@ -36,6 +36,13 @@ export function sidesWhere(me: WhoIsHere, key: string): SideKeys[] {
   return me.permissions.sides.filter((side) => side.permissions.includes(key));
 }
 
+/** The home page of the person here: the PIN screen's welcome at a shared device, where a PIN's session names its device;
+ * the office's home page for a password's. Where the arrow of a page that both reach leads, opened from outside the app
+ * (page-header.tsx's fallback): Mipangilio yangu (UI-9), Hela ya chakula (WAGE-7). */
+export function homeOf(me: WhoIsHere): string {
+  return me.device ? "/" : "/office/";
+}
+
 /** The side a person works on at this device, for the top bar (UI-4): the device's home side if they
  * hold a key there, or else the first side they hold one on; none if they hold none. */
 export function sideAt(

@@ -50,7 +50,7 @@ import {
   type Weekday,
 } from "@/features/attendance/attendance-month";
 import { MonthSwitch, usePagesClock } from "@/features/attendance/month-switch";
-import { useWhoIsHere } from "@/features/people/who-is-here";
+import { homeOf, useWhoIsHere } from "@/features/people/who-is-here";
 import { Decimal } from "@/lib/decimal";
 import {
   formatDay,
@@ -119,7 +119,12 @@ export function MealMoneyScreen() {
 
   return (
     <div className="grid max-w-2xl gap-6">
-      <PageHeader title={t("title")} />
+      {/* Opened from outside the app, the arrow leads to the person's own home: a seller at the laptop came from the PIN
+          screen's welcome, not from the office's. */}
+      <PageHeader
+        title={t("title")}
+        fallback={who.data ? homeOf(who.data) : undefined}
+      />
       <p role="status" className={waiting ? "text-lg" : "sr-only"}>
         {waiting ? loginWords("waiting") : null}
       </p>
