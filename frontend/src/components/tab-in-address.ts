@@ -20,10 +20,10 @@ export function useTabInAddress(): [string | null, (value: string) => void] {
  * than adding to the history: the back arrow and the browser's back leave the page, as a person expects, rather than
  * stepping through every tab they opened; and coming back to the page finds what they left.
  *
- * Read from the address on the first draw: the page's tabs come only once the server has answered, so always in
- * the browser, never in the page built ahead of time (ADR-0016), which has no address. The typeof check
- * keeps that true even if a later change draws them sooner. Read once: a link to the same page with another
- * word would not change it. No such link exists; one that comes must set the word itself. */
+ * Read from the address on the first draw. The page built ahead of time has none (ADR-0016), so there it reads nothing
+ * (the typeof check), and a page that calls this at its top shows what depends on it only once the server has answered,
+ * in the browser: drawn sooner, the built page and the browser's first draw would differ. Read once: a link to the same
+ * page with another word would not change it. No such link exists; one that comes must set the word itself. */
 export function useWordInAddress(
   name: string,
 ): [string | null, (value: string | null) => void] {

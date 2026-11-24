@@ -171,7 +171,10 @@ def test_closed_flags_have_a_list_of_their_own(
 
 def test_the_list_keeps_to_a_kind_and_a_side(
     shop_a: Shop,
+    shop_b: Shop,
     side_a: Side,
+    side_b: Side,
+    staff_b: StaffMember,
     foods: Side,
     device_a: Device,
     foods_laptop: Device,
@@ -192,8 +195,12 @@ def test_the_list_keeps_to_a_kind_and_a_side(
     assert shown(client, kind="suspended_staff_activity") == ids(vyakula, dawa)
     assert shown(client, kind="suspended_staff_activity", side=str(side_a.pk)) == ids(dawa)
     assert client.get(FLAGS, {"kind": "device_gap"}).json()["waiting"] == 1
-    # A side no shop has, and another shop's, hold none, alike.
-    assert shown(client, side=str(uuid.uuid7())) == []
+    # A side no shop has, and another shop's, with a flag of its own, hold none, alike.
+    with shop_context(shop_b):
+        raise_flag(kind=FlagKind.TOTAL_MISMATCH, subject=side_b, side=side_b, people=[staff_b], by=None)
+    for elsewhere in (uuid.uuid7(), side_b.pk):
+        answer = client.get(FLAGS, {"side": str(elsewhere)}).json()
+        assert (answer["results"], answer["waiting"]) == ([], 0)
     for wrong in ({"state": "open"}, {"kind": "no_such_kind"}, {"side": "Dawa"}):
         answer = client.get(FLAGS, wrong)
         assert (answer.status_code, list(answer.json()["fields"])) == (400, list(wrong)), wrong

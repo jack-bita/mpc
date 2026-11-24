@@ -133,7 +133,7 @@ class FlagDetail(FlagLine):
 
 
 def flag_detail(flag: Flag, *, viewer: Actor) -> FlagDetail:
-    """`flag`, loaded with its side, whole, for its page, as `viewer` sees it: the person looking."""
+    """`flag` whole, for its page, as `viewer` sees it: the person looking. Its side is read if it isn't loaded."""
     record = _records([flag]).get(flag.subject_id)
     named = people_named([flag])[flag.pk]
     # A record of a table that says nothing of itself, or none at all: the flag's own facts alone.
