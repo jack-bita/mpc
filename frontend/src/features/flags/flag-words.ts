@@ -12,7 +12,7 @@ import { useTranslations } from "use-intl";
 import { useRefusedRecordWords } from "@/i18n/refused-record";
 import { Decimal } from "@/lib/decimal";
 
-import type { Flag, FlagNote } from "./flags";
+import { type Flag, type FlagNote, isRaised } from "./flags";
 
 /** The system's own notes (SYSTEM_NOTES, apps/control/services.py), each a code, with the words it is said in. */
 const SYSTEM_NOTES = {
@@ -39,7 +39,12 @@ export function useWhatHappened(): (flag: Flag) => {
     const loaded = flag.loaded_by !== null && flag.people[0] === flag.loaded_by;
     const why = flag.refused_for === "" ? null : refusedFor(flag.refused_for);
     const said = (sentence: string) => ({ sentence, why });
-    switch (flag.kind) {
+    const { kind } = flag;
+    // A kind newer than this app (flags.ts): its page still says who, where and when.
+    if (!isRaised(kind)) return said(t("another"));
+    // No default: the type checker refuses a kind of RAISED_KINDS with no sentence here, so a card that raises one can't
+    // forget it (CTRL-4's review).
+    switch (kind) {
       case "unverified_time":
         return said(
           flag.tap === null
@@ -74,9 +79,6 @@ export function useWhatHappened(): (flag: Flag) => {
       }
       case "invalid_document":
         return said(t("recordRefused"));
-      default:
-        // A kind newer than this app (flags.ts): its page still says who, where and when.
-        return said(t("another"));
     }
   };
 }

@@ -163,7 +163,8 @@ export function useKindWords(): (kind: FlagKind) => string {
   return (kind) => (isRaised(kind) ? t(`kind.${kind}`) : t("kind.another"));
 }
 
-function isRaised(kind: FlagKind): kind is RaisedKind {
+/** Whether the app knows a kind: one the server raises today, with its words and its sentence. */
+export function isRaised(kind: FlagKind): kind is RaisedKind {
   return (RAISED_KINDS as readonly FlagKind[]).includes(kind);
 }
 
