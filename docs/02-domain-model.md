@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.62 · 24 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.63 · 24 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.63** (24 Nov 2026, WAGE-7): §12 and §15, meal money: where it is typed and for which days; who shares it, by the decision where there is one, and not on office duty (Jack: A); a waiting day, and a date with nobody to share it (04 v1.193). Marked **(v1.63)**.
 
 **Changes in v1.62** (24 Nov 2026, CTRL-4): §13, who sees a flag in the office: whoever may close it; being named on one counts by the person, not the job; and deciding a day closes no flag (Jack: A). Marked **(v1.62)** below.
 
@@ -604,6 +606,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - `date`, `amount` (positive), `note`; who typed it is the row's `created_by` (§1). The whole shop's, not a side's: the workers of both sides eat together.
 - Typed each day by whoever holds `meals.record`, a key the owner gives to whoever he chooses (Jack, 15 Nov 2026). A day may have several: the day's meal money is the sum of its rows not voided.
 - Append-only, as money is (T2): a wrong amount is voided (who, when, why) and typed again; nothing else on it ever changes. Locked, like its days, once their pay run is approved.
+- **(v1.63)** Typed on an office page, with the internet, on a phone or on the shop's laptop after a PIN; never offline. For today or an earlier working day: never a day to come, a Sunday or a day attendance was off. The amount is above 0, in whole shillings. Anyone with the key crosses out a wrong one *(default)*. Never on a laptop's own copy (03 §6.1).
 
 **PayRun** → Shop — one month. `status`: `draft` → `approved` → `paid`. Recalculated freely while draft; approval freezes payslips, attendance days, advances and meal money **(v1.29)**.
 
@@ -689,7 +692,7 @@ stateDiagram-v2
 11. **Loss %** (production, jobs) = (input kg − output kg) ÷ input kg.
 12. **Expiry:** days left = expiry − today; alert when ≤ `expiry.alert_days`.
 13. **Shopping list:** on hand ≤ reorder level, or an open restock request.
-14. **Meal share** **(v1.29)** (worker, day) = the day's meal money ÷ the workers who came that day (on time, late or half; not office duty, as they eat away *(default)*) and share meals, rounded with the shared function (ADR-0024). Nobody else pays for that day, so a worker who came 10 days pays 10 days' shares. The rounded shares may add up to a few shillings off the day's money.
+14. **Meal share** **(v1.29)** (worker, day) = the day's meal money ÷ the workers who came that day (on time, late or half, by the decision where there is one; not office duty, as they eat away (Jack: A, WAGE-7) **(v1.63)**) and share meals, by a rate in force that day **(v1.63)**, rounded with the shared function (ADR-0024) to the shop's rounding step that day **(v1.63)**. Nobody else pays for that day, so a worker who came 10 days pays 10 days' shares. The rounded shares may add up to a few shillings off the day's money. A day still waiting for a decision has no share, and deciding it splits its whole date again; a date's money with nobody to share it is paid by nobody **(v1.63)**.
 
 ## 16. Rules (invariants)
 
