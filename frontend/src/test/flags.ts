@@ -1,11 +1,13 @@
 // flags.ts — made-up answers of GET /api/v1/control/flags/ for Tofauti's tests (CTRL-4): a line of the list, a page of
-// it, and the manager who may open it. Tests only. Fake data: the made-up MPC of devices.ts, its sides, and made-up
-// names.
+// it, one flag whole with a note, and the manager who may open it. Tests only. Fake data: the made-up MPC of devices.ts,
+// its sides, and made-up names.
 import type { components } from "@/api/schema";
 
 import { DAWA, VYAKULA, whoIsHere } from "./devices";
 
 type FlagLine = components["schemas"]["FlagLine"];
+type Flag = components["schemas"]["Flag"];
+type FlagNote = components["schemas"]["FlagNote"];
 
 /** The list's address, as the tests answer it. */
 export const FLAGS_ROUTE = "/api/v1/control/flags/";
@@ -51,3 +53,40 @@ export function flagsPage(
 ): components["schemas"]["PaginatedFlagLineList"] {
   return { next, previous: null, results: lines, waiting };
 }
+
+/** One flag whole: that same tap of Juma's, with its day to open and nothing written yet, unless told otherwise. */
+export function flag(fields: Partial<Flag> = {}): Flag {
+  return {
+    ...flagLine(),
+    expected: null,
+    actual: null,
+    difference: null,
+    tap: { staff: JUMA_JOB, kind: "in", day: "2026-11-22" },
+    refused_for: "",
+    brought_from: null,
+    loaded_by: null,
+    notes: [],
+    names_you: false,
+    ready_notes: [],
+    ...fields,
+  };
+}
+
+/** Juma's job, as the attendance pages' address names it. */
+export const JUMA_JOB = "019a8311-0000-7000-8000-000000000001";
+
+/** A note: Neema's explanation, on 23 November at 09:10, unless told otherwise. Each its own id. */
+export function flagNote(fields: Partial<FlagNote> = {}): FlagNote {
+  made += 1;
+  return {
+    id: `019a8312-0000-7000-8000-${String(made).padStart(12, "0")}`,
+    step: "explained",
+    text: "Alikuja kuchukua vitu vyake tu.",
+    by: "Neema",
+    at: "2026-11-23T06:10:00Z",
+    ...fields,
+  };
+}
+
+/** One flag's address, as the tests answer it. */
+export const flagRoute = (id: string) => `${FLAGS_ROUTE}${id}/`;

@@ -950,6 +950,45 @@
       "on": "Umechuja: {what}",
       "both": "{side} · {kind}",
       "clear": "Onyesha zote"
+    },
+    "moment": "{weekday} {date}, saa {time}",
+    "tapKind": {
+      "in": "Ingia kazini",
+      "out": "Toka kazini"
+    },
+    "page": {
+      "noFlag": "Hakuna tofauti iliyochaguliwa.",
+      "why": "Kwa nini: {why}",
+      "people": "{count, plural, one {Anayetajwa} other {Wanaotajwa}}",
+      "side": "Upande",
+      "device": "Kompyuta",
+      "broughtFrom": "Iliandikwa kwenye",
+      "loadedBy": "Faili lilipakiwa na",
+      "madeAt": "Lini (kwa saa ya kompyuta)",
+      "raisedAt": "Mfumo uliona",
+      "status": "Hali",
+      "openDay": "Fungua siku yake",
+      "notes": "Maelezo ({count})",
+      "noNotes": "Bado hakuna maelezo.",
+      "noteBy": "{step} · {by} · {when}",
+      "system": "Mfumo"
+    },
+    "what": {
+      "someone": "Mtu",
+      "unverifiedTap": "{name} alibonyeza {kind} kwenye kompyuta ambayo saa yake haikuaminika, kwa hiyo saa halisi haijulikani.",
+      "unverifiedTime": "{name} aliandika kumbukumbu kwenye kompyuta ambayo saa yake haikuaminika, kwa hiyo saa halisi haijulikani.",
+      "suspendedTap": "{name} alibonyeza {kind} akiwa amesimamishwa, au baada ya kuondoka kazini.",
+      "suspendedRecord": "{name} aliandika kumbukumbu akiwa amesimamishwa, au baada ya kuondoka kazini.",
+      "suspendedLoaded": "{name} alipakia faili la kumbukumbu akiwa amesimamishwa, au baada ya kuondoka kazini.",
+      "permissionRecord": "{name} aliandika kumbukumbu ambayo hana ruhusa ya kuiandika.",
+      "permissionLoaded": "{name} alipakia faili la kumbukumbu bila ruhusa.",
+      "recordsMissing": "Kompyuta hii ilituma kumbukumbu namba {actual}, lakini seva ilisubiri namba {expected}. Zinazokosekana: {missing}.",
+      "numbersWentBack": "Namba za kumbukumbu za kompyuta hii zimerudi nyuma: seva ilisubiri namba {expected}, ikaja namba {actual}.",
+      "recordRefused": "Seva haikuweza kuhifadhi kumbukumbu iliyotumwa na kompyuta hii.",
+      "another": "Mfumo umeona tofauti ambayo toleo hili la programu halijui kuieleza."
+    },
+    "systemNote": {
+      "deviceGapFilled": "Kumbukumbu zote zilizokosekana zimefika."
     }
   },
   "needsAttention": {

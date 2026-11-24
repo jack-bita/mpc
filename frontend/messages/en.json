@@ -950,6 +950,45 @@
       "on": "Filtered: {what}",
       "both": "{side} · {kind}",
       "clear": "Show all"
+    },
+    "moment": "{weekday} {date}, {time}",
+    "tapKind": {
+      "in": "Clock in",
+      "out": "Clock out"
+    },
+    "page": {
+      "noFlag": "No flag was chosen.",
+      "why": "Why: {why}",
+      "people": "{count, plural, one {Who it names} other {Who it names}}",
+      "side": "Side",
+      "device": "Laptop",
+      "broughtFrom": "Written on",
+      "loadedBy": "File loaded by",
+      "madeAt": "When (by the laptop's clock)",
+      "raisedAt": "The system found it",
+      "status": "State",
+      "openDay": "Open their day",
+      "notes": "Notes ({count})",
+      "noNotes": "No notes yet.",
+      "noteBy": "{step} · {by} · {when}",
+      "system": "The system"
+    },
+    "what": {
+      "someone": "Someone",
+      "unverifiedTap": "{name} tapped {kind} on a laptop whose clock couldn't be trusted, so the real time isn't known.",
+      "unverifiedTime": "{name} made a record on a laptop whose clock couldn't be trusted, so the real time isn't known.",
+      "suspendedTap": "{name} tapped {kind} while suspended, or after leaving the job.",
+      "suspendedRecord": "{name} made a record while suspended, or after leaving the job.",
+      "suspendedLoaded": "{name} loaded a file of records while suspended, or after leaving the job.",
+      "permissionRecord": "{name} made a record they have no permission to make.",
+      "permissionLoaded": "{name} loaded a file of records without permission.",
+      "recordsMissing": "This laptop sent record number {actual}, but the server was waiting for number {expected}. Missing: {missing}.",
+      "numbersWentBack": "This laptop's record numbers went back: the server was waiting for number {expected}, and number {actual} came.",
+      "recordRefused": "The server couldn't keep a record this laptop sent.",
+      "another": "The system found something this version of the app can't explain."
+    },
+    "systemNote": {
+      "deviceGapFilled": "Every missing record has arrived."
     }
   },
   "needsAttention": {

@@ -7,7 +7,7 @@
 // on every read and every action.
 "use client";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -15,10 +15,18 @@ import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import type { Weekday } from "@/features/attendance/attendance-month";
 import { sidesWhere, type WhoIsHere } from "@/features/people/who-is-here";
-import { formatDayMonth, weekdayOf } from "@/lib/format";
+import {
+  dayPart,
+  formatDate,
+  formatDayMonth,
+  formatTime,
+  weekdayOf,
+} from "@/lib/format";
 import { shopToday } from "@/offline/rules";
 
 export type FlagLine = components["schemas"]["FlagLine"];
+export type Flag = components["schemas"]["Flag"];
+export type FlagNote = components["schemas"]["FlagNote"];
 export type FlagKind = components["schemas"]["FlagKindEnum"];
 type FlagsAnswer = components["schemas"]["PaginatedFlagLineList"];
 
@@ -124,6 +132,22 @@ export function useFlags(state: FlagState, filter: FlagFilter, on: boolean) {
   });
 }
 
+/** One flag whole, for its own page, from the store of server answers; nothing is asked until the page knows which, and
+ * who is here. */
+export function useFlag(id: string | null, on: boolean) {
+  return useQuery({
+    queryKey: [...FLAGS, "one", id],
+    queryFn: () =>
+      answerOf(
+        api.GET("/api/v1/control/flags/{id}/", {
+          // Never null here: the query runs only once `enabled`.
+          params: { path: { id: id ?? "" } },
+        }),
+      ),
+    enabled: id !== null && on,
+  });
+}
+
 /** A kind's words, "Saa yake haiaminiki". */
 export function useKindWords(): (kind: FlagKind) => string {
   const t = useTranslations("flags");
@@ -151,4 +175,23 @@ export function useDayWords(timezone: string): (at: string) => string {
       date: formatDayMonth(day),
     });
   };
+}
+
+/** A moment, "Jumapili 22/11/2026, saa 07:52 asubuhi", in the shop's zone: its weekday, its whole date, as a closed flag
+ * may be years old, and its time with the part of the day (Jack, SYNC-11). */
+export function useMomentWords(timezone: string): (at: string) => string {
+  const t = useTranslations("flags");
+  const attendance = useTranslations("attendance");
+  const weekdays = useTranslations("attendanceMonth.weekdays");
+  return (at) =>
+    t("moment", {
+      weekday: weekdays(
+        String(weekdayOf(shopToday(timezone, Date.parse(at)))) as Weekday,
+      ),
+      date: formatDate(at, timezone),
+      time: attendance("timeOfDay", {
+        time: formatTime(at, timezone),
+        part: dayPart(at, timezone),
+      }),
+    });
 }
