@@ -48,6 +48,7 @@ from apps.people.services import (
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.sync.push import Sent, push
+from apps.sync.selectors import staff_photo
 
 pytestmark = pytest.mark.django_db
 
@@ -259,6 +260,48 @@ def test_a_clock_in_photo_is_never_handed_to_a_laptop(asha: StaffMember, laptop:
     with shop_context(asha.shop_id):
         StaffMember.objects.filter(pk=asha.pk).update(photo=photo_id)
     assert_not_found(client.get(address(photo_id)), client)
+    # Nor one pinned to her job too: the kind is asked by itself, never only through whose photo it is.
+    with shop_context(asha.shop_id):
+        Attachment.objects.filter(pk=photo_id).update(subject_id=asha.pk)
+    assert_not_found(client.get(address(photo_id)), client)
+
+
+def test_a_photo_of_someone_else_is_never_handed_to_a_laptop(
+    shop_a: Shop, asha: StaffMember, baba: StaffMember, laptop: tuple[Device, str]
+) -> None:
+    # A job made to name a coworker's photo, by a bug no foreign key can refuse: Juma's tile would wear the face of
+    # Asha, who left. Not found, as a photo shows only on the very job it is pinned to.
+    ashas = set_photo(asha, by=baba)
+    juma = hire(shop_a, "Juma Mfano", "Juma")
+    with shop_context(shop_a):
+        mark_left(asha, left_on=shop_today(shop_a), by=baba, reason="Amehamia mji mwingine")
+        StaffMember.objects.filter(pk=juma.pk).update(photo=ashas)
+    client = a_browser(laptop[1])
+
+    assert_not_found(client.get(address(ashas)), client)
+
+
+def test_another_shops_photo_is_never_read_whatever_a_row_names(
+    asha: StaffMember, baba: StaffMember, shop_b: Shop, staff_b: StaffMember, side_b: Side, give_role: GiveRole
+) -> None:
+    # The same bug, across shops: a job of shop B names shop A's photo. The link is followed by the database, past the
+    # shop's guard, so the shop is asked too (T1): the row itself never leaves shop A, not only its file, which the
+    # storage would refuse by its name. And the answer is the one an id no shop has gets.
+    ours = set_photo(asha, by=baba)
+    give_role(staff_b, RoleTemplate.OWNER, None)
+    _device_b, key_b = pair(staff_b, side_b, "Laptop B")
+    with shop_context(shop_b):
+        StaffMember.objects.filter(pk=staff_b.pk).update(photo=ours)
+        assert staff_photo(shop_b, ours) is None
+    client = a_browser(key_b)
+
+    assert_not_found(client.get(address(ours)), client)
+    # Nor one pinned to that very job too: the shop is asked by itself, never only through whose photo it is.
+    with shop_context(asha.shop_id):
+        Attachment.objects.filter(pk=ours).update(subject_id=staff_b.pk)
+    with shop_context(shop_b):
+        assert staff_photo(shop_b, ours) is None
+    assert_not_found(client.get(address(ours)), client)
 
 
 def test_each_shops_laptop_reads_its_own_photo_of_one_person(

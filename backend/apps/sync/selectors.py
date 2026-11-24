@@ -16,7 +16,7 @@ system_context() the guard shows every shop's rows (03 §5.11).
 import uuid
 from datetime import date
 
-from django.db.models import Max, Prefetch, QuerySet
+from django.db.models import F, Max, Prefetch, QuerySet
 
 from apps.control.models import Attachment, AttachmentKind
 from apps.core import settings_registry
@@ -101,10 +101,23 @@ def staff_photo(shop: Shop, photo_id: uuid.UUID) -> Attachment | None:
     is: a photo a newer one replaced, a leaver's, a clock-in's, another shop's, or none at all (PPL-14)."""
     # Asked of the very rows the device holds, so the photos it may read and the ones its rows name can't disagree: a
     # person who leaves the list takes their face along. The job says which photo it shows, never the photo what it is
-    # pinned to. The kind too: no foreign key can hold the column to a worker's photo, and a clock-in photo must never
-    # be handed to whoever stands at the laptop. No index by photo is needed: the rows are one shop's few people.
+    # pinned to: a photo no job shows is nobody's face now. No index by photo is needed: the rows are one shop's few
+    # people.
+    #
+    # And the photo is asked what it is, as no foreign key can hold the column to a worker's own photo (T1), and the
+    # link is followed by the database, past the guard: a worker's photo, never a clock-in's, which must not be handed
+    # to whoever stands at the laptop; of this shop; and of this very job. A job made to name another's, by a bug, shows
+    # no face rather than a leaver's or another shop's (PPL-14's review).
     person = (
-        staff_rows(shop).filter(photo=photo_id, photo__kind=AttachmentKind.STAFF_PHOTO).select_related("photo").first()
+        staff_rows(shop)
+        .filter(
+            photo=photo_id,
+            photo__kind=AttachmentKind.STAFF_PHOTO,
+            photo__shop=shop,
+            photo__subject_id=F("pk"),
+        )
+        .select_related("photo")
+        .first()
     )
     return person.photo if person is not None else None
 
