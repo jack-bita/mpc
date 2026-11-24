@@ -72,6 +72,7 @@ from apps.control.models import (
     FlagStep,
     attachment_file_name,
 )
+from apps.control.selectors import flag_names
 from apps.core.acting import acting_as, current_device_id
 from apps.core.links import link_type_of
 from apps.core.models import ShopScoped
@@ -503,8 +504,9 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
             raise ValidationError("This flag is closed.", code="flag.closed")
         # A person the flag names may explain it, but never decide it (Jack, at CTRL-1's review; 02 v1.8):
         # Asha closing her own drawer's shortage with "no problem" would hide it from the owner. Someone else
-        # closes it; who may is `flag.review` on the flag's side, which the review screen checks (CTRL-4).
-        if step is not FlagStep.EXPLAINED and FlagPerson.objects.filter(flag=fresh, staff_id=by.staff_id).exists():
+        # closes it; who may is `flag.review` on the flag's side, which the office's route checks (CTRL-4). By the
+        # person: hired again, she has a new job, and the flag that names her old one is still hers (flag_names).
+        if step is not FlagStep.EXPLAINED and flag_names(fresh, by):
             raise ValidationError("A person this flag names can't close it.", code="flag.own_flag")
         written = FlagNote(shop_id=fresh.shop_id, flag=fresh, step=step, text=text, created_by_id=by.staff_id)
         if note_id is not None:
