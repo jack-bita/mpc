@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.61 · 24 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.62 · 24 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.62** (24 Nov 2026, CTRL-4): §13, who sees a flag in the office: whoever may close it; being named on one counts by the person, not the job; and deciding a day closes no flag (Jack: A). Marked **(v1.62)** below.
 
 **Changes in v1.61** (24 Nov 2026, PPL-14's review): §5, the laptops hold the photos only of people with a PIN, who have a tile (Jack: A). Marked **(v1.61)** below.
 
@@ -619,6 +621,9 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 - A manager who finds the reason may resolve or dismiss a flag straight from `open`, with their own note. `resolved` and `dismissed` are final **(v1.8)**.
 - Each step is a note, with who and when. Every explanation is kept: each person a flag names may write their own, and none replaces another. Closing a flag needs a note too. Notes are never edited **(v1.8)**.
 - A person a flag names may explain it, but never resolve or dismiss it: Asha can't write "no problem" on her own drawer's shortage. Someone else decides, with `flag.review` on the flag's side (X1) **(v1.8)**.
+- Named is by the person, not the job: someone hired again has two jobs (PPL-11), and closes no flag that names either **(v1.62)**.
+- In the office a flag shows only to whoever may close it: `flag.review` on its side, or on the whole shop for a flag of no side. Until CTRL-7, a worker it names says why to Meneja, who types it (Jack, CTRL-4: A) **(v1.62)**.
+- Deciding a worker's day closes no flag about its taps: the pay is settled, but someone must still say why the clock was wrong (Jack, CTRL-4: A) **(v1.62)**.
 - One flag closes itself: a `device_gap`, once every number it was missing has arrived (the record was only late). The system resolves it, with a note of its own saying so, and names no person; the note stays in its history like any other. Every other kind waits for a person (Jack, SYNC-5) **(v1.22)**.
 - Low stock and expiring batches are **alerts** (lists), not flags: nobody has to explain them.
 
