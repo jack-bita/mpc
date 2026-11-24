@@ -2,8 +2,7 @@
 // server answers, the reading of every page, one worker for their own page and its address, a saved worker kept in
 // both at once, the key the page asks, and the words for each role and its side. For PPL-8: the shop's roles, read by
 // Ongeza kazi's own page (ROLES, useRoles, RolesRead, handed down as values, UI-11), how a role or a key is written on
-// its side (useOnSide), and what a roles form shows above its buttons (aboutTheChange). For UI-11: each long form's
-// own page's address, and the way back from it (backToWorker).
+// its side (useOnSide). For UI-11: each long form's own page's address, and the way back from it (backToWorker).
 //
 // GET /api/v1/people/staff/ answers everyone the shop has had, those who left included, newest first, in pages of
 // 50 (CursorPage, PPL-4). A shop has tens of workers over the years, not hundreds, so one screen holds them all,
@@ -25,7 +24,7 @@ import { useTranslations } from "use-intl";
 import type { useRouter } from "next/navigation";
 
 import { api } from "@/api/client";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { mayGoBack } from "@/components/in-app-moves";
 import type { WhoIsHere } from "@/features/people/who-is-here";
@@ -111,29 +110,6 @@ async function allWorkers(): Promise<Worker[]> {
 /** The shop's workers, from the store of server answers. */
 export function useWorkers() {
   return useQuery({ queryKey: WORKERS, queryFn: allWorkers });
-}
-
-/** What a roles form (give-form.tsx, end-form.tsx) shows above its buttons: the failure, with one more step than
- * aboutTheWholeRequest (src/api/refusal.ts). A refusal of fields alone (`invalid`) names fields the form may have no
- * box for, as id.taken comes on `id`, or a role or side no longer there on `role`, `role_given`, `key` or `side`: the
- * first such field's code is about the whole change, so it shows in the code's place, never nowhere (PPL-8's review).
- * A refusal of the form's own boxes (`boxes`) alone shows beside them instead: nothing above. */
-export function aboutTheChange(
-  error: unknown,
-  boxes: readonly string[] = [],
-): unknown {
-  if (!(error instanceof ApiRefusal) || error.body.code !== "invalid")
-    return error;
-  const field = Object.entries(error.body.fields).find(
-    ([name, codes]) => !boxes.includes(name) && codes.length > 0,
-  );
-  return field === undefined
-    ? null
-    : new ApiRefusal(error.status, {
-        ...error.body,
-        code: field[1][0] ?? error.body.code,
-        fields: {},
-      });
 }
 
 /** The shop's roles' place in the store: apart from the workers', as a change to a worker changes no role. */

@@ -26,7 +26,7 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
-import { aboutTheWholeRequest, answerOf } from "@/api/refusal";
+import { aboutTheChange, answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
@@ -80,8 +80,9 @@ export function FlagNoteSheet({
   const { fieldMessages } = useApiErrorWords();
   const online = useOnline();
   const store = useQueryClient();
-  // Made once, as the sheet opens, so every try of this note carries the same id.
-  const [noteId] = useState(() => newId());
+  // Made as the sheet opens, so every try of this note carries the same id; a new one only once the server says it is
+  // another note's, which it would say for good.
+  const [noteId, setNoteId] = useState(() => newId());
   const [text, setText] = useState("");
   // The form's own check, as the server would refuse it, shown once the person has tried to send.
   const [tried, setTried] = useState(false);
@@ -101,7 +102,11 @@ export function FlagNoteSheet({
       onDone();
     },
     // Closed by someone else meanwhile, or kept though its answer was lost: the page behind reads it as it now is.
-    onError: () => void store.invalidateQueries({ queryKey: FLAGS }),
+    onError: (error) => {
+      if (error instanceof ApiRefusal && "id" in error.body.fields)
+        setNoteId(newId());
+      void store.invalidateQueries({ queryKey: FLAGS });
+    },
   });
 
   function send() {
@@ -117,10 +122,6 @@ export function FlagNoteSheet({
     tried && text.trim() === ""
       ? codeMessage(codes, "flag.note_required")
       : fieldMessages(write.error).text;
-  // A refusal of fields this sheet has no box for, as an id taken, is about the whole note: shown above, never nowhere.
-  const above =
-    textError === undefined ? write.error : aboutTheWholeRequest(write.error);
-
   return (
     <Sheet
       open
@@ -158,7 +159,9 @@ export function FlagNoteSheet({
           maxLength={NOTE_LONGEST}
         />
       )}
-      <ApiErrorAlert error={above} />
+      {/* What the box doesn't say: closed meanwhile, the flag names this person, an id taken, no network, the server's
+          problem. */}
+      <ApiErrorAlert error={aboutTheChange(write.error, ["text"])} />
     </Sheet>
   );
 }

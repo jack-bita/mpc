@@ -368,11 +368,42 @@ describe("the sheet", () => {
     expect(await within(sheet).findByText("Andika maelezo.")).toBeTruthy();
     expect(within(sheet).queryByRole("alert")).toBeNull();
 
-    // A field this sheet has no box for is about the whole note: above, never nowhere.
+    // A field this sheet has no box for is about the whole note: above, in its own words, never nowhere.
     answer("POST", route, refusal(400, "invalid", {}, { id: ["id.taken"] }));
     fireEvent.click(save(sheet));
-    expect(await within(sheet).findByRole("alert")).toBeTruthy();
+    expect(
+      await within(sheet).findByText(
+        "Namba ya utambulisho imeshatumika. Jaribu tena.",
+      ),
+    ).toBeTruthy();
     expect(within(sheet).queryByText("Andika maelezo.")).toBeNull();
+  });
+
+  it("tries again with a new id once its own was taken, and with the same one otherwise", async () => {
+    const { one } = show();
+    const route = `${flagRoute(one.id)}explain/`;
+    answer("POST", route, refusal(400, "invalid", {}, { id: ["id.taken"] }));
+    render(<FlagScreen id={one.id} />);
+    const sheet = await openSheet("Eleza");
+    type(sheet, WORDS);
+    fireEvent.click(save(sheet));
+    await within(sheet).findByRole("alert");
+
+    // The same id would be refused for good.
+    answer(
+      "POST",
+      route,
+      refusal(400, "invalid", {}, { text: ["flag.note_required"] }),
+    );
+    fireEvent.click(save(sheet));
+    await within(sheet).findByText("Andika maelezo.");
+    fireEvent.click(save(sheet));
+    await waitFor(async () => expect(await notesSent()).toHaveLength(3));
+    const [taken, fresh, again] = (await notesSent()).map(
+      (note) => note.body.id,
+    );
+    expect(fresh).not.toBe(taken);
+    expect(again).toBe(fresh);
   });
 
   it("holds its main button with no network, and keeps Ghairi free", async () => {

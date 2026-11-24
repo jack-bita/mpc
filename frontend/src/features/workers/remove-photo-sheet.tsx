@@ -24,14 +24,14 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { aboutTheChange, answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { useOnline } from "@/offline/network";
 
-import { aboutTheChange, keepWorker, type Worker, WORKERS } from "./workers";
+import { keepWorker, type Worker, WORKERS } from "./workers";
 
 /** The server's code for an empty reason, shown beside Sababu. */
 const REASON_REQUIRED = "staff.reason_required";

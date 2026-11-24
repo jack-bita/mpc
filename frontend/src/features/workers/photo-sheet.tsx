@@ -32,7 +32,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { aboutTheChange, answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Alert, AlertDescription } from "@/components/design/alert";
 import { Sheet } from "@/components/design/sheet";
@@ -41,7 +41,7 @@ import { newId } from "@/lib/ids";
 import { shrinkFile } from "@/lib/shrink-photo";
 import { useOnline } from "@/offline/network";
 
-import { aboutTheChange, keepWorker, type Worker, WORKERS } from "./workers";
+import { keepWorker, type Worker, WORKERS } from "./workers";
 
 /** The codes that say someone else changed the worker first: the sheet closes, and the card says it. */
 const CHANGED_MEANWHILE = new Set(["version_conflict", "staff.left"]);
