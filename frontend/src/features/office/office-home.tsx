@@ -3,12 +3,13 @@
 //
 // Where a manager lands after logging in on their own phone (Jack, 7 Nov 2026): big buttons are easy to
 // tap, and the page grows a button as each office screen comes (products, prices, reports…). Today there
-// are five. Two are for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
+// are six. Two are for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
 // (UI-3), and Hali ya vifaa, as keeping the devices working is theirs too (SYNC-14). Mipangilio ya duka is
 // for anyone who works on a side: reading the shop's rules needs no key, and changing one is the owner's,
 // which the page itself asks for (SHOP-5). Wafanyakazi is for whoever holds staff.manage on the whole shop,
 // as even reading the workers is behind it (PPL-6). Mahudhurio ya mwezi is for whoever holds attendance.manage on
-// the whole shop, the owner and the managers, as its route asks (ATT-5).
+// the whole shop, the owner and the managers, as its route asks (ATT-5). Tofauti is for whoever holds flag.review on
+// some side, as a flag shows only to whoever may close it (CTRL-4).
 // A button for a screen someone may not use stays off the page; the server still checks every change
 // itself (PPL-5), so this only keeps a door nobody may use out of sight. Under them, for everyone,
 // Mipangilio yangu: a person's own language and font need no key (UI-9).
@@ -28,6 +29,7 @@ import {
   type WhoIsHere,
 } from "@/features/people/who-is-here";
 import { mayManageAttendance } from "@/features/attendance/attendance-month";
+import { FLAGS_PAGE, mayReviewFlags } from "@/features/flags/flags";
 import { mayManageStaff } from "@/features/workers/workers";
 
 export function OfficeHome() {
@@ -40,6 +42,7 @@ export function OfficeHome() {
   const settings = useTranslations("mySettings");
   const workers = useTranslations("workers");
   const attendanceMonth = useTranslations("attendanceMonth");
+  const flags = useTranslations("flags");
   const me = useWhoIsHere();
   // Focus on the welcome as each person arrives: after a login, or Chagua nenosiri lako's Hifadhi, the
   // button that had it is gone. A screen reader then says where the person is, and Tab goes on to the
@@ -81,6 +84,13 @@ export function OfficeHome() {
         href: "/attendance-month/",
         label: attendanceMonth("title"),
         open: mayManageAttendance(here),
+      },
+      {
+        // What the system found and a person must look into: for whoever may close a flag on some side, as the
+        // server shows a flag to nobody else (CTRL-4).
+        href: FLAGS_PAGE,
+        label: flags("title"),
+        open: mayReviewFlags(here),
       },
     ].filter((screen) => screen.open);
 

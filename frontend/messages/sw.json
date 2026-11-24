@@ -909,6 +909,38 @@
     },
     "save": "Hifadhi uamuzi"
   },
+  "flags": {
+    "title": "Tofauti",
+    "intro": "Mambo ambayo mfumo umeyaona, na mtu anapaswa kuyaangalia.",
+    "tabs": {
+      "waiting": "Zinasubiri",
+      "waitingCount": "Zinasubiri ({count})",
+      "closed": "Zilizofungwa"
+    },
+    "none": {
+      "waiting": "Hakuna tofauti inayosubiri.",
+      "closed": "Bado hakuna tofauti iliyofungwa."
+    },
+    "more": "Onyesha zaidi",
+    "wholeShop": "Duka zima",
+    "details": "{who} · {where} · {when}",
+    "detailsNobody": "{where} · {when}",
+    "day": "{weekday} {date}",
+    "kind": {
+      "unverified_time": "Saa yake haiaminiki",
+      "suspended_staff_activity": "Alisimamishwa au aliondoka, lakini alibonyeza",
+      "device_gap": "Kumbukumbu zinakosekana",
+      "permission_break": "Hakuwa na ruhusa",
+      "invalid_document": "Kumbukumbu haikukubalika",
+      "another": "Tofauti nyingine"
+    },
+    "status": {
+      "open": "Inasubiri",
+      "explained": "Imeelezwa",
+      "resolved": "Imetatuliwa",
+      "dismissed": "Si tatizo"
+    }
+  },
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",
     "clock": "{name}: {action}, saa {time}",

@@ -1,0 +1,111 @@
+// flags.ts — the flags as the office reads them (CTRL-4, 03 §5.10): the key that opens them, their place in the store of
+// server answers, the list read a page at a time, and the words of a flag's kind, day and those it names.
+//
+// GET /api/v1/control/flags/ answers one tab, what waits or what is closed, newest found first, 50 at a time, and how
+// many wait. A flag shows only to whoever may close it: flag.review on its side, or on the whole shop for a flag of no
+// side (02 §13). The office home offers the button only to someone holding it somewhere; the server asks the key again
+// on every read and every action.
+"use client";
+
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useFormatter, useTranslations } from "use-intl";
+
+import { api } from "@/api/client";
+import { answerOf } from "@/api/refusal";
+import type { components } from "@/api/schema";
+import type { Weekday } from "@/features/attendance/attendance-month";
+import { sidesWhere, type WhoIsHere } from "@/features/people/who-is-here";
+import { formatDayMonth, weekdayOf } from "@/lib/format";
+import { shopToday } from "@/offline/rules";
+
+export type FlagLine = components["schemas"]["FlagLine"];
+export type FlagKind = components["schemas"]["FlagKindEnum"];
+type FlagsAnswer = components["schemas"]["PaginatedFlagLineList"];
+
+/** The list's two tabs. An explained flag still waits: only a close ends one. */
+export const FLAG_STATES = ["waiting", "closed"] as const;
+export type FlagState = (typeof FLAG_STATES)[number];
+
+/** The kinds the server raises today, each with its words in the books (backend/tests/test_flag_kinds.py holds the two
+ * together). The server knows more, for the cards to come: one it raised before the app had its words, as a laptop's
+ * page left open over a release, reads as a flag of another kind, never as a blank. */
+export const RAISED_KINDS = [
+  "unverified_time",
+  "suspended_staff_activity",
+  "device_gap",
+  "permission_break",
+  "invalid_document",
+] as const satisfies readonly FlagKind[];
+export type RaisedKind = (typeof RAISED_KINDS)[number];
+
+/** The key that opens a side's flags, and closes them: the Owner's and the Manager's (03 §5.8). */
+export const REVIEWS_FLAGS = "flag.review";
+
+/** The flags' place in the store of server answers. Each action asks them again. */
+export const FLAGS = ["control", "flags"] as const;
+
+/** Tofauti, the list. */
+export const FLAGS_PAGE = "/flags/";
+
+/** A flag's own page, by its id: a query string, as the app is plain files with no page per id (ADR-0016). */
+export function flagPage(id: string): string {
+  return `/flags/view/?id=${id}`;
+}
+
+/** Whether the person may open Tofauti: flag.review on some side. Held on the whole shop, it is on every side too. */
+export function mayReviewFlags(me: WhoIsHere): boolean {
+  return sidesWhere(me, REVIEWS_FLAGS).length > 0;
+}
+
+/** One tab's flags, a page after another, from the store of server answers. Asked only while `on`: the closed ones wait
+ * until their tab is opened. */
+export function useFlags(state: FlagState, on: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...FLAGS, "list", state],
+    queryFn: ({ pageParam }): Promise<FlagsAnswer> =>
+      answerOf(
+        api.GET("/api/v1/control/flags/", {
+          params: {
+            query: {
+              state,
+              ...(pageParam === null ? {} : { cursor: pageParam }),
+            },
+          },
+        }),
+      ),
+    initialPageParam: null as string | null,
+    // The next page's address, in full; only its cursor is ours to send back.
+    getNextPageParam: (last) =>
+      last.next ? new URL(last.next).searchParams.get("cursor") : null,
+    enabled: on,
+  });
+}
+
+/** A kind's words, "Saa yake haiaminiki". */
+export function useKindWords(): (kind: FlagKind) => string {
+  const t = useTranslations("flags");
+  return (kind) => (isRaised(kind) ? t(`kind.${kind}`) : t("kind.another"));
+}
+
+function isRaised(kind: FlagKind): kind is RaisedKind {
+  return (RAISED_KINDS as readonly FlagKind[]).includes(kind);
+}
+
+/** Those a flag names, "Asha na Neema": the browser joins them the language's own way. */
+export function useNames(): (people: string[]) => string {
+  const format = useFormatter();
+  return (people) => format.list(people, { type: "conjunction" });
+}
+
+/** The day a moment falls on, "Jumapili 22/11", on the shop's own calendar, never the phone's. */
+export function useDayWords(timezone: string): (at: string) => string {
+  const t = useTranslations("flags");
+  const weekdays = useTranslations("attendanceMonth.weekdays");
+  return (at) => {
+    const day = shopToday(timezone, Date.parse(at));
+    return t("day", {
+      weekday: weekdays(String(weekdayOf(day)) as Weekday),
+      date: formatDayMonth(day),
+    });
+  };
+}

@@ -909,6 +909,38 @@
     },
     "save": "Save the decision"
   },
+  "flags": {
+    "title": "Flags",
+    "intro": "What the system found, and a person must look into.",
+    "tabs": {
+      "waiting": "Waiting",
+      "waitingCount": "Waiting ({count})",
+      "closed": "Closed"
+    },
+    "none": {
+      "waiting": "No flag is waiting.",
+      "closed": "No flag has been closed yet."
+    },
+    "more": "Show more",
+    "wholeShop": "Whole shop",
+    "details": "{who} · {where} · {when}",
+    "detailsNobody": "{where} · {when}",
+    "day": "{weekday} {date}",
+    "kind": {
+      "unverified_time": "Its time can't be trusted",
+      "suspended_staff_activity": "Suspended or gone, but used the system",
+      "device_gap": "Records are missing",
+      "permission_break": "Had no permission",
+      "invalid_document": "A record was refused",
+      "another": "Another flag"
+    },
+    "status": {
+      "open": "Waiting",
+      "explained": "Explained",
+      "resolved": "Resolved",
+      "dismissed": "Not a problem"
+    }
+  },
   "needsAttention": {
     "title": "Records the server refused",
     "clock": "{name}: {action}, at {time}",

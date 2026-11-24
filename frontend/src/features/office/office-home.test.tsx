@@ -105,6 +105,30 @@ describe("the office's home page", () => {
     expect(link.getAttribute("href")).toMatch(/^\/settings\/?$/);
   });
 
+  it("opens Tofauti for whoever may close a flag on some side (CTRL-4)", async () => {
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["flag.review"] }]),
+    });
+
+    render(<OfficeHome />);
+
+    const link = await screen.findByRole("link", { name: "Tofauti" });
+    expect(link.getAttribute("href")).toMatch(/^\/flags\/?$/);
+  });
+
+  it("offers no Tofauti to someone who may close none", async () => {
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["sale.write"] }]),
+    });
+
+    render(<OfficeHome />);
+
+    await screen.findByRole("link", { name: "Mipangilio ya duka" });
+    expect(screen.queryByRole("link", { name: "Tofauti" })).toBeNull();
+  });
+
   it("opens Wafanyakazi for whoever holds staff.manage on the whole shop (PPL-6)", async () => {
     answer("GET", ME, { status: 200, body: MANAGER });
 
