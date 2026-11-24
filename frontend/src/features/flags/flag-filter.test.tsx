@@ -126,6 +126,20 @@ describe("Chuja", () => {
     expect(window.location.search).toBe("?tab=closed");
   });
 
+  it.each(["Ghairi", "Onyesha"])(
+    "gives the keyboard back to Chuja after %s",
+    async (button) => {
+      theShopHas();
+      render(<FlagsScreen />);
+      const sheet = await openTheSheet();
+
+      fireEvent.click(within(sheet).getByRole("button", { name: button }));
+
+      const opener = await screen.findByRole("button", { name: "Chuja" });
+      await waitFor(() => expect(document.activeElement).toBe(opener));
+    },
+  );
+
   it("starts from what the address names, the sheet too", async () => {
     window.history.replaceState(
       null,

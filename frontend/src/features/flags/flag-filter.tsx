@@ -45,6 +45,7 @@ export function FlagFilterSheet({
   filter,
   onShow,
   onClose,
+  finalFocus,
 }: {
   me: WhoIsHere;
   /** The filter now on, picked as the sheet opens. */
@@ -52,6 +53,9 @@ export function FlagFilterSheet({
   /** Onyesha: the list kept to this. */
   onShow: (filter: FlagFilter) => void;
   onClose: () => void;
+  /** Where the keyboard goes as it closes: Chuja's button. Named, never left to Base UI's guess, which on a phone's tap
+   * may be an element of an earlier opening (UI-10's review). */
+  finalFocus: () => HTMLElement | null;
 }) {
   const t = useTranslations("flags.filter");
   const flags = useTranslations("flags");
@@ -70,6 +74,7 @@ export function FlagFilterSheet({
       onClose={onClose}
       title={t("title")}
       actionLabel={t("show")}
+      finalFocus={finalFocus}
       onAction={() =>
         onShow({
           side: side === EVERY ? null : side,

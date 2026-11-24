@@ -139,6 +139,7 @@ export function FlagsScreen() {
             setFiltering(false);
           }}
           onClose={() => setFiltering(false)}
+          finalFocus={() => filterButton.current}
         />
       ) : null}
       {who.data ? (
