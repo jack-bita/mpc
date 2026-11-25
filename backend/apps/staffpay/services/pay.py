@@ -29,7 +29,7 @@ from django.db.models import Min
 
 from apps.core.settings_registry import ATTENDANCE_ON, ROUNDING_STEP
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
-from apps.people.models import StaffMember
+from apps.people.models import StaffMember, StaffStatus
 from apps.shops.models import Setting, Shop
 from apps.shops.selectors import shop_settings_between, shop_today
 from apps.staffpay.calculations import (
@@ -112,12 +112,14 @@ class ToApprove:
     # pay still open, as months are approved in order, or a debt would be lost; the days that wait for a decision
     # (Jack: A); and the days to pay with no rate. Warns, and stops nothing: the laptops that have sent nothing since
     # the month ended (Jack: A), whose taps may be missing; and who came to work without any daily pay in the month, by
-    # nickname, as they are on no payslip.
+    # nickname, as they are on no payslip. The same for one worker's approval alone, of what is theirs: which also waits
+    # for their Toka, on their last evening, or today would be left out of their pay.
     earlier: dt.date | None
     waiting: list[OpenDay]
     no_rate: list[OpenDay]
     quiet_laptops: list[QuietLaptop]
     came_unpaid: list[str]
+    still_clocked_in: bool = False
 
 
 @dataclass(frozen=True)
@@ -162,6 +164,9 @@ class WorkerPayMonth:
     paid_by_day: bool
     no_day_yet: bool
     worker: WorkerPay
+    # For one who left, with pay still open: what their approval alone waits for (WAGE-3), or None, when there is
+    # nothing to approve alone.
+    to_approve: ToApprove | None = None
 
 
 @dataclass(frozen=True)
@@ -187,6 +192,18 @@ class MonthsParts:
         # The jobs with pay of this month that no payslip keeps yet.
         return self.workers.keys() - self.kept.keys()
 
+    def tonight(self, job: uuid.UUID) -> AttendanceDay | None:
+        # Today's day of a job once it counts: when a Toka has ended it (first_out, ATT-4). Until then it is still
+        # theirs to work, and the rule would send it to a person for want of one. A Toka the rule can't judge, at 16:00,
+        # ended it too, and waits. And a day with a tap whose time nobody trusts, as the laptop's clock moved: a Toka
+        # among them has no minute, so it ends nothing the rule can read, and whatever is tapped after, the day waits.
+        # Said tonight: one who leaves with it unsaid would be paid without today, and nobody would know (WAGE-2's
+        # review).
+        today = self.todays.get(job)
+        if today is None or (today.first_out is None and today.review_reason != ReviewReason.TIME_UNKNOWN):
+            return None
+        return today
+
     def days_to_pay(self, job: uuid.UUID, days: Iterable[AttendanceDay]) -> list[DayToPay]:
         # Some days of one job as the sum reads them, each with its own rate and step.
         return [
@@ -203,6 +220,15 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
     keeps them; the whole; and, once the month is over, what its approval waits for. Worked out through the book
     (work_out_days), so it writes as the book does, and asked twice writes nothing the second time; the draft itself is
     never kept. The shop must be open, as for the book."""
+    answer, parts = _month(shop, month)
+    if parts is None or parts.today <= parts.last or not answer.workers:
+        # Approved, to come, still running, or nobody to pay: nothing to approve.
+        return answer
+    return replace(answer, to_approve=what_stops(shop, parts, answer))
+
+
+def _month(shop: Shop, month: dt.date) -> tuple[PayMonth, MonthsParts | None]:
+    # A month's pay, and the parts it was worked out from, which an approved month and one to come don't have.
     _check_asked(shop, month)
     first, last = month_span(month)
     # The shop's today, read once: the pay counts up to the day before it, and today apart, whatever the clock does
@@ -211,29 +237,31 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
     today = shop_today(shop)
     run = run_of(shop, first)
     if run is not None:
-        return _approved(shop, run, last, today)
+        return _approved(shop, run, last, today), None
     if today < first:
         # A month to come: nothing of it is worked yet, and nothing more is read. So the calendar's last month is an
         # answer too, never a day past the last one Python knows (ATT-5's review).
-        return PayMonth(month=first, today=today, counted_to=None, workers=[], total=NO_PAY, worked=frozenset())
+        return PayMonth(month=first, today=today, counted_to=None, workers=[], total=NO_PAY, worked=frozenset()), None
     parts = read_parts(shop, first, last, today)
-    draft = draft_of(shop, parts)
-    if today <= last or not draft.workers:
-        # Still running, or nobody to pay: nothing to approve.
-        return draft
-    return replace(draft, to_approve=what_stops(shop, parts, draft))
+    return draft_of(shop, parts), parts
 
 
 def worker_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
     """One job's pay of the month of `month`, any day of it (WAGE-2): the very line Mishahara shows of them (pay_month),
     so the two pages never say two totals. A worker the shop neither pays by the day in it nor gave money in it has
-    nothing, and the answer says so. The shop must be open, and the job one of it."""
+    nothing, and the answer says so. One who left, with pay still open, comes with what their approval alone waits for
+    (WAGE-3). The shop must be open, and the job one of it."""
     # The route finds the job through the guard, so another shop's never comes here; but a service checks what it is
     # given (T1), so a bug that passed one fails loudly.
     if job.shop_id != shop.pk:
         raise ShopMismatch("worker_pay was given a job of another shop.")
-    whole = pay_month(shop, month)
+    whole, parts = _month(shop, month)
     line = next((line for line in whole.workers if line.staff_id == job.pk), None)
+    alone = (
+        what_stops_alone(shop, parts, line)
+        if parts is not None and line is not None and line.approval is None and job.status == StaffStatus.LEFT
+        else None
+    )
     return WorkerPayMonth(
         month=whole.month,
         today=whole.today,
@@ -242,6 +270,7 @@ def worker_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
         # Not one who left, whose last day may be in a month before: nothing of theirs is to come.
         no_day_yet=whole.is_running and job.left_on is None and job.pk not in whole.worked,
         worker=_worker_pay(job, work_out_pay([]), None) if line is None else line,
+        to_approve=alone,
     )
 
 
@@ -310,20 +339,14 @@ def draft_of(shop: Shop, parts: MonthsParts) -> PayMonth:
             # Approved alone: as it was kept, never worked out again (A3).
             lines.append(parts.kept[job])
             continue
-        # Today only once a Toka has ended it (first_out, ATT-4): until then it is still theirs to work, and the rule
-        # would send it to a person for want of one. A Toka the rule can't judge, at 16:00, ended it too, and waits. And
-        # a day with a tap whose time nobody trusts, as the laptop's clock moved: a Toka among them has no minute, so it
-        # ends nothing the rule can read, and whatever is tapped after, the day waits. Said tonight: one who leaves with
-        # it unsaid would be paid without today, and nobody would know (WAGE-2's review).
-        tonight = parts.todays.get(job)
-        waits = tonight is not None and tonight.review_reason == ReviewReason.TIME_UNKNOWN
-        ended = [tonight] if tonight is not None and (tonight.first_out is not None or waits) else []
+        # Today, once it counts (Leo, Jack: A).
+        tonight = parts.tonight(job)
         carried_from, carried = debts.get(job, (None, NO_PAY))
         # The advances and the debt come off the days that are over, never off today's part too, or they would be taken
         # twice.
         days = parts.days_to_pay(job, parts.over.get(job, []))
         pay = work_out_pay(days, advances=parts.advances.get(job, NO_PAY), carried=carried)
-        today = work_out_pay(parts.days_to_pay(job, ended)) if ended else None
+        today = None if tonight is None else work_out_pay(parts.days_to_pay(job, [tonight]))
         paid = [(day.date, pay_day(to_pay)) for day, to_pay in zip(parts.over.get(job, []), days, strict=True)]
         lines.append(
             replace(
@@ -351,17 +374,11 @@ def what_stops(shop: Shop, parts: MonthsParts, draft: PayMonth) -> ToApprove:
     """What the approval of a month waits for, and what it warns of (WAGE-3), from the parts its draft was worked out
     from. Asked by the page, to say it before the tap, and by the approval itself, which refuses by it."""
     open_lines = [line for line in draft.workers if line.approval is None]
-    midnight = dt.datetime.combine(parts.last + dt.timedelta(days=1), dt.time.min, tzinfo=ZoneInfo(shop.timezone))
     return ToApprove(
         earlier=min(open_before(shop, parts.first).values(), default=None),
-        # By date, the oldest first, as it has waited longest; on one date by name, as the lines are.
-        waiting=_by_date(
-            OpenDay(line.staff_id, line.display_name, day) for line in open_lines for day in line.waiting_on
-        ),
-        no_rate=_by_date(
-            OpenDay(line.staff_id, line.display_name, day) for line in open_lines for day in line.no_rate_on
-        ),
-        quiet_laptops=quiet_laptops(shop, midnight),
+        waiting=_by_date((line, day) for line in open_lines for day in line.waiting_on),
+        no_rate=_by_date((line, day) for line in open_lines for day in line.no_rate_on),
+        quiet_laptops=quiet_laptops(shop, _midnight(shop, parts.last + dt.timedelta(days=1))),
         # Came, by the decision where there is one, or waits for someone to say so, with no line of the month: no rate
         # on any working day of it, and no money given. Not the owner, who never clocks in.
         came_unpaid=sorted(
@@ -374,6 +391,43 @@ def what_stops(shop: Shop, parts: MonthsParts, draft: PayMonth) -> ToApprove:
             },
             key=str.casefold,
         ),
+    )
+
+
+def what_stops_alone(shop: Shop, parts: MonthsParts, line: WorkerPay) -> ToApprove:
+    """What the approval of one worker's pay alone waits for, and what it warns of (WAGE-3): of their own days and their
+    own earlier months alone, as whoever else's day waits is no reason to keep one who left from their pay. And, on
+    their last evening, for their Toka: clocked in with none, today isn't counted yet."""
+    job = line.staff_id
+    tonight = parts.todays.get(job)
+    # Today, when it counts and the rule can't judge it, waits as any other day, and can be decided once it is over.
+    waits = (parts.today,) if line.today is not None and line.today.waiting else ()
+    no_rate = (parts.today,) if line.today is not None and line.today.no_rate else ()
+    # Their last day, or the month's, was over at the midnight after it; one who leaves tonight is asked of since this
+    # morning.
+    since = min((line.left_on or parts.last) + dt.timedelta(days=1), parts.last + dt.timedelta(days=1), parts.today)
+    return ToApprove(
+        earlier=open_before(shop, parts.first).get(job),
+        waiting=_by_date((line, day) for day in (*line.waiting_on, *waits)),
+        no_rate=_by_date((line, day) for day in (*line.no_rate_on, *no_rate)),
+        quiet_laptops=quiet_laptops(shop, _midnight(shop, since)),
+        came_unpaid=[],
+        still_clocked_in=tonight is not None
+        and tonight.status == DayStatus.NEEDS_REVIEW
+        and parts.tonight(job) is None,
+    )
+
+
+def _midnight(shop: Shop, day: dt.date) -> dt.datetime:
+    # The midnight a day starts at, on the shop's own clock (02 §1).
+    return dt.datetime.combine(day, dt.time.min, tzinfo=ZoneInfo(shop.timezone))
+
+
+def _by_date(days: Iterable[tuple[WorkerPay, dt.date]]) -> list[OpenDay]:
+    # Days that stop an approval, the oldest first, as it has waited longest; on one date by name, as the lines are.
+    return sorted(
+        (OpenDay(line.staff_id, line.display_name, day) for line, day in days),
+        key=lambda day: (day.date, day.display_name.casefold(), day.staff_id),
     )
 
 
@@ -509,10 +563,6 @@ def _cash(lines: Iterable[WorkerPay]) -> Decimal:
     # The cash to prepare (WAGE-3, Jack: A): one who owes is handed nothing, so they count as 0. Their minus would make
     # the whole less than what the others are owed, and Baba would come short at the counter.
     return add_up(cash_to_pay(line.total) for line in lines)
-
-
-def _by_date(days: Iterable[OpenDay]) -> list[OpenDay]:
-    return sorted(days, key=lambda day: (day.date, day.display_name.casefold(), day.staff_id))
 
 
 def _check_asked(shop: Shop, month: dt.date) -> None:

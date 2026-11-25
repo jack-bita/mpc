@@ -1,4 +1,5 @@
-"""apps/staffpay/services/approval.py — approving a month's pay (WAGE-3; 02 §12, A3): the one moment it is kept.
+"""apps/staffpay/services/approval.py — approving a month's pay, or one worker's alone (WAGE-3; 02 §12, A3): the one
+moment it is kept.
 
     1 Dec, Baba reads November, 432,000 for three workers, and approves it:
         PayRun Novemba, by Baba
@@ -10,12 +11,19 @@ between the reading and the keeping; and only if every total is still the one th
 would be missing from it: a day that waits (Jack: A), a day with no rate, an earlier month still open, a month not over.
 Never undone: a mistake found later is an adjustment in a later month (A3, WAGE-9). Handing out the money is WAGE-9's.
 
+One who left is approved alone, as they can't wait for the month's end (Jack, 15 Nov 2026), their last evening too:
+
+    14 Nov, 18:45, Neema taps Toka and leaves; Baba reads her pay, 62,000, Leo with it, and approves it
+        Payslip Neema 62,000, with no run; her days up to the 14th marked, today's kept with them
+    1 Dec: the month's approval leaves her payslip as it is
+
 No line in the change log, here or on any of the rows: no laptop keeps a payslip (03 §6.1).
 """
 
 import datetime as dt
 import uuid
 from collections.abc import Iterable, Mapping
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
@@ -24,15 +32,24 @@ from django.db import transaction
 
 from apps.core.permissions import Permission
 from apps.core.tenancy import ShopMismatch
-from apps.people.models import StaffMember
+from apps.people.models import StaffMember, StaffStatus
 from apps.people.permissions import require
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_today
-from apps.staffpay.calculations import PaidAs, Pay, add_up
+from apps.staffpay.calculations import PaidAs, Pay, add_up, work_out_pay
 from apps.staffpay.models import AttendanceDay, PayRun, Payslip, PayslipLine, PayslipLineKind
 from apps.staffpay.selectors import advances_by_job
 from apps.staffpay.services.book import lock_jobs, month_span
-from apps.staffpay.services.pay import OpenDay, ToApprove, WorkerPay, draft_of, read_parts, run_of, what_stops
+from apps.staffpay.services.pay import (
+    OpenDay,
+    ToApprove,
+    WorkerPay,
+    draft_of,
+    read_parts,
+    run_of,
+    what_stops,
+    what_stops_alone,
+)
 
 # The keys whoever approves must hold, on the whole shop: the owner's own key to the approval, and the two of pay, as
 # nobody approves what they may not read (02 §5; Jack, WAGE-1's review: A).
@@ -85,13 +102,74 @@ def approve_month(
         # An INSERT, never an UPDATE: an id another row holds clashes, loudly, and never overwrites it (03 §5.4).
         run.save(force_insert=True)
         _keep(
+            first,
             run,
-            [line for line in draft.workers if line.approval is None],
-            parts.over,
+            [(line, parts.over.get(line.staff_id, [])) for line in draft.workers if line.approval is None],
             advances_by_job(shop, first, last),
             by,
         )
     return run
+
+
+def approve_leaver(
+    staff: StaffMember, month: dt.date, *, payslip_id: uuid.UUID, seen: Decimal, by: StaffMember
+) -> Payslip:
+    """Approve the pay of one worker who left, alone, for the month of `month`, any day of it (WAGE-3; Jack, 15 Nov
+    2026): their payslip, its lines, and their days marked as paid, today's kept with them when they go tonight (Leo).
+    `payslip_id`: the client's (ADR-0007), as a run's. `seen`: the total the person read. `by`: who approves, as for a
+    month, and never one's own. Refuses: one's own (payslip.own); a worker who hasn't left (payslip.not_left); a month
+    approved already (pay_run.already_approved), or theirs (payslip.already_approved); nothing to pay
+    (payslip.nothing); still clocked in today (payslip.still_clocked_in); and, as a month's, an earlier month of theirs
+    still open, a day of theirs that waits or has no rate, and a total that is no longer the one seen. The shop must be
+    open. Returns the payslip as saved."""
+    if by.shop_id != staff.shop_id:
+        raise ShopMismatch("approve_leaver was given a person of another shop.")
+    shop = Shop.objects.get(pk=staff.shop_id)
+    first, last = month_span(month)
+    with transaction.atomic():
+        _ask_who_approves(by)
+        # The same lock as the month's, so the two never both make a payslip of theirs; and the job read afresh with it,
+        # as it may have just been marked as gone.
+        staff = next(job for job in lock_jobs(shop) if job.pk == staff.pk)
+        # Never one's own, alone (as an advance, WAGE-8): someone hired again would close their old job's pay on their
+        # own word. By the person, not the job.
+        if staff.user_id == by.user_id:
+            raise ValidationError("Nobody approves their own pay alone.", code="payslip.own")
+        if staff.status != StaffStatus.LEFT:
+            # One who works here waits for the month: approved alone, nothing of the month could be fixed for them.
+            raise ValidationError("Only one who left is approved alone.", code="payslip.not_left")
+        if run_of(shop, first) is not None:
+            raise ValidationError("This month's pay is approved already.", code="pay_run.already_approved")
+        if Payslip.objects.filter(shop=shop, staff=staff, month=first).exists():
+            raise ValidationError("This worker's pay is approved already.", code="payslip.already_approved")
+        today = shop_today(shop)
+        if today < first:
+            raise ValidationError("This worker has no pay in this month.", code="payslip.nothing")
+        parts = read_parts(shop, first, last, today)
+        line = next((line for line in draft_of(shop, parts).workers if line.staff_id == staff.pk), None)
+        if line is None:
+            raise ValidationError("This worker has no pay in this month.", code="payslip.nothing")
+        stops = what_stops_alone(shop, parts, line)
+        if stops.still_clocked_in:
+            # Before the others, as it comes of itself: approved now, today would be left out of their pay for good.
+            raise ValidationError("This worker is still clocked in.", code="payslip.still_clocked_in")
+        _refuse_if_stopped(stops)
+        if seen != line.total:
+            raise ValidationError("A total has changed since it was read.", code="pay_run.totals_moved")
+        days = list(parts.over.get(staff.pk, []))
+        tonight = parts.todays.get(staff.pk)
+        if tonight is not None:
+            # Today's day, still to come in the book, which keeps a day once it is over: kept now, as it is judged, with
+            # its share of the meals as it stands, or the book would work it out again tomorrow with nothing paid
+            # (Jack: A). Leo is a line of the page alone: on the payslip it is one of their days.
+            days.append(tonight)
+        # The very sum the page showed in two parts, in one: each day is paid alone, so the two add up to it.
+        pay = work_out_pay(parts.days_to_pay(staff.pk, days), advances=line.pay.advances, carried=line.pay.carried)
+        # Its own total, never the two parts' again: should the two ever differ, the lines wouldn't add up to it, and
+        # nothing is kept.
+        whole = replace(line, pay=pay, today=None, total=pay.total)
+        (slip,) = _keep(first, None, [(whole, days)], advances_by_job(shop, first, last), by, ids=[payslip_id])
+    return slip
 
 
 def _ask_who_approves(by: StaffMember) -> None:
@@ -124,31 +202,48 @@ def _named(days: list[OpenDay]) -> dict[str, Any]:
 
 
 def _keep(
-    run: PayRun,
-    lines: list[WorkerPay],
-    days: Mapping[uuid.UUID, Iterable[AttendanceDay]],
+    month: dt.date,
+    run: PayRun | None,
+    lines: list[tuple[WorkerPay, list[AttendanceDay]]],
     given: Mapping[uuid.UUID, list[tuple[dt.date, Decimal]]],
     by: StaffMember,
-) -> None:
-    # The payslips of a month, their lines, and their days marked as paid. Each in one statement, but the marks, one a
-    # worker.
-    slips = {
-        line.staff_id: Payslip(
-            shop_id=run.shop_id, staff_id=line.staff_id, month=run.month, pay_run=run, total=line.total, created_by=by
+    *,
+    ids: Iterable[uuid.UUID] = (),
+) -> list[Payslip]:
+    # The payslips of a month, each worker's line with their days; their lines; and their days marked as paid. Each in
+    # one statement, but the marks, one a worker. `ids`: the payslips' own, where the client made them.
+    made = iter(ids)
+    slips = [
+        Payslip(
+            id=next(made, None) or uuid.uuid7(),
+            shop_id=by.shop_id,
+            staff_id=line.staff_id,
+            month=month,
+            pay_run=run,
+            total=line.total,
+            created_by=by,
         )
-        for line in lines
-    }
-    Payslip.objects.bulk_create(slips.values())
+        for line, _ in lines
+    ]
+    # An INSERT, as bulk_create always is: an id another row holds, or a payslip there is already, clashes on the
+    # table's own rules, loudly, and never overwrites it (03 §5.4).
+    Payslip.objects.bulk_create(slips)
     PayslipLine.objects.bulk_create(
         row
-        for line in lines
-        for row in _payslip_lines(slips[line.staff_id], line.pay, line.carried_from, given.get(line.staff_id, []), by)
+        for slip, (line, _) in zip(slips, lines, strict=True)
+        for row in _payslip_lines(slip, line.pay, line.carried_from, given.get(line.staff_id, []), by)
     )
-    for job, slip in slips.items():
+    for slip, (_, days) in zip(slips, lines, strict=True):
         # Every day the book answered of the job, the absent and the off ones too: they were paid nothing, and that is
         # as final. From here the table refuses any change of them (FrozenTrigger). The edit history keeps each mark,
         # with who approved (ADR-0036).
-        AttendanceDay.objects.filter(pk__in=[day.pk for day in days.get(job, [])]).update(payslip=slip)
+        AttendanceDay.objects.filter(pk__in=[day.pk for day in days]).update(payslip=slip)
+        for day in days:
+            if day._state.adding:
+                # Today's, not kept yet: an INSERT, marked from its first moment.
+                day.payslip = slip
+                day.save(force_insert=True)
+    return slips
 
 
 def _payslip_lines(

@@ -12,7 +12,7 @@ one file to another with no change anywhere else; a file of the package takes fr
 from here would be a circle. What isn't listed is the package's own.
 """
 
-from apps.staffpay.services.approval import approve_month
+from apps.staffpay.services.approval import approve_leaver, approve_month
 from apps.staffpay.services.attendance import (
     DEMO_ADD_REASONS,
     DEMO_REASONS,
@@ -101,6 +101,7 @@ __all__ = [
     "add_tap",
     "advance_line",
     "advances_month",
+    "approve_leaver",
     "approve_month",
     "attendance_month",
     "decide_day",
