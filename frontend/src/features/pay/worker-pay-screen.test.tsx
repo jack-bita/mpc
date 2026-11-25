@@ -1,5 +1,5 @@
 // worker-pay-screen.test.tsx — one worker's pay of a month, line by line (WAGE-2): the lines as Jack drew them, a raise,
-// today once they tapped Toka, what isn't paid, a month gone by, and what the page says with no worker or no pay.
+// what they were given before payday (WAGE-8), today once they tapped Toka, what isn't paid, a month gone by, and what the page says with no worker or no pay.
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -156,6 +156,69 @@ describe("a worker's pay", () => {
     ]);
     // Its lines say it: "Pamoja na leo" is Mishahara's, which has none.
     expect(screen.queryByText("Pamoja na leo")).toBeNull();
+  });
+
+  it("takes off what they were given before payday, as Jack drew it (WAGE-8)", async () => {
+    // Juma's 132,000 less the 20,000 of the 10th and the 20,000 of the 25th, the server's own sums.
+    jumaIsPaid({
+      pay: pay({ advances: "40000.00", total: "92000.00" }),
+      total: "92000.00",
+    });
+
+    open();
+
+    expect(await lines()).toEqual([
+      "Siku kamili | 14 × 10,000 | 140,000",
+      "Nusu siku | 2 × 5,000 | 10,000",
+      "Faini | 2 | − 2,000",
+      "Chakula | siku 16 | − 16,000",
+      "Advansi | − 40,000",
+      "Jumla ya kumlipa leo | TSh 92,000",
+    ]);
+  });
+
+  it("puts it above the total, under today's lines", async () => {
+    jumaIsPaid({
+      pay: pay({ advances: "40000.00", total: "92000.00" }),
+      today: {
+        ...NO_PAY,
+        lines: [
+          { paid_as: "full", days: 1, each: "10000.00", amount: "10000.00" },
+        ],
+        total: "10000.00",
+      },
+      total: "102000.00",
+    });
+
+    open();
+
+    expect((await lines()).slice(4)).toEqual([
+      "Leo: siku kamili | 10,000",
+      "Advansi | − 40,000",
+      "Jumla ya kumlipa leo | TSh 102,000",
+    ]);
+  });
+
+  it("shows money given before any working day of the month, and that none has come", async () => {
+    // Sunday 1 November: nobody has worked yet, and Juma took 20,000. With the line hidden, the money would be nowhere.
+    jumaIsPaid(
+      {
+        pay: { ...NO_PAY, advances: "20000.00", total: "-20000.00" },
+        total: "-20000.00",
+      },
+      { today: "2026-11-01", counted_to: null, no_day_yet: true },
+    );
+
+    open();
+
+    const [line, total, ...more] = await lines();
+    expect([line, more]).toEqual(["Advansi | − 20,000", []]);
+    expect(total).toMatch(/^Jumla ya kumlipa leo \| [−-]TSh 20,000$/);
+    expect(
+      screen.getByRole("heading", {
+        name: "Novemba 2026 · Bado hakuna siku ya kazi iliyokwisha mwezi huu.",
+      }),
+    ).toBeTruthy();
   });
 
   it("shows a half day today, and none of today's fine or meals when there is none", async () => {

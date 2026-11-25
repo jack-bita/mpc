@@ -886,6 +886,7 @@
     "fines": "Fines",
     "meals": "Meals",
     "mealDays": "{count, plural, one {1 day} other {# days}}",
+    "advances": "Advances",
     "less": "− {amount}",
     "todayLine": {
       "full": "Today: full day",

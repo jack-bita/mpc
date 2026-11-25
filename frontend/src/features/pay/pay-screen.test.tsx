@@ -266,6 +266,36 @@ describe("the month's pay", () => {
     }
   });
 
+  it("lists one given money before any working day, with its minus (WAGE-8)", async () => {
+    // Sunday 1 November: nobody has worked yet, and Juma took 20,000. Beside the line that says no day is over.
+    vi.setSystemTime(new Date("2026-11-01T05:00:00Z"));
+    theShopPays({
+      "2026-11": payMonth(
+        [
+          workerPay({
+            pay: { ...NO_PAY, advances: "20000.00", total: "-20000.00" },
+            total: "-20000.00",
+          }),
+        ],
+        {
+          today: "2026-11-01",
+          counted_to: null,
+          no_day_yet: true,
+          total: "-20000.00",
+        },
+      ),
+    });
+
+    render(<PayScreen />);
+
+    const [line, ...more] = await lines();
+    expect(line).toMatch(/^Juma \| [−-]20,000$/);
+    expect(more).toEqual([]);
+    expect(
+      screen.getByText("Bado hakuna siku ya kazi iliyokwisha mwezi huu."),
+    ).toBeTruthy();
+  });
+
   it("reads which month it is from the server's two answers, not the phone's date", async () => {
     // A phone a month behind still shows November as the server's own month gone by: no "Hadi jana".
     theShopPays({

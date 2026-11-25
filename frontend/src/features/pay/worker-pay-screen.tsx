@@ -98,9 +98,10 @@ function TheWorkersPay({ answer }: { answer: WorkerPayMonth }) {
       <h2 className="text-lg font-semibold">
         {counted === null ? month : t("monthAndCounted", { month, counted })}
       </h2>
-      {/* Nothing under the heading when it says no working day has come: whether they are paid by the day isn't known
-          yet. */}
-      {answer.no_day_yet ? null : (
+      {/* Their line whenever there is one: money given on a 1st that is a Sunday is one, before any working day (WAGE-8).
+          With none, nothing under a heading that says no working day has come: whether they are paid by the day isn't
+          known yet. */}
+      {!answer.paid_by_day && answer.no_day_yet ? null : (
         <Card>
           <CardContent>
             {answer.paid_by_day ? (

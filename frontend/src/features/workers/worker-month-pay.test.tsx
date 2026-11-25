@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { components } from "@/api/schema";
 import { answer, refusal, sent } from "@/test/fake-server";
 import {
+  NO_PAY,
   pay,
   payRoute,
   workerPay,
@@ -122,6 +123,46 @@ describe("Malipo ya mwezi", () => {
         .getAttribute("aria-disabled"),
     ).toBe("true");
     expect(monthsAsked(JUMA.id)).toEqual(["2026-11"]);
+  });
+
+  it("takes off what they were given before payday (WAGE-8)", async () => {
+    theServerHas(JUMA, {
+      "2026-11": workerPayMonth(
+        workerPay({
+          staff: JUMA.id,
+          pay: pay({ advances: "40000.00", total: "92000.00" }),
+          total: "92000.00",
+        }),
+      ),
+    });
+
+    render(<WorkerScreen id={JUMA.id} />);
+
+    expect((await lines(await theCard())).slice(-2)).toEqual([
+      "Advansi |  | − 40,000",
+      "Jumla ya kumlipa leo | TSh 92,000",
+    ]);
+  });
+
+  it("shows money given before any working day of the month, and that none has come (WAGE-8)", async () => {
+    theServerHas(JUMA, {
+      "2026-11": workerPayMonth(
+        workerPay({
+          staff: JUMA.id,
+          pay: { ...NO_PAY, advances: "20000.00", total: "-20000.00" },
+          total: "-20000.00",
+        }),
+        { today: "2026-11-01", counted_to: null, no_day_yet: true },
+      ),
+    });
+
+    render(<WorkerScreen id={JUMA.id} />);
+    const card = await theCard();
+
+    expect((await lines(card))[0]).toBe("Advansi |  | − 20,000");
+    expect(
+      within(card).getByText("Bado hakuna siku ya kazi iliyokwisha mwezi huu."),
+    ).toBeTruthy();
   });
 
   it("moves to the month before and back, its total then the month's", async () => {
