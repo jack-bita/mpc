@@ -45,9 +45,9 @@
 //   Hakuna picha: imeongezwa ofisini
 //   [ Ongeza Ingia au Toka ]
 //
-// No button on the viewer's own month, as nobody fixes their own taps; nor on a month whose pay is approved, with
-// everyone's or the worker's alone, which the day says instead (WAGE-3): *Malipo ya mwezi huu yameidhinishwa, kwa hiyo siku
-// hii haibadiliki tena.* The server refuses them all the same.
+// No button on the viewer's own month, as nobody fixes their own taps; nor on a month whose pay is closed, approved with
+// everyone's or the worker's alone, or before one that was, which the day says instead (WAGE-3): *Malipo ya mwezi huu
+// yamefungwa, kwa hiyo siku hii haibadiliki tena.* The server refuses them all the same.
 //
 // Everything comes from the server's one answer for the month (worker-month.ts): the page never works out what a day
 // was, nor moves a time by the phone's zone. The photo is opened from its own route, which asks attendance.manage

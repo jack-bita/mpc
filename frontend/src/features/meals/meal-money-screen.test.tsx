@@ -288,7 +288,7 @@ describe("the month's meal money", () => {
 
     expect(
       await screen.findByText(
-        "Malipo ya siku hizi yameidhinishwa, kwa hiyo hela ya chakula ya siku hizo haibadiliki tena.",
+        "Malipo ya siku hizi yamefungwa, kwa hiyo hela ya chakula ya siku hizo haibadiliki tena.",
       ),
     ).toBeTruthy();
     expect(await lines()).toHaveLength(1);
@@ -307,7 +307,7 @@ describe("the month's meal money", () => {
     render(<MealMoneyScreen />);
 
     await lines();
-    expect(screen.queryByText(/yameidhinishwa/)).toBeNull();
+    expect(screen.queryByText(/yamefungwa/)).toBeNull();
   });
 
   it("says nothing of it on days chosen across the last approved one", async () => {
@@ -328,7 +328,7 @@ describe("the month's meal money", () => {
     render(<MealMoneyScreen />);
 
     await screen.findByRole("list", { name: "Siku ulizochagua" });
-    expect(screen.queryByText(/yameidhinishwa/)).toBeNull();
+    expect(screen.queryByText(/yamefungwa/)).toBeNull();
   });
 
   it("says a month's pay is approved though nobody wrote any money in it", async () => {
@@ -343,7 +343,7 @@ describe("the month's meal money", () => {
 
     render(<MealMoneyScreen />);
 
-    expect(await screen.findByText(/yameidhinishwa/)).toBeTruthy();
+    expect(await screen.findByText(/yamefungwa/)).toBeTruthy();
   });
 
   it("says when a month has none", async () => {

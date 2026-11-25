@@ -788,14 +788,14 @@
     "waiting": "{count, plural, one {1 anasubiri uamuzi} other {# wanasubiri uamuzi}}",
     "none": "Hakuna siku ya kuonyesha katika mwezi huu.",
     "noneChosen": "Hakuna siku ya kuonyesha katika siku hizi.",
-    "closed": "Malipo ya siku hizi yameidhinishwa, kwa hiyo hela ya chakula ya siku hizo haibadiliki tena.",
+    "closed": "Malipo ya siku hizi yamefungwa, kwa hiyo hela ya chakula ya siku hizo haibadiliki tena.",
     "daysChosenLabel": "Siku ulizochagua",
     "span": "{first} hadi {last}",
     "wholeMonth": "Mwezi mzima",
     "dayPage": {
       "noDay": "Hakuna siku iliyochaguliwa.",
       "none": "Hakuna hela ya chakula siku hii.",
-      "closed": "Malipo ya siku hii yameidhinishwa, kwa hiyo hela yake ya chakula haibadiliki tena.",
+      "closed": "Malipo ya siku hii yamefungwa, kwa hiyo hela yake ya chakula haibadiliki tena.",
       "total": "Jumla {amount}",
       "rowsLabel": "Hela iliyoandikwa siku hii",
       "rowWithNote": "{amount} · {note}",
@@ -835,7 +835,7 @@
     "line": "{weekday} {date} · {name}",
     "voided": "Imebatilishwa",
     "none": "Hakuna advansi katika mwezi huu.",
-    "closed": "Malipo ya mwezi huu yameidhinishwa, kwa hiyo advansi zake hazibadiliki tena.",
+    "closed": "Malipo ya mwezi huu yamefungwa, kwa hiyo advansi zake hazibadiliki tena.",
     "record": {
       "title": "Andika advansi",
       "worker": "Mfanyakazi",
@@ -855,7 +855,7 @@
       "voidedBy": "Imebatilishwa na {by}, {date}",
       "reason": "Sababu: {reason}",
       "own": "Hii ni advansi yako. Mtu mwingine ndiye anayeweza kuibatilisha.",
-      "closed": "Malipo yake ya mwezi huo yameidhinishwa, kwa hiyo advansi hii haibatilishwi."
+      "closed": "Malipo yake ya mwezi huo yamefungwa, kwa hiyo advansi hii haibatilishwi."
     },
     "void": {
       "title": "Batilisha {amount}",
@@ -903,6 +903,7 @@
     "totalMonth": "Jumla ya mwezi",
     "owes": "Analipwa 0. Anadaiwa {amount}, zitakatwa kwenye malipo yake yajayo.",
     "owesLeft": "Analipwa 0. Anadaiwa {amount}.",
+    "owed": "Alilipwa 0. Alibaki anadaiwa {amount}.",
     "notPaidByDay": "Hana malipo kwa siku katika mwezi huu.",
     "worker": "Malipo ya mfanyakazi",
     "cardTitle": "Malipo ya mwezi",
@@ -1051,7 +1052,7 @@
     "systemSaid": "Mfumo ulisema: {said}",
     "systemSaidWhy": "Mfumo ulisema: {said} · {why}",
     "yours": "Huwezi kuamua siku zako mwenyewe.",
-    "closed": "Malipo ya mwezi huu yameidhinishwa, kwa hiyo siku hii haibadiliki tena.",
+    "closed": "Malipo ya mwezi huu yamefungwa, kwa hiyo siku hii haibadiliki tena.",
     "sheetTitle": "Amua siku ya {name}",
     "sheetAbout": "{weekday} {date}",
     "sheetAboutIn": "{weekday} {date} · Ingia {time}",
@@ -1546,7 +1547,7 @@
       "reason_missing": "Andika sababu."
     },
     "pay": {
-      "day_approved": "Malipo ya siku hii yameshaidhinishwa, hayabadiliki tena."
+      "day_approved": "Malipo ya siku hii yameshafungwa, hayabadiliki tena."
     },
     "pay_run": {
       "already_approved": "Malipo ya mwezi huu yameshaidhinishwa.",

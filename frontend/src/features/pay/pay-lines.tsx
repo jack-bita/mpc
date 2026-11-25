@@ -23,7 +23,10 @@
 
 import { useTranslations } from "use-intl";
 
-import type { MonthNumber } from "@/features/attendance/attendance-month";
+import {
+  monthOf,
+  type MonthNumber,
+} from "@/features/attendance/attendance-month";
 import { Decimal } from "@/lib/decimal";
 import { formatAmount, formatMoney } from "@/lib/format";
 
@@ -161,19 +164,24 @@ export function PayLines({
   );
 }
 
-/** "Analipwa 0. Anadaiwa TSh 18,000…", of a total below 0 that is final or whose month is over (Jack: A): nothing is handed
- * over, and their next pay takes it off; or, of one who left, stays owed. Nothing on a month still running, whose days
- * still come. */
+/** "Analipwa 0. Anadaiwa TSh 18,000…", of a total below 0 of a month that is over (Jack: A): nothing is handed over, and
+ * their next pay takes it off; or, of one who left by its end, with no pay to come, stays owed. Once approved, what it
+ * was: "Alilipwa 0. Alibaki anadaiwa TSh 18,000.", as a payslip is read for ever, long after the next one took it.
+ * Nothing on a month still running, whose days still come. */
 function Owes({ answer, worker }: { answer: Counted; worker: WorkerPay }) {
   const t = useTranslations("pay");
   const total = new Decimal(worker.total);
   if (!total.lt("0") || (isThisMonth(answer) && worker.approval === null))
     return null;
+  // Days as text sort as days do, and so do months.
+  const goneByItsEnd =
+    worker.left_on !== null && monthOf(worker.left_on) <= answer.month;
   return (
     <p>
-      {t(worker.left_on === null ? "owes" : "owesLeft", {
-        amount: formatMoney(total.abs()),
-      })}
+      {t(
+        worker.approval !== null ? "owed" : goneByItsEnd ? "owesLeft" : "owes",
+        { amount: formatMoney(total.abs()) },
+      )}
     </p>
   );
 }

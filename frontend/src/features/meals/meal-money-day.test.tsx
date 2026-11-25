@@ -409,7 +409,7 @@ describe("one day's meal money", () => {
 
     expect(
       await screen.findByText(
-        "Malipo ya siku hii yameidhinishwa, kwa hiyo hela yake ya chakula haibadiliki tena.",
+        "Malipo ya siku hii yamefungwa, kwa hiyo hela yake ya chakula haibadiliki tena.",
       ),
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Batilisha/ })).toBeNull();
@@ -436,7 +436,7 @@ describe("one day's meal money", () => {
     expect(
       screen.getByRole("button", { name: "Andika hela ya chakula" }),
     ).toBeTruthy();
-    expect(screen.queryByText(/yameidhinishwa/)).toBeNull();
+    expect(screen.queryByText(/yamefungwa/)).toBeNull();
   });
 
   it("says why on a closed day nobody wrote any for, in place of the button", async () => {
@@ -449,7 +449,7 @@ describe("one day's meal money", () => {
 
     render(<MealMoneyDayScreen date={MONDAY} />);
 
-    expect(await screen.findByText(/yameidhinishwa/)).toBeTruthy();
+    expect(await screen.findByText(/yamefungwa/)).toBeTruthy();
     expect(
       screen.queryByRole("button", { name: "Andika hela ya chakula" }),
     ).toBeNull();

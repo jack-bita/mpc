@@ -1125,7 +1125,7 @@ describe("deciding a day (ATT-6)", () => {
     expect(within(thursday).queryByRole("button")).toBeNull();
     expect(
       within(thursday).getByText(
-        "Malipo ya mwezi huu yameidhinishwa, kwa hiyo siku hii haibadiliki tena.",
+        "Malipo ya mwezi huu yamefungwa, kwa hiyo siku hii haibadiliki tena.",
       ),
     ).toBeTruthy();
   });
@@ -1133,7 +1133,7 @@ describe("deciding a day (ATT-6)", () => {
   it("says it is approved, not that it is theirs, on the viewer's own approved month", async () => {
     openThursday([waiting({ choices: [] })], { closed: true, yours: true });
     const thursday = await theDay("Alhamisi 12/11/2026");
-    expect(within(thursday).getByText(/yameidhinishwa/)).toBeTruthy();
+    expect(within(thursday).getByText(/yamefungwa/)).toBeTruthy();
     expect(within(thursday).queryByText(/siku zako mwenyewe/)).toBeNull();
   });
 
@@ -1146,7 +1146,7 @@ describe("deciding a day (ATT-6)", () => {
       taps: [tap({ date: "2026-11-12", kind: "in", time: "07:20" })],
     });
     const today = await theDay("Alhamisi 12/11/2026 · leo");
-    expect(within(today).getByText(/yameidhinishwa/)).toBeTruthy();
+    expect(within(today).getByText(/yamefungwa/)).toBeTruthy();
     expect(within(today).queryByRole("button")).toBeNull();
   });
 
@@ -1161,7 +1161,36 @@ describe("deciding a day (ATT-6)", () => {
       <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-15" />,
     );
     const sunday = await theDay("Jumapili 15/11/2026");
-    expect(within(sunday).queryByText(/yameidhinishwa/)).toBeNull();
+    expect(within(sunday).queryByText(/yamefungwa/)).toBeNull();
+  });
+
+  it("says it under a tap the book doesn't count, and nothing on a day with none (WAGE-3's review)", async () => {
+    // Juma left and was paid; a laptop then sent his Ingia of the day after: kept to be read, and nothing to decide.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [],
+        [tap({ date: "2026-11-18", kind: "in", time: "07:20" })],
+        { closed: true, left_on: "2026-11-17" },
+      ),
+    });
+    const { unmount } = render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-18" />,
+    );
+    const late = await theDay("Jumatano 18/11/2026");
+    expect(
+      within(late).getByText("Siku hii haihesabiwi, lakini ina Ingia au Toka."),
+    ).toBeTruthy();
+    expect(within(late).getByText(/yamefungwa/)).toBeTruthy();
+    expect(within(late).queryByRole("button")).toBeNull();
+    unmount();
+
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-19" />,
+    );
+    // A day with nothing of his at all opens nothing, so nothing is said of it.
+    await screen.findByRole("table");
+    expect(screen.queryByRole("region", { name: /19\/11\/2026/ })).toBeNull();
   });
 
   it("offers nothing on a day the shop was shut", async () => {

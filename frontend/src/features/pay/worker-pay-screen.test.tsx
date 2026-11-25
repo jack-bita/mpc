@@ -318,7 +318,8 @@ describe("a worker's pay", () => {
   });
 
   it.each([
-    // A month gone by, still open; then approved; and approved alone, of one who left, whose debt no pay to come takes.
+    // A month gone by, still open; of one who left in it, whose debt no pay to come takes; and of one who left in the
+    // month after, whose next pay takes it.
     [
       { today: "2026-12-01" },
       {},
@@ -326,8 +327,19 @@ describe("a worker's pay", () => {
     ],
     [
       { today: "2026-12-01" },
-      { approval: { by: "Baba", at: "2026-12-01T16:05:00Z" } },
+      { left_on: "2026-11-30" },
+      "Analipwa 0. Anadaiwa TSh 18,000.",
+    ],
+    [
+      { today: "2026-12-10" },
+      { left_on: "2026-12-01" },
       "Analipwa 0. Anadaiwa TSh 18,000, zitakatwa kwenye malipo yake yajayo.",
+    ],
+    // Approved, and approved alone this very month: what it was, true however long after it is read.
+    [
+      { today: "2026-12-01" },
+      { approval: { by: "Baba", at: "2026-12-01T16:05:00Z" } },
+      "Alilipwa 0. Alibaki anadaiwa TSh 18,000.",
     ],
     [
       {},
@@ -335,7 +347,7 @@ describe("a worker's pay", () => {
         approval: { by: "Baba", at: "2026-11-25T09:00:00Z" },
         left_on: "2026-11-25",
       },
-      "Analipwa 0. Anadaiwa TSh 18,000.",
+      "Alilipwa 0. Alibaki anadaiwa TSh 18,000.",
     ],
   ])(
     "says what a total below 0 pays and leaves owed: %j %j",
@@ -362,13 +374,13 @@ describe("a worker's pay", () => {
     jumaIsPaid({ pay: pay({ total: "-18000.00" }), total: "-18000.00" });
     const { unmount } = open();
     await lines();
-    expect(screen.queryByText(/Analipwa 0/)).toBeNull();
+    expect(screen.queryByText(/lipwa 0/)).toBeNull();
     unmount();
 
     jumaIsPaid({ total: "0.00" }, { today: "2026-12-01" });
     open();
     await lines();
-    expect(screen.queryByText(/Analipwa 0/)).toBeNull();
+    expect(screen.queryByText(/lipwa 0/)).toBeNull();
   });
 
   it("says who approved the month, and calls its total the month's", async () => {

@@ -166,7 +166,7 @@ describe("the month's advances", () => {
 
     expect(
       await screen.findByText(
-        "Malipo ya mwezi huu yameidhinishwa, kwa hiyo advansi zake hazibadiliki tena.",
+        "Malipo ya mwezi huu yamefungwa, kwa hiyo advansi zake hazibadiliki tena.",
       ),
     ).toBeTruthy();
     // Those given in it stay to be read.
@@ -179,7 +179,7 @@ describe("the month's advances", () => {
 
     render(<AdvancesScreen />);
 
-    expect(await screen.findByText(/yameidhinishwa/)).toBeTruthy();
+    expect(await screen.findByText(/yamefungwa/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Andika advansi" })).toBeNull();
   });
 
@@ -189,7 +189,7 @@ describe("the month's advances", () => {
     render(<AdvancesScreen />);
 
     await lines();
-    expect(screen.queryByText(/yameidhinishwa/)).toBeNull();
+    expect(screen.queryByText(/yamefungwa/)).toBeNull();
     expect(screen.getByRole("button", { name: "Andika advansi" })).toBeTruthy();
   });
 

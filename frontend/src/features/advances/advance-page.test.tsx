@@ -144,7 +144,7 @@ describe("one advance", () => {
     render(<AdvanceScreen id={JUMAS.id} />);
 
     expect((await facts()).at(-1)).toBe(
-      "Malipo yake ya mwezi huo yameidhinishwa, kwa hiyo advansi hii haibatilishwi.",
+      "Malipo yake ya mwezi huo yamefungwa, kwa hiyo advansi hii haibatilishwi.",
     );
     expect(screen.queryByRole("button", { name: "Batilisha" })).toBeNull();
   });
@@ -155,7 +155,7 @@ describe("one advance", () => {
 
     render(<AdvanceScreen id={JUMAS.id} />);
 
-    expect((await facts()).at(-1)).toMatch(/yameidhinishwa/);
+    expect((await facts()).at(-1)).toMatch(/yamefungwa/);
     expect(screen.queryByText(/Hii ni advansi yako/)).toBeNull();
   });
 
