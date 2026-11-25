@@ -858,7 +858,8 @@
     "totalToday": "Jumla ya kumlipa leo",
     "totalMonth": "Jumla ya mwezi",
     "notPaidByDay": "Hana malipo kwa siku katika mwezi huu.",
-    "worker": "Malipo ya mfanyakazi"
+    "worker": "Malipo ya mfanyakazi",
+    "cardTitle": "Malipo ya mwezi"
   },
   "attendanceWorker": {
     "title": "Mahudhurio ya mfanyakazi",

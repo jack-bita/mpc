@@ -16,6 +16,7 @@ import {
   MonthsAsked,
   monthsAreAnswered,
 } from "@/test/meals";
+import { notPaidByDay } from "@/test/pay";
 import { PAY_RATES_ROUTE, payRate, payRates, TODAY } from "@/test/pay-rates";
 import { render } from "@/test/render";
 import { BABA, STAFF, worker } from "@/test/workers";
@@ -53,6 +54,7 @@ function theServerHas(rates: PayRates): void {
   answer("GET", ME, { status: 200, body: BABA });
   answer("GET", `${STAFF}${JUMA.id}/`, { status: 200, body: JUMA });
   answer("GET", PAY_RATES_ROUTE, { status: 200, body: rates });
+  notPaidByDay(JUMA.id);
   answer("POST", PAY_RATES_ROUTE, async (request) => {
     const body = (await request.json()) as PayRate;
     return Response.json(
@@ -188,6 +190,7 @@ describe("after a save", () => {
     answer("GET", ME, { status: 200, body: BABA });
     answer("GET", `${STAFF}${JUMA.id}/`, { status: 200, body: JUMA });
     answer("GET", PAY_RATES_ROUTE, () => Response.json(held));
+    notPaidByDay(JUMA.id);
     answer("POST", PAY_RATES_ROUTE, async (request) => {
       const body = (await request.json()) as PayRate;
       const saved = payRate({ ...body, daily_rate: `${body.daily_rate}.00` });
@@ -262,6 +265,7 @@ describe("Badilisha malipo", () => {
     const coming = payRate({ staff: zawadi.id, effective_from: "2026-11-25" });
     answer("GET", ME, { status: 200, body: BABA });
     answer("GET", `${STAFF}${zawadi.id}/`, { status: 200, body: zawadi });
+    notPaidByDay(zawadi.id);
     answer("GET", PAY_RATES_ROUTE, {
       status: 200,
       body: payRates([coming], null),

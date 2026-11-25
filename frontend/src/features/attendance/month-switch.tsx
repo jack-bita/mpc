@@ -1,6 +1,6 @@
 // month-switch.tsx — ‹ Novemba 2026 ›, the month a page shows and the two arrows that move it, and the clock that page
-// keeps, so › stops at this month (ATT-5). Mahudhurio ya mwezi wears it, and Hela ya chakula (WAGE-7): one switch, so
-// the two pages move a month the same way.
+// keeps, so › stops at this month (ATT-5). Mahudhurio ya mwezi wears it, Hela ya chakula (WAGE-7), Mishahara, and the
+// month's pay on a worker's page (WAGE-2): one switch, so they all move a month the same way.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and keeps the page's clock.
 "use client";
@@ -40,10 +40,14 @@ export function MonthSwitch({
   month,
   thisMonth,
   onChoose,
+  heading: Heading = "h2",
 }: {
   month: string;
   thisMonth: string;
   onChoose: (month: string) => void;
+  /** The month's heading: under a card's own (h2), an h3, so a screen reader's list of headings nests as the page does
+   * (a worker's page, WAGE-2). */
+  heading?: "h2" | "h3";
 }) {
   const t = useTranslations("attendanceMonth");
   const [year, number] = month.split("-") as [string, string];
@@ -64,12 +68,12 @@ export function MonthSwitch({
         <ChevronLeft aria-hidden className="size-6" />
       </Button>
       {/* A heading, so a screen reader can jump to it, and says the month as it changes: the page's title stays. */}
-      <h2 aria-live="polite" className="text-center text-xl font-semibold">
+      <Heading aria-live="polite" className="text-center text-xl font-semibold">
         {t("monthTitle", {
           month: t(`monthNames.${number as MonthNumber}`),
           year,
         })}
-      </h2>
+      </Heading>
       {/* Always there, greyed out on this month, as no day after today is over. Never taken away: pressed to reach
           this month, a button that went would take the keyboard's place with it, back to the page's top (the review).
           focusableWhenDisabled keeps it in the Tab order, said "dimmed" by a screen reader, where a plain disabled

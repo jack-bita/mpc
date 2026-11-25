@@ -858,7 +858,8 @@
     "totalToday": "Total to pay today",
     "totalMonth": "Total for the month",
     "notPaidByDay": "No daily pay in this month.",
-    "worker": "A worker's pay"
+    "worker": "A worker's pay",
+    "cardTitle": "The month's pay"
   },
   "attendanceWorker": {
     "title": "A worker's attendance",

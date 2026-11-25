@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 import { forgetTheLastPerson, makeQueryClient } from "@/api/query-client";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
+import { notPaidByDay } from "@/test/pay";
 import { PAY_RATES_ROUTE, payRate, payRates } from "@/test/pay-rates";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
@@ -86,8 +87,8 @@ describe("a worker's own page", () => {
     expect(screen.queryByText("Siku ya mwisho")).toBeNull();
   });
 
-  it("cuts the page into five headed cards, each button on its heading's row (UI-10)", async () => {
-    // Baba sees Juma's pay too (maySeePay), so all five cards show: Juma works, with a rate in force.
+  it("cuts the page into six headed cards, each button on its heading's row (UI-10)", async () => {
+    // Baba sees Juma's pay too (maySeePay), so all six cards show: Juma works, with a rate in force.
     const juma = worker({ started_on: "2026-11-10" });
     const rate = payRate({ staff: juma.id });
     answer("GET", ME, { status: 200, body: BABA });
@@ -96,6 +97,7 @@ describe("a worker's own page", () => {
       status: 200,
       body: payRates([rate], rate),
     });
+    notPaidByDay(juma.id);
 
     render(<WorkerScreen id={juma.id} />);
 
@@ -105,7 +107,14 @@ describe("a worker's own page", () => {
       screen
         .getAllByRole("heading", { level: 2 })
         .map((heading) => heading.textContent),
-    ).toEqual(["Picha", "Taarifa zake", "Kuingia", "Cheo", "Malipo kwa siku"]);
+    ).toEqual([
+      "Picha",
+      "Taarifa zake",
+      "Kuingia",
+      "Cheo",
+      "Malipo kwa siku",
+      "Malipo ya mwezi",
+    ]);
     expect(
       screen.getByRole("heading", { level: 3, name: "Ruhusa za ziada" }),
     ).toBeDefined();

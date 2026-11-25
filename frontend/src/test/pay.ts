@@ -2,6 +2,7 @@
 // (WAGE-2), and who may open it. Tests only. Fake data: every name, amount and id is made up (rule 10).
 import type { components } from "@/api/schema";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
+import { answer } from "@/test/fake-server";
 
 export type Pay = components["schemas"]["Pay"];
 export type PayMonth = components["schemas"]["PayMonthAnswer"];
@@ -105,4 +106,15 @@ export function workerPayMonth(
     worker,
     ...fields,
   };
+}
+
+/** The server says the shop doesn't pay this worker by the day, for a test of something else on their page: whoever may
+ * see pay has the page ask it (WAGE-2). */
+export function notPaidByDay(staff: string): void {
+  answer("GET", payRoute(staff), {
+    status: 200,
+    body: workerPayMonth(workerPay({ staff, pay: NO_PAY, total: "0.00" }), {
+      paid_by_day: false,
+    }),
+  });
 }
