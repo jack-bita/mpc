@@ -12,12 +12,13 @@
 //   └──────────────────────────────────┘
 //
 // What stops it is of their own days alone, and their Toka on their last evening (approve-sheet.tsx). It sends the total
-// as the page shows it, so whoever approves approves only what they read. How it is sent, and what is read again after it,
-// is useApproval's (use-approval.ts).
+// as the page showed it when the sheet opened, so whoever approves approves only what they read (approve-month.tsx). How
+// it is sent, and what is read again after it, is useApproval's (use-approval.ts).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -47,7 +48,10 @@ export function ApproveLeaver({
 }) {
   const t = useTranslations("pay.approval");
   const monthTitle = useMonthTitle();
-  const { worker } = answer;
+  // What was read, kept as the sheet opened (approve-month.tsx): on their last evening the page asks itself again each
+  // minute, and a tap that comes meanwhile moves the total.
+  const [read] = useState(answer);
+  const { worker } = read;
   const approve = useApproval(
     (id) =>
       answerOf(
@@ -73,6 +77,7 @@ export function ApproveLeaver({
       })}
       final={t("leaverFinal", { month })}
       stops={answer.to_approve ?? NOTHING_STOPS}
+      moved={answer.worker.total !== worker.total}
       // Their pay of the earlier month, which the page moves to with its address.
       earlier={(earlier, words) => (
         <TextLink href={workerPayPage(worker.staff, earlier)}>{words}</TextLink>

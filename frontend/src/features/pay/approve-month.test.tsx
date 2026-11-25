@@ -1,6 +1,6 @@
 // approve-month.test.tsx — Idhinisha on Mishahara (WAGE-3): who is offered it, the sheet as Jack drew it, what stops it,
 // what it warns of, what is sent, and the page once the month is approved.
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import {
   act,
   fireEvent,
@@ -84,9 +84,36 @@ function bodies(): Promise<Sent[]> {
 
 const OPENER = { name: "Idhinisha Novemba 2026" };
 
+/** What the sheet says once a total is no longer the one it opened with, in the server's own sentence. */
+const MOVED =
+  "Hesabu zimebadilika tangu ulipozisoma. Zisome tena, kisha idhinisha.";
+
+/** A part's words, with the plain space people type for the one Intl writes after "TSh". */
+function wordsOf(part: HTMLElement): string {
+  return part.textContent.replace(/\u00a0/g, " ");
+}
+
+/** Reads the pay again behind the open sheet, as a save on another page of the app does. */
+function ReadAgain() {
+  const store = useQueryClient();
+  return (
+    <button
+      type="button"
+      onClick={() => void store.invalidateQueries({ queryKey: PAY })}
+    >
+      Soma tena
+    </button>
+  );
+}
+
 /** The page with its sheet open. */
 async function openSheet() {
-  const { container, ...rest } = render(<PayScreen />);
+  const { container, ...rest } = render(
+    <>
+      <PayScreen />
+      <ReadAgain />
+    </>,
+  );
   fireEvent.click(await screen.findByRole("button", OPENER));
   return { sheet: await screen.findByRole("dialog"), container, ...rest };
 }
@@ -439,7 +466,7 @@ describe("what stops it", () => {
 });
 
 describe("a refusal", () => {
-  it("shows in the sheet, with the new totals once a total has moved, and can be sent again", async () => {
+  it("shows in the sheet once a total has moved, and what is approved is only what is read again", async () => {
     theShopPays(OVER);
     let tries = 0;
     answer("POST", RUNS, () => {
@@ -467,26 +494,52 @@ describe("a refusal", () => {
     });
     const { sheet } = await openSheet();
     fireEvent.click(action(sheet));
-    expect(
-      await within(sheet).findByText(
-        "Hesabu zimebadilika tangu ulipozisoma. Zisome tena, kisha idhinisha.",
-      ),
-    ).toBeTruthy();
-    await waitFor(() =>
-      expect(sheet.textContent.replace(/\u00a0/g, " ")).toContain(
-        "Jumla TSh 422,000",
-      ),
-    );
-    fireEvent.click(action(sheet));
+    expect(await within(sheet).findByText(MOVED)).toBeTruthy();
+    // The page behind has the new totals; the sheet keeps what was read, and takes no second tap. Said once.
+    await screen.findByText(/422,000/);
+    await waitFor(() => expect(action(sheet).disabled).toBe(true));
+    expect(wordsOf(sheet)).toContain("Watu 3 · Jumla TSh 432,000");
+    expect(within(sheet).getAllByText(MOVED)).toHaveLength(1);
+    fireEvent.click(within(sheet).getByRole("button", { name: "Ghairi" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // Read on the page, and approved as it was read: another wish, with a request of its own.
+    fireEvent.click(screen.getByRole("button", OPENER));
+    const again = await screen.findByRole("dialog");
+    expect(wordsOf(again)).toContain("Watu 3 · Jumla TSh 422,000");
+    fireEvent.click(action(again));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     const [first, second] = await bodies();
-    // The same request by its id, with what was read this time.
-    expect(second?.id).toBe(first?.id);
+    expect(second?.id).not.toBe(first?.id);
     expect(second?.seen.map(({ total }) => total)).toEqual([
       "142000.00",
       "148000.00",
       "132000.00",
     ]);
+  });
+
+  it("holds the button when a total moves under the open sheet, with nothing sent (WAGE-3's review)", async () => {
+    // Juma's day is decided on another phone, and the page behind is read again: two totals that cancel each other out
+    // leave the whole as it was, and have moved all the same.
+    theShopPays(OVER);
+    const { sheet } = await openSheet();
+    expect(action(sheet).disabled).toBe(false);
+    november = {
+      ...OVER,
+      workers: [
+        { ...ASHA, total: "142000.00" },
+        BARAKA,
+        { ...JUMA, total: "142000.00" },
+      ],
+    };
+    fireEvent.click(screen.getByText("Soma tena"));
+    expect(await within(sheet).findByText(MOVED)).toBeTruthy();
+    expect(action(sheet).disabled).toBe(true);
+    // It moves back: what was read is true again.
+    november = OVER;
+    fireEvent.click(screen.getByText("Soma tena"));
+    await waitFor(() => expect(action(sheet).disabled).toBe(false));
+    expect(within(sheet).queryByText(MOVED)).toBeNull();
+    expect(await bodies()).toEqual([]);
   });
 
   it("asks the month again when no answer came, as it may have been approved all the same", async () => {

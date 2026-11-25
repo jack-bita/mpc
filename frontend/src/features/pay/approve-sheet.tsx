@@ -14,18 +14,22 @@
 // Or, while something stops it, what does in place of that sentence, each opening where it is mended, and Idhinisha
 // held: an earlier month, "Amua siku hii kwanza: Juma · Alhamisi 12/11" (Jack: A), a day with no daily pay, or a worker
 // still clocked in. The server says what stops it (ToApprove) and asks it all again as it approves; its refusals show
-// above the buttons. Approving is for good (A3), so the sheet says so before the tap.
+// above the buttons. So does a total that moved while the sheet was open, which holds Idhinisha too: what is approved is
+// what was read as it opened, never what came under it (WAGE-3's review). Approving is for good (A3), so the sheet says so
+// before the tap.
 //
 // The screen gives what is approved and sends it; this part is what both sheets show alike.
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
 
+import { CircleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { aboutTheWholeRequest } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
 import { Sheet } from "@/components/design/sheet";
 import { TextLink } from "@/components/design/text-link";
 import {
@@ -35,6 +39,7 @@ import {
 } from "@/features/attendance/attendance-month";
 import { workerMonthAddress } from "@/features/attendance/worker-month";
 import { workerPage } from "@/features/workers/workers";
+import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { formatDate, formatDayMonth, weekdayOf } from "@/lib/format";
 import { useOnline } from "@/offline/network";
 
@@ -78,6 +83,7 @@ export function ApproveSheet({
   about,
   final,
   stops,
+  moved,
   earlier,
   timezone,
   error,
@@ -92,6 +98,8 @@ export function ApproveSheet({
   /** That it is for good, in the words of what is approved. */
   final: string;
   stops: ToApprove;
+  /** Whether a total is no longer the one the sheet opened with. */
+  moved: boolean;
   /** What opens an earlier month, "Oktoba 2026", which is approved first: a link, or the page's own move to it. */
   earlier: (month: string, words: string) => ReactNode;
   /** The shop's, for when a laptop last sent. */
@@ -106,6 +114,8 @@ export function ApproveSheet({
   finalFocus: () => HTMLElement | null;
 }) {
   const t = useTranslations("pay.approval");
+  const apiError = useTranslations("apiError");
+  const codes = useCodeWords();
   const online = useOnline();
   const monthTitle = useMonthTitle();
   return (
@@ -117,9 +127,9 @@ export function ApproveSheet({
       actionLabel={t("action")}
       onAction={onApprove}
       busy={busy}
-      // Offline, nothing is sent, so nothing waits unsent while it looks done; and while something stops it, there is
-      // nothing to send: the server would only refuse it.
-      actionDisabled={!online || isStopped(stops)}
+      // Offline, nothing is sent, so nothing waits unsent while it looks done; and while something stops it, or a total
+      // has moved, there is nothing to send: the server would only refuse it.
+      actionDisabled={!online || isStopped(stops) || moved}
       finalFocus={finalFocus}
     >
       {stops.earlier !== null ? (
@@ -157,6 +167,17 @@ export function ApproveSheet({
       {stops.came_unpaid.map((name) => (
         <Warning key={name}>{t("cameUnpaid", { name })}</Warning>
       ))}
+      {/* A total that moved, in the server's own sentence, unless the last try was refused, which says why itself. */}
+      {moved && error === null ? (
+        <Alert kind="danger">
+          {/* The icon says what the title says, so a screen reader skips it (api-error-alert.tsx). */}
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>{apiError("title")}</AlertTitle>
+          <AlertDescription>
+            {codeMessage(codes, "pay_run.totals_moved")}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {/* What the server refused: a total that moved, a day decided otherwise meanwhile, a key taken away, no network. */}
       <ApiErrorAlert error={aboutTheWholeRequest(error)} />
     </Sheet>

@@ -248,7 +248,7 @@ describe("the sheet", () => {
     expect(action(sheet).disabled).toBe(true);
   });
 
-  it("shows a refusal, and her new total once it has moved", async () => {
+  it("shows a refusal, and takes no second tap once her total has moved", async () => {
     theShopPays(neemasNovember());
     answer("POST", SLIPS, () => {
       november = neemasNovember();
@@ -267,10 +267,11 @@ describe("the sheet", () => {
         "Hesabu zimebadilika tangu ulipozisoma. Zisome tena, kisha idhinisha.",
       ),
     ).toBeTruthy();
-    await waitFor(() =>
-      expect(sheet.textContent.replace(/ /g, " ")).toContain(
-        "Jumla TSh 60,000",
-      ),
+    // Read again behind it: the sheet keeps what was read, and holds its button.
+    await screen.findByText(/60,000/);
+    await waitFor(() => expect(action(sheet).disabled).toBe(true));
+    expect(sheet.textContent.replace(/\u00a0/g, " ")).toContain(
+      "Jumla TSh 62,000",
     );
   });
 

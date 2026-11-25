@@ -220,6 +220,15 @@ test("Meneja approves the pay of one who left, and none of it changes after", as
       .getByRole("list", { name: PAY.workersLabel })
       .getByRole("link", { name: "Neema", exact: true })
       .click();
+    const total = phone
+      .getByRole("table", { name: PAY.linesCaption })
+      .getByRole("row")
+      .last()
+      .getByRole("cell")
+      .last();
+    // Read first, as a person does: her page's card kept the 0 of before her taps, which shows until the page has asked
+    // again, and the sheet approves only what it opened with (WAGE-3's review).
+    await expect(total).toHaveText(/^TSh\s10,000$/);
     const approveHers = words(PAY.approval.leaverTitle, { name: "Neema" });
     await phone.getByRole("button", { name: approveHers, exact: true }).click();
     const sheet = sheetCalled(approveHers);
@@ -236,12 +245,6 @@ test("Meneja approves the pay of one who left, and none of it changes after", as
     // Read again from the server, the payslip says the same.
     await phone.reload();
     await expect(phone.getByText(/^Imeidhinishwa na Meneja · /)).toBeVisible();
-    const total = phone
-      .getByRole("table", { name: PAY.linesCaption })
-      .getByRole("row")
-      .last()
-      .getByRole("cell")
-      .last();
     await expect(total).toHaveText(/^TSh\s10,000$/);
   });
 

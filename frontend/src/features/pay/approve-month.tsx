@@ -1,13 +1,15 @@
 // approve-month.tsx — the sheet that approves a month's pay for everyone, over Mishahara (WAGE-3): how many workers and
 // the whole of it, that it is for good, and what stops it (approve-sheet.tsx).
 //
-// It sends each worker's total as the page shows it, so whoever approves approves only what they read: a day decided a
-// moment before is refused (pay_run.totals_moved), and the page behind, read again, shows the new totals, in the sheet
-// too. How it is sent, and what is read again after it, is useApproval's (use-approval.ts).
+// It sends each worker's total as the page showed it when the sheet opened, so whoever approves approves only what they
+// read: a day decided meanwhile, which the page behind learns as it is read again, moves a total, and the sheet says so
+// and holds its button until it is closed and the page read (WAGE-3's review). The server refuses the same
+// (pay_run.totals_moved). How it is sent, and what is read again after it, is useApproval's (use-approval.ts).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -40,6 +42,8 @@ export function ApproveMonth({
 }) {
   const t = useTranslations("pay.approval");
   const monthTitle = useMonthTitle();
+  // What was read, kept as the sheet opened: a second tap would otherwise approve totals that came under it.
+  const [read] = useState(answer);
   const approve = useApproval(
     (id) =>
       answerOf(
@@ -47,7 +51,7 @@ export function ApproveMonth({
           body: {
             id,
             month: answer.month,
-            seen: answer.workers.map(({ staff, total }) => ({ staff, total })),
+            seen: read.workers.map(({ staff, total }) => ({ staff, total })),
           },
         }),
       ),
@@ -59,11 +63,12 @@ export function ApproveMonth({
     <ApproveSheet
       title={t("monthTitle", { month })}
       about={t("monthAbout", {
-        count: answer.workers.length,
-        total: formatMoney(new Decimal(answer.total)),
+        count: read.workers.length,
+        total: formatMoney(new Decimal(read.total)),
       })}
       final={t("monthFinal", { month })}
       stops={answer.to_approve ?? NOTHING_STOPS}
+      moved={totalsOf(answer) !== totalsOf(read)}
       // Not a link: it would be to this very page, which keeps its month itself (useWordInAddress) and would stay.
       earlier={(earlierMonth, words) => (
         <Button
@@ -82,4 +87,10 @@ export function ApproveMonth({
       finalFocus={finalFocus}
     />
   );
+}
+
+/** Each worker's total, whole, to see whether any has moved: never the whole month's alone, as two changes could cancel
+ * each other out. In the server's order, by name, as both answers are. */
+function totalsOf(month: PayMonth): string {
+  return month.workers.map(({ staff, total }) => `${staff} ${total}`).join();
 }
