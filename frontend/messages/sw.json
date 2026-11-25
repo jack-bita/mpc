@@ -898,7 +898,24 @@
     "totalMonth": "Jumla ya mwezi",
     "notPaidByDay": "Hana malipo kwa siku katika mwezi huu.",
     "worker": "Malipo ya mfanyakazi",
-    "cardTitle": "Malipo ya mwezi"
+    "cardTitle": "Malipo ya mwezi",
+    "approval": {
+      "approvedBy": "Imeidhinishwa na {by} · {date} {time}",
+      "approvedOn": "Imeidhinishwa {date}",
+      "monthButton": "Idhinisha {month}",
+      "monthTitle": "Idhinisha {month}",
+      "monthAbout": "{count, plural, one {Mtu 1} other {Watu #}} · Jumla {total}",
+      "monthFinal": "Baada ya kuidhinisha, {month} haibadiliki tena.",
+      "action": "Idhinisha",
+      "earlier": "Idhinisha kwanza:",
+      "stillClockedIn": "Bado hajabonyeza Toka leo. Akibonyeza, utaweza kuidhinisha.",
+      "waiting": "{count, plural, one {Amua siku hii kwanza:} other {Amua siku hizi kwanza:}}",
+      "noRate": "{count, plural, one {Siku hii haina malipo kwa siku:} other {Siku hizi hazina malipo kwa siku:}}",
+      "day": "{name} · {weekday} {date}",
+      "laptopQuiet": "{name} haijatuma tangu {date}",
+      "laptopNever": "{name} haijawahi kutuma",
+      "cameUnpaid": "{name} alikuja kazini, lakini hana malipo kwa siku"
+    }
   },
   "attendanceWorker": {
     "title": "Mahudhurio ya mfanyakazi",

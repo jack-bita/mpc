@@ -70,9 +70,16 @@ export function Left({ worker }: { worker: WorkerPay }) {
   );
 }
 
-/** Under a worker's name on Mishahara: what isn't paid; that today is in the total, which shows no lines; and the day
- * they left. */
-export function PayNotes({ worker }: { worker: WorkerPay }) {
+/** Under a worker's name on Mishahara: what isn't paid; that today is in the total, which shows no lines; the day they
+ * left; and, while the month is open, that theirs alone is approved (`approvedOn`, its day, WAGE-3). */
+export function PayNotes({
+  worker,
+  approvedOn,
+}: {
+  worker: WorkerPay;
+  /** The day theirs was approved alone, or null: on an approved month the page says it once, of everyone. */
+  approvedOn: string | null;
+}) {
   const t = useTranslations("pay");
   return (
     <>
@@ -81,6 +88,9 @@ export function PayNotes({ worker }: { worker: WorkerPay }) {
         <Note>{t("withToday")}</Note>
       ) : null}
       <Left worker={worker} />
+      {approvedOn === null ? null : (
+        <Note>{t("approval.approvedOn", { date: approvedOn })}</Note>
+      )}
     </>
   );
 }

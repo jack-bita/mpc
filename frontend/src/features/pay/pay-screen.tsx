@@ -20,15 +20,29 @@
 // nothing up. What isn't paid is said under the name, with the ! that marks a day to decide on the attendance pages: days
 // that wait for a decision, and days with no daily pay.
 //
+// Once a month is over, whoever may approve it (mayApprovePay) finds Idhinisha at its foot, which opens a sheet
+// (approve-month.tsx); and once it is approved, the page says who did and when, and shows the payslips as they were kept
+// (WAGE-3, as Jack pictured it):
+//
+//    ‹          Novemba 2026          ›
+//   Imeidhinishwa na Baba · 1/12/2026 19:05 usiku
+//
+//   Jumla ya wote          TSh 432,000
+//   …
+//
+// One who left and was approved alone says so under their name while the month is still open: Imeidhinishwa 14/11/2026.
+//
 // An office screen: it asks the server through the store of server answers (rule 5). Its route asks the two keys of pay
 // on the whole shop; someone without both has no button, and opening the address shows the server's refusal.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
+import { type RefObject, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
+import { Button } from "@/components/design/button";
 import { Card } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
 import { TextLink } from "@/components/design/text-link";
@@ -42,10 +56,18 @@ import { MonthSwitch, usePagesClock } from "@/features/attendance/month-switch";
 import { useWhoIsHere } from "@/features/people/who-is-here";
 import { maySeePay } from "@/features/workers/pay-rates";
 import { Decimal } from "@/lib/decimal";
-import { formatAmount, formatMoney } from "@/lib/format";
+import { formatAmount, formatDate, formatMoney } from "@/lib/format";
 import { shopToday } from "@/offline/rules";
 
-import { type PayMonth, usePayMonth, workerPayPage } from "./pay";
+import { ApproveMonth } from "./approve-month";
+import { useMonthTitle } from "./approve-sheet";
+import { ApprovedLine } from "./approved-line";
+import {
+  mayApprovePay,
+  type PayMonth,
+  usePayMonth,
+  workerPayPage,
+} from "./pay";
 import { PayNotes, useCountedTo } from "./pay-notes";
 
 export function PayScreen() {
@@ -72,13 +94,15 @@ export function PayScreen() {
         : openedOn;
   const may = who.data !== undefined && maySeePay(who.data);
   const answer = usePayMonth(month);
+  // The page's title, which the keyboard goes to when a sheet moves the page to another month.
+  const title = useRef<HTMLHeadingElement>(null);
   // "Subiri kidogo…", through the store's own tries too, and only once there is something to wait for, as on the month
   // page.
   const waiting = who.isPending || (month !== null && answer.isPending);
 
   return (
     <div className="grid max-w-2xl gap-6">
-      <PageHeader title={t("title")} />
+      <PageHeader title={t("title")} headingRef={title} />
       <p role="status" className={waiting ? "text-lg" : "sr-only"}>
         {waiting ? loginWords("waiting") : null}
       </p>
@@ -91,20 +115,64 @@ export function PayScreen() {
       {/* Asked here alone and handed down, never by the part that shows it (frontend rules). A failed read shows its
           reason; a refresh that fails keeps the month last read, with the reason above it. */}
       <ApiErrorAlert error={answer.error} />
-      {answer.data && !answer.isPending ? (
-        <TheMonth answer={answer.data} />
+      {who.data && answer.data && !answer.isPending ? (
+        <TheMonth
+          // A month of its own: on another's, as ‹ › or the browser's back move the address, an open sheet closes, so
+          // November is never approved from October's page.
+          key={answer.data.month}
+          answer={answer.data}
+          timezone={who.data.shop.timezone}
+          mayApprove={mayApprovePay(who.data)}
+          onMonth={choose}
+          title={title}
+        />
       ) : null}
     </div>
   );
 }
 
-/** How far the month is counted, the whole of it, then a line per worker. */
-function TheMonth({ answer }: { answer: PayMonth }) {
+/** How far the month is counted, or who approved it; the whole of it; a line per worker; and Idhinisha. */
+function TheMonth({
+  answer,
+  timezone,
+  mayApprove,
+  onMonth,
+  title,
+}: {
+  answer: PayMonth;
+  /** The shop's, for when it was approved. */
+  timezone: string;
+  mayApprove: boolean;
+  /** Move the page to another month, as ‹ › do. */
+  onMonth: (month: string) => void;
+  /** The page's title, which stays as the month moves. */
+  title: RefObject<HTMLHeadingElement | null>;
+}) {
   const t = useTranslations("pay");
   const counted = useCountedTo(answer);
+  const monthTitle = useMonthTitle();
+  const [approving, setApproving] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const line = useRef<HTMLDivElement>(null);
+  // Whether the last close was an approval, when the button is gone: read as the sheet goes, after the draw that took it
+  // away, so a ref, not the state (worker-pay.tsx).
+  const afterApproval = useRef(false);
+  // Whether the sheet moved the page to another month, when all of this one's is gone.
+  const moved = useRef(false);
   return (
     <>
       {counted === null ? null : <p>{counted}</p>}
+      {/* Always on the page, empty and hidden until it is approved: the keyboard goes to it as the sheet closes, which may
+          be a moment before the page has drawn the line in it. */}
+      <div
+        ref={line}
+        tabIndex={-1}
+        className={answer.approval === null ? "sr-only" : "outline-none"}
+      >
+        {answer.approval === null ? null : (
+          <ApprovedLine approval={answer.approval} timezone={timezone} />
+        )}
+      </div>
       {answer.workers.length === 0 ? (
         // Nobody paid by the day; or no working day yet, which the line above says, and is all the page knows: on a
         // Sunday the 1st, ten workers with a rate are listed nowhere (the review, as on the attendance month).
@@ -148,13 +216,58 @@ function TheMonth({ answer }: { answer: PayMonth }) {
                   <p className="text-right tabular-nums">
                     {formatAmount(new Decimal(worker.total))}
                   </p>
-                  <PayNotes worker={worker} />
+                  <PayNotes
+                    worker={worker}
+                    approvedOn={
+                      answer.approval === null && worker.approval !== null
+                        ? formatDate(worker.approval.at, timezone)
+                        : null
+                    }
+                  />
                 </li>
               ))}
             </ul>
           </Card>
         </>
       )}
+      {/* At the foot, under the totals it closes: only once the month is over and open, as the server says
+          (to_approve), and only for whoever may. */}
+      {mayApprove && answer.to_approve !== null ? (
+        <Button
+          ref={button}
+          onClick={() => {
+            afterApproval.current = false;
+            setApproving(true);
+          }}
+        >
+          {t("approval.monthButton", { month: monthTitle(answer.month) })}
+        </Button>
+      ) : null}
+      {/* Mounted only while open, so each opening makes its own request (its id). It stays until it is done, though the
+          page has learned meanwhile that the month is approved and its button is gone. */}
+      {approving ? (
+        <ApproveMonth
+          answer={answer}
+          timezone={timezone}
+          onEarlier={(earlier) => {
+            moved.current = true;
+            onMonth(earlier);
+          }}
+          onDone={() => {
+            afterApproval.current = true;
+            setApproving(false);
+          }}
+          onClose={() => setApproving(false)}
+          // Or the line, when the button went while the sheet was open: approved, its answer lost.
+          finalFocus={() =>
+            moved.current
+              ? title.current
+              : afterApproval.current
+                ? line.current
+                : (button.current ?? line.current)
+          }
+        />
+      ) : null}
     </>
   );
 }

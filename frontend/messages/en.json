@@ -898,7 +898,24 @@
     "totalMonth": "Total for the month",
     "notPaidByDay": "No daily pay in this month.",
     "worker": "A worker's pay",
-    "cardTitle": "The month's pay"
+    "cardTitle": "The month's pay",
+    "approval": {
+      "approvedBy": "Approved by {by} · {date} {time}",
+      "approvedOn": "Approved {date}",
+      "monthButton": "Approve {month}",
+      "monthTitle": "Approve {month}",
+      "monthAbout": "{count, plural, one {1 person} other {# people}} · Total {total}",
+      "monthFinal": "Once approved, {month} never changes again.",
+      "action": "Approve",
+      "earlier": "Approve first:",
+      "stillClockedIn": "They haven't tapped Toka yet today. Once they do, you can approve.",
+      "waiting": "{count, plural, one {Decide this day first:} other {Decide these days first:}}",
+      "noRate": "{count, plural, one {This day has no daily pay:} other {These days have no daily pay:}}",
+      "day": "{name} · {weekday} {date}",
+      "laptopQuiet": "{name} has sent nothing since {date}",
+      "laptopNever": "{name} has never sent anything",
+      "cameUnpaid": "{name} came to work, but has no daily pay"
+    }
   },
   "attendanceWorker": {
     "title": "A worker's attendance",

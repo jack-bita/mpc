@@ -30,6 +30,27 @@ export const OWNER: components["schemas"]["WhoIsHere"] = {
   },
 };
 
+/** The owner who may approve the pay too: the approval's own key, on the whole shop (WAGE-3). */
+export const APPROVER: components["schemas"]["WhoIsHere"] = {
+  ...OWNER,
+  permissions: { ...OWNER.permissions, whole_shop: [...KEYS, "pay.approve"] },
+};
+
+export type ToApprove = components["schemas"]["ToApprove"];
+
+/** What an approval waits for and warns of: nothing, unless told otherwise. */
+export function nothingStops(fields: Partial<ToApprove> = {}): ToApprove {
+  return {
+    earlier: null,
+    waiting: [],
+    no_rate: [],
+    still_clocked_in: false,
+    quiet_laptops: [],
+    came_unpaid: [],
+    ...fields,
+  };
+}
+
 /** The sum of some days: Juma's November as Jack drew it, 14 × 10,000 and 2 × 5,000, less 2,000 of fines and 16,000 of
  * meals, unless told otherwise. */
 export function pay(fields: Partial<Pay> = {}): Pay {
