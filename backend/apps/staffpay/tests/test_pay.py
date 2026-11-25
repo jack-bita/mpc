@@ -20,7 +20,17 @@ from decimal import Decimal, localcontext
 
 import pytest
 
-from apps.staffpay.calculations import PAID_AS, DayToPay, PaidAs, PaidDay, Pay, PayLine, pay_day, work_out_pay
+from apps.staffpay.calculations import (
+    PAID_AS,
+    DayToPay,
+    PaidAs,
+    PaidDay,
+    Pay,
+    PayLine,
+    add_up,
+    pay_day,
+    work_out_pay,
+)
 from apps.staffpay.models import AbsenceType, DayStatus
 
 RATE = Decimal("10000.00")
@@ -288,6 +298,14 @@ def test_the_sum_is_exact_whatever_the_thread_rounds_to() -> None:
     # With 4 digits, 31 days of 12,345 would come out as 382,700, not 382,695.
     with localcontext(prec=4):
         assert work_out_pay([a_day(DayStatus.ON_TIME, rate="12345.00")] * 31).total == Decimal("382695.00")
+
+
+def test_adding_up_is_exact_whatever_the_thread_rounds_to() -> None:
+    # Everyone's totals, as Mishahara adds them: with 4 digits, 152,001 and 148,000 would come out as 300,000.
+    with localcontext(prec=4):
+        assert add_up([Decimal("152001.00"), Decimal("148000.00"), Decimal("-1.00")]) == Decimal("300000.00")
+        assert add_up([Decimal("152001.00"), Decimal("148000.00")]) == Decimal("300001.00")
+    assert str(add_up([])) == "0.00"
 
 
 def test_an_advance_below_0_is_refused() -> None:

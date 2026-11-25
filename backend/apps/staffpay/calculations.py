@@ -430,6 +430,14 @@ class PaidDay:
 NO_PAY = Decimal("0.00")
 
 
+def add_up(amounts: Iterable[Decimal]) -> Decimal:
+    """The sum of some amounts of money, 0.00 for none (WAGE-2): the one way the pay adds, its lines, a worker's total
+    and everyone's. Exact, with more digits than any column holds, whatever other code set for this thread, as the
+    shared numbers are (apps/core/numbers.py)."""
+    with localcontext(prec=40):
+        return sum(amounts, NO_PAY)
+
+
 def _paid_as(day: DayToPay) -> PaidAs:
     # The shop was shut: the day is nobody's, whatever was decided on it. A tap on a closed day sent it to a person
     # (ATT-10), who decided it, and the tap was then crossed out, so the day is off again with its decision kept (A2).
@@ -525,8 +533,8 @@ def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY) -> Pay
         # The share as the book kept it (WAGE-7), never split again here: Hela ya chakula and the pay say the same.
         if day.meal_share:
             meals.append(day.meal_share)
-    # Only adding and whole multiples from here: every amount is whole cents already, so nothing is rounded again. With
-    # more digits than any column holds, whatever other code set for this thread, as the shared numbers do.
+    # Only adding and whole multiples from here: every amount is whole cents already, so nothing is rounded again
+    # (add_up says with how many digits).
     with localcontext(prec=40):
         lines = tuple(
             PayLine(kind, number, each, number * each)
@@ -534,8 +542,8 @@ def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY) -> Pay
             for (paid_as, each), number in counts.items()
             if paid_as is kind
         )
-        fined, eaten = sum(fines, NO_PAY), sum(meals, NO_PAY)
-        total = sum((line.amount for line in lines), NO_PAY) - fined - eaten - advances
+        fined, eaten = add_up(fines), add_up(meals)
+        total = add_up(line.amount for line in lines) - fined - eaten - advances
     return Pay(
         lines=lines,
         fined_days=len(fines),

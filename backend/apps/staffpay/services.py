@@ -99,6 +99,7 @@ from apps.staffpay.calculations import (
     MealPart,
     Pay,
     Tap,
+    add_up,
     day_choices,
     meal_part,
     meal_share,
@@ -1669,7 +1670,7 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
         # Up to yesterday, or the end of a month gone by; none on the 1st.
         counted_to=min(last, today - dt.timedelta(days=1)) if first < today else None,
         workers=lines,
-        total=sum((line.total for line in lines), NO_PAY),
+        total=add_up(line.total for line in lines),
         worked=frozenset(day.staff_id for day in working),
     )
 
@@ -1702,7 +1703,7 @@ def _worker_pay(staff: StaffMember, pay: Pay, today: Pay | None) -> WorkerPay:
         left_on=staff.left_on,
         pay=pay,
         today=today,
-        total=pay.total if today is None else pay.total + today.total,
+        total=add_up(part.total for part in (pay, today) if part is not None),
     )
 
 
