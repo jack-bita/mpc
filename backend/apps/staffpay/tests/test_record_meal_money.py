@@ -33,7 +33,7 @@ from apps.core.permissions import Permission, RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import StaffMember
-from apps.people.services import grant_permission, suspend
+from apps.people.services import grant_permission, mark_left, suspend
 from apps.shops.models import Closure, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import MealMoney
@@ -254,6 +254,18 @@ def test_one_suspended_types_and_crosses_out_nothing(shop_a: Shop, asha: StaffMe
     with pytest.raises(PermissionDenied):
         cross_out(row, asha)
     assert rows_of(shop_a) == 1
+
+
+def test_one_who_left_types_and_crosses_out_nothing(shop_a: Shop, asha: StaffMember) -> None:
+    # She left this morning, in a tab still open from before: a job that ended holds no key (X2).
+    row = type_money(asha)
+    with shop_context(shop_a):
+        mark_left(asha, left_on=shop_today(shop_a), by=None, reason="Ameacha kazi")
+    with pytest.raises(PermissionDenied):
+        type_money(asha)
+    with pytest.raises(PermissionDenied):
+        cross_out(row, asha)
+    assert mondays_money(shop_a) == Decimal("5000.00")
 
 
 def test_a_person_of_another_shop_is_a_bug(shop_a: Shop, asha: StaffMember, staff_b: StaffMember) -> None:

@@ -897,7 +897,20 @@ describe("with no network (SYNC-10)", () => {
     await jumaLogsInHere();
 
     expect(screen.queryByRole("link", { name: "Mipangilio yangu" })).toBeNull();
-    // Nor the meal money, which an office page shows (WAGE-7): no server, no key to ask.
+  });
+
+  it("offers no Hela ya chakula in a local session, though the laptop's row gives its key (WAGE-7)", async () => {
+    // An office page, read from the server under the server's own session, which a local one isn't.
+    await aLaptopWithNoNetwork(null);
+    await db().staff.put({
+      ...JUMA_ROW,
+      permissions: { ...JUMA_ROW.permissions, every_side: ["meals.record"] },
+    });
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+
+    // His row is read, as Kompyuta hii, offered by the row, shows; so the key on it is known too.
+    await screen.findByRole("link", { name: "Kompyuta hii" });
     expect(screen.queryByRole("link", { name: "Hela ya chakula" })).toBeNull();
   });
 
