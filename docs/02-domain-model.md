@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.67 · 25 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.68 · 25 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.68** (25 Nov 2026, WAGE-8): §12, a new append-only record, `Advance`, money given to a worker before payday, typed on an office page on the day it is given and taken off that month's pay, in full; until the drawer exists (CASH-2), it is the advance's one home. Whoever holds `money.advance` types one, and nobody their own (Jack: A, A). §3, §5, §16 and §19 name it; §20, item 7, in full is decided (04 v1.201). Marked **(v1.68)**.
 
 **Changes in v1.67** (25 Nov 2026, WAGE-2's review): §12, a daily rate is at most ten million, a technical guard; and the day still running waits at once when one of its taps has no trusted time (04 v1.199). Marked **(v1.67)**.
 
@@ -255,7 +257,7 @@ Shop
 │   └── Job, Exchange, ProductionRun, Transfer, BagOpening   (R2)
 ├── Product ─ SellingUnit ─ Price;  ProductSide;  Batch;  ProductCost
 ├── Contact ─ BalanceEntry* ─ Allocation;  ContactBalance
-├── StaffMember ─ RoleAssignment;  AttendanceEvent*;  PayRate;  Payslip
+├── StaffMember ─ RoleAssignment;  AttendanceEvent*;  PayRate;  Advance*;  Payslip
 └── Device ─ DeviceOutage;  Setting, Flag, AuditEvent, EditEvent, Attachment, ImportJob
 
 * = ledger (append-only)
@@ -345,7 +347,7 @@ A full diagram for GitHub is in Appendix A.
 **What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again. A role or a permission that ended counts nowhere; a record made offline is checked against what its maker held when it was made, by the device's clock, as their status is (X2), so a sale made before a role was taken away, and synced after, breaks no rule **(v1.39)**. A key given after the record counts for it, as only a slow laptop clock could put a record before its key, unless that key had been taken away by then: a sale made between a key's end and its return breaks the rule, whichever role or extra key gives it back **(v1.41)**.
 
 **Permissions** are fixed codes in code (not a table). A new code reaches the shops that already have their roles through a data migration: their Owner gets it, and their Manager unless it is one of the owner's own (03 §5.8) **(v1.10)**, five of them since `meals.record`: the day's final approval, the pay's approval, the shop's rules, who works there, and the meal money **(v1.64)**:
-`sale.write` · `sale.take_payment` · `sale.hand_over` · `sale.bargain` (down to the floor) · `sale.below_floor_approve` · `sale.jumla_switch` · `sale.cancel` · `sale.refund` · `credit.give` · `credit.approve` · `debt.view` · `debt.adjust` · `price.change` · `cost.view` (buying prices, profit) · `product.manage` · `contact.manage` · `stock.receive` (complete a delivery, with its buying prices) · `stock.weigh` (weigh goods as they arrive: any role may have it, and it shows no buying price) **(v1.10)** · `stock.loss` · `stock.count` · `stock.count_approve` · `stock.transfer` · `money.expense` · `money.advance` · `money.withdraw` · `drawer.count` · `drawer.confirm` · `drawer.approve` (approve the day) · `staff.manage` · `attendance.manage` · `meals.record` (type the day's meal money, and cross out a wrong one, on the whole shop) **(v1.64)** · `pay.run` · `pay.approve` · `settings.manage` · `device.manage` · `flag.review` (resolve or dismiss a side's flags) **(v1.8)** · `report.view` · `job.manage` (R2) · `production.run` (R2)
+`sale.write` · `sale.take_payment` · `sale.hand_over` · `sale.bargain` (down to the floor) · `sale.below_floor_approve` · `sale.jumla_switch` · `sale.cancel` · `sale.refund` · `credit.give` · `credit.approve` · `debt.view` · `debt.adjust` · `price.change` · `cost.view` (buying prices, profit) · `product.manage` · `contact.manage` · `stock.receive` (complete a delivery, with its buying prices) · `stock.weigh` (weigh goods as they arrive: any role may have it, and it shows no buying price) **(v1.10)** · `stock.loss` · `stock.count` · `stock.count_approve` · `stock.transfer` · `money.expense` · `money.advance` (type an advance, and cross out a wrong one, on the whole shop, never one's own) **(v1.68)** · `money.withdraw` · `drawer.count` · `drawer.confirm` · `drawer.approve` (approve the day) · `staff.manage` · `attendance.manage` · `meals.record` (type the day's meal money, and cross out a wrong one, on the whole shop) **(v1.64)** · `pay.run` · `pay.approve` · `settings.manage` · `device.manage` · `flag.review` (resolve or dismiss a side's flags) **(v1.8)** · `report.view` · `job.manage` (R2) · `production.run` (R2)
 
 **Approval** [R1] ✚ → Shop — a permitted person says yes on the spot.
 - `action`, `subject`, `requested_by`, `approved_by`, `method`: `pin_here` (they type their PIN on the same device; works offline) | [Later] `remote`; `note`
@@ -622,7 +624,13 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 **Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, meal shares **(v1.29)**, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own.
 - **Leaving mid-month** **(v1.29)**: a worker who leaves gets their payslip up to `left_on`, approved and paid on its own, before the month's run: the owner reads it and pays, with nothing to count by hand (Jack, 15 Nov 2026). The month's run then holds it as paid.
 
-Advances come from `MoneyMovement` `staff_advance` and are deducted in the next pay run *(default: in full)*.
+**Advance** **(v1.68)** → StaffMember — money given to a worker before payday, whether called mid-month money or asked of the owner (Jack, WAGE-1). Juma asks for 20,000 on 10 Nov: it comes off Juma's November pay.
+- `staff` (the job), `date`, `amount` (positive), `note`; who typed it is the row's `created_by` (§1). Typed on the day it is given, so the pay so far is right every day.
+- Typed by whoever holds `money.advance`, the owner and the managers (Jack: A), on an office page, with the internet; never offline, and never on a laptop's own copy (03 §6.1). Nobody types or crosses out their own, by the person, not the job (Jack: A).
+- Of today or an earlier day, Sundays too, within the job's first and last day; only for a worker with a daily pay rate, as the owner taking money is a `withdrawal` (§10). Whole shillings, at most ten million, a slip of the zeros past it.
+- Comes off the month of its own day, in full; today's too. One bigger than the pay leaves a total below 0: the money was given, so the system says so.
+- Append-only, as money is (T2): a wrong one is voided (who, when, why) and typed again; nothing else on it ever changes. Locked, like its days, once their pay run is approved (WAGE-3).
+- Once the drawer exists (CASH-2), money given from it is a `MoneyMovement` `staff_advance`, which takes the place of the one typed by hand, never both (WAGE-6).
 
 ## 13. Control — module `control`
 
@@ -709,7 +717,7 @@ These become database constraints and automated tests.
 
 **Tenancy and history**
 - **T1** Every record (except `User`, `Unit`, the `Shop` itself **(v1.3)** and a `PairingRequest` **(v1.11)**) has a shop, and only points at records of the same shop.
-- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)**, the offline periods devices report **(v1.22)** and meal money **(v1.29)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements, meal money **(v1.29)** and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
+- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)**, the offline periods devices report **(v1.22)**, meal money **(v1.29)** and advances **(v1.68)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements, meal money **(v1.29)**, advances **(v1.68)** and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
 - **T3** Nothing is deleted: cancel, void, suspend, archive — always with who, when and why.
 - **T4** Copied values (price, floor, factor, cost, rate, rules, formula version) never change once the record is confirmed.
 
@@ -799,7 +807,7 @@ Opening count 20 bags +1,000 · sell 3 bags −150 · sell 12.5 kg −12.5 · de
 | sales | Sale, SaleLine, PaymentAllocation, Return, PrintLog | | Bill, phone orders, handover per line | online orders, proforma |
 | money | Payment, DrawerSession, MoneyMovement | salary payments | side transfers, supplier credit payments | statement matching |
 | services | | | Formula, FormulaVersion, Job, Exchange | machines |
-| staffpay | | AttendanceEvent, AttendanceDay, PayRate, MealMoney **(v1.29)**, PayRun, Payslip | | |
+| staffpay | | AttendanceEvent, AttendanceDay, PayRate, MealMoney **(v1.29)**, Advance **(v1.68)**, PayRun, Payslip | | |
 | control | Flag, AuditEvent, EditEvent **(v1.9)**, Attachment, ImportJob | | Notification | message log |
 
 ## 20. Parking lot
@@ -812,7 +820,7 @@ Small items, each with a default or a setting. Settled while building; most need
 4. Machine charge per kg: kg brought in *(default)*, or kg out.
 5. Exchange rate (kg out per kg in): one rate, or one per product.
 6. Attendance: when late becomes a half day, leaving early, a missing clock-out *(default: needs review)*, Sundays and holidays (spec §14). Settled by the owner, 16 Nov 2026: §12, the day's rules; a missing clock-out needs review **(v1.32)**.
-7. Advances: deducted in full next month *(default)*, or in parts.
+7. Advances: deducted in full *(default)*, or in parts. Built in full, off the month of their own day (WAGE-8) **(v1.68)**.
 8. Inter-side money: cash handed over at day close, or only shown in the report.
 9. Loaders confirming handover on a device (R2), or not.
 10. Return time limit *(default: none)*.
