@@ -47,8 +47,16 @@ from apps.staffpay.models import (
     MealMoney,
     PayRate,
 )
-from apps.staffpay.selectors import rates_between
-from apps.staffpay.services.book import SUNDAY, month_span, ran_on, who_shares, work_out_days
+from apps.staffpay.selectors import is_closed, rates_between
+from apps.staffpay.services.book import (
+    SUNDAY,
+    lock_jobs,
+    month_span,
+    ran_on,
+    refuse_if_closed,
+    who_shares,
+    work_out_days,
+)
 
 
 def set_pay_rate(
@@ -67,7 +75,8 @@ def set_pay_rate(
     the row (ADR-0007), if it made one. `by`: who sets it, under the PIN's rule and with settings.manage on the whole
     shop; None for the system or the superuser. Refuses, all together, each beside its box: an amount of 0 or less, or
     with cents (pay_rate.amount_invalid), or over ten million (pay_rate.amount_too_big); a day before the job's first
-    (pay_rate.before_first_day); and on the demo, a person's note (demo.no_note). Returns the rate as saved."""
+    (pay_rate.before_first_day), or one whose pay is approved (pay.day_approved); and on the demo, a person's note
+    (demo.no_note). Returns the rate as saved."""
     # Spaces around a note say nothing, and "  " is no note.
     note = note.strip()
     # One transaction: the lock below holds until the rate is saved, so who may is asked of the jobs as they are when it
@@ -105,11 +114,16 @@ def set_pay_rate(
             ]
         # Any day of the job, gone by or to come: Juma started on 10 Nov and Baba types his rate on the 19th, from the
         # 10th, so those days are paid. Never before the job's first day, read under the lock: a day before it is not a
-        # day of this job to pay. A day in an approved month is WAGE-3's to refuse, once pay runs exist.
+        # day of this job to pay.
         if effective_from < staff.started_on:
             errors["effective_from"] = [
                 ValidationError("A rate can't start before the worker's first day.", code="pay_rate.before_first_day")
             ]
+        # Nor from a day whose pay is approved (WAGE-3, A3), the shop's or this worker's alone: those days were paid at
+        # the rate there was, so a raise starts after them, from the next open month. Under the lock on the job, one of
+        # those the approval takes.
+        elif is_closed(Shop.objects.get(pk=staff.shop_id), effective_from, staff.pk):
+            errors["effective_from"] = [ValidationError("The pay of this day is approved.", code="pay.day_approved")]
         # On the demo every visitor logs in as Meneja (OPS-3): a note would show to every visitor after them, signed by
         # the shared manager, until the morning's seed, so a person's note isn't kept, as for a rule (demo.no_note,
         # set_setting). The seed's people are already refused above (demo.people_fixed); a worker a visitor added can
@@ -150,21 +164,22 @@ def record_meal_money(
     client's (ADR-0007), so the route answers a request sent twice with the row it made (CreateOnceMixin). `by`: who
     types it, with meals.record on the whole shop. Refuses, all together, each beside its box: an amount of 0 or less,
     or with cents (meal_money.amount_invalid), or over ten million (meal_money.amount_too_big); a day to come
-    (meal_money.in_future), a Sunday, or a day attendance was off (meal_money.not_working_day); and on the demo, a note
-    (demo.no_note). Returns the row as saved."""
+    (meal_money.in_future), a Sunday, or a day attendance was off (meal_money.not_working_day), or one whose pay is
+    approved (pay.day_approved); and on the demo, a note (demo.no_note). Returns the row as saved."""
     # A job of another shop typing into this shop's money is a bug in the calling code (T1), never a person's mistake:
     # the route finds both in the one shop open. A server error, before anything is read.
     if by.shop_id != shop.pk:
         raise ShopMismatch("record_meal_money was given a person of another shop.")
     # Spaces around a note say nothing, and "  " is no note.
     note = note.strip()
-    # Not a recording_changes block: meal money writes no line in the change log, as no laptop gets one (03 §6.1). No
-    # lock either: the book reads the money inside its own lock each time a day is asked for (_share_meals), so money
-    # typed beside a run of it is in the next. WAGE-3 takes one, once an approved month refuses new money.
+    # Not a recording_changes block: meal money writes no line in the change log, as no laptop gets one (03 §6.1).
     with transaction.atomic():
         # First, so someone without it sets nothing to work; read afresh, so a key taken away a moment ago counts. On
         # the whole shop, as the workers of both sides eat together.
         require(by, Permission.MEALS_RECORD, None)
+        # The book's lock, which the approval of a month takes (WAGE-3): money typed while Baba approves November waits,
+        # and then finds it approved. Every job, as the money is split among whoever came.
+        lock_jobs(shop)
         # The boxes, all together, so a person who got two wrong sees both at once, each beside its own (ADR-0040).
         errors: dict[str, list[ValidationError]] = {}
         # As the table's rules hold: named here, beside the amount's box, where the table's own would name the whole
@@ -182,6 +197,10 @@ def record_meal_money(
             # A day the book answers for nobody: money typed there would be shared by nobody, a slip of the date. A
             # closed day takes it: breakfast was cooked the morning of a funeral, and each day that came is decided.
             errors["date"] = [ValidationError("Only a working day has meal money.", code="meal_money.not_working_day")]
+        elif is_closed(shop, date):
+            # Every worker's share of that day is paid (A3). One who left and was approved alone locks nothing here: the
+            # others' shares still move, and theirs stays as they paid it (book.py).
+            errors["date"] = [ValidationError("The pay of this day is approved.", code="pay.day_approved")]
         # On the demo every visitor logs in as Meneja (OPS-3): a note would show to every visitor after them, signed by
         # the shared manager, until the morning's seed, so it isn't kept, as for a rule (demo.no_note, set_setting).
         if settings.DEMO_SEED and note:
@@ -201,8 +220,9 @@ def void_meal_money(money: MealMoney, *, reason: str, by: StaffMember) -> MealMo
     voided once with who, when and why, and counts for nothing; the right amount is typed again. Never brought back.
     `by`: who crosses it out, with meals.record on the whole shop, whoever typed it. A row crossed out already, by this
     request sent twice or by someone a moment before, is answered as it was crossed out, never stamped again (CORE-3's
-    Watch out). Refuses, beside the reason's box: no reason (meal_money.reason_missing), or on the demo a reason not the
-    ready one (demo.ready_reasons). Returns the row as saved."""
+    Watch out). Refuses a row of a day whose pay is approved (pay.day_approved); and, beside the reason's box, no reason
+    (meal_money.reason_missing), or on the demo a reason not the ready one (demo.ready_reasons). Returns the row as
+    saved."""
     # Who voids is a staff member of the row's own shop (T1): the void rule in the database checks only that the stamp
     # is filled whole, so this is the check it can't make with one column.
     if by.shop_id != money.shop_id:
@@ -210,6 +230,11 @@ def void_meal_money(money: MealMoney, *, reason: str, by: StaffMember) -> MealMo
     reason = reason.strip()
     with transaction.atomic():
         require(by, Permission.MEALS_RECORD, None)
+        shop = Shop.objects.get(pk=money.shop_id)
+        lock_jobs(shop)
+        # Read afresh under the lock: one crossed out already is answered as it is, whatever was approved since.
+        if MealMoney.objects.get(pk=money.pk).voided_at is None:
+            refuse_if_closed(shop, money.date)
         if not reason:
             raise ValidationError(
                 {"reason": [ValidationError("Money crossed out says why.", code="meal_money.reason_missing")]}
@@ -390,25 +415,25 @@ def record_advance(
     (ADR-0007), so the route answers a request sent twice with the row it made (CreateOnceMixin). `by`: who types it,
     with money.advance on the whole shop, and never the worker themself. Refuses: one's own (advance.own); and, all
     together, each beside its box, a worker with no daily pay (advance.not_paid_by_day); an amount of 0 or less, or with
-    cents (advance.amount_invalid), or over ten million (advance.amount_too_big); a day to come (advance.in_future), or
-    one outside the job's days (advance.outside_job); and on the demo, a note (demo.no_note). Returns the row as
-    saved."""
+    cents (advance.amount_invalid), or over ten million (advance.amount_too_big); a day to come (advance.in_future), one
+    outside the job's days (advance.outside_job), or one whose pay is approved (pay.day_approved); and on the demo, a
+    note (demo.no_note). Returns the row as saved."""
     # A job of another shop typing this shop's money is a bug in the calling code (T1), never a person's mistake: the
     # route finds both in the one shop open. A server error, before anything is read.
     if by.shop_id != staff.shop_id:
         raise ShopMismatch("record_advance was given a person of another shop.")
     # Spaces around a note say nothing, and "  " is no note.
     note = note.strip()
-    # Not a recording_changes block: an advance writes no line in the change log, as no laptop gets one (03 §6.1). No
-    # lock either: the pay reads the advances each time it is asked (pay_month), so one typed beside a read of it is in
-    # the next. WAGE-3 takes one, once an approved month refuses new ones.
+    # Not a recording_changes block: an advance writes no line in the change log, as no laptop gets one (03 §6.1).
     with transaction.atomic():
         # First, so someone without it sets nothing to work; read afresh, so a key taken away a moment ago counts. On
         # the whole shop, as a worker and their pay belong to it.
         require(by, Permission.MONEY_ADVANCE, None)
         # The job as it is now: its first or last day may have just moved (PPL-10). An advance may be of a day gone by,
         # so a worker who left still takes one for a day they worked: a forgotten one, or their last pay would be wrong.
-        staff = StaffMember.objects.get(pk=staff.pk)
+        # Locked, as the approval of a month locks every job (WAGE-3): one typed while Baba approves November waits, and
+        # then finds it approved. FOR NO KEY UPDATE, the light lock (backend rules).
+        staff = StaffMember.objects.select_for_update(no_key=True).get(pk=staff.pk)
         # Never one's own (Jack: A), as nobody sets their own rate or decides their own day: a manager alone in the shop
         # would give themself its money on their own word. By the person, not the job: someone hired again (PPL-11) has
         # two jobs, and neither's is theirs to type.
@@ -427,7 +452,8 @@ def record_advance(
             errors["amount"] = [ValidationError("An advance is a whole amount above 0.", code="advance.amount_invalid")]
         elif amount > MOST_ADVANCE:
             errors["amount"] = [ValidationError("An advance is at most ten million.", code="advance.amount_too_big")]
-        if date > shop_today(Shop.objects.get(pk=staff.shop_id)):
+        shop = Shop.objects.get(pk=staff.shop_id)
+        if date > shop_today(shop):
             # Tomorrow's isn't given yet, so it is a wrong date. A Sunday's is taken, and a closed day's: money is asked
             # for on any day, and nothing is shared or worked on it.
             errors["date"] = [ValidationError("An advance is never of a day to come.", code="advance.in_future")]
@@ -437,6 +463,10 @@ def record_advance(
             errors["date"] = [
                 ValidationError("An advance is of a day the worker had this job.", code="advance.outside_job")
             ]
+        elif is_closed(shop, date, staff.pk):
+            # Their pay of that day's month is final (A3): this money would come off nothing. Given after it, it is of
+            # the day it is given, and comes off the month that still runs.
+            errors["date"] = [ValidationError("The pay of this day is approved.", code="pay.day_approved")]
         # On the demo every visitor logs in as Meneja (OPS-3): a note would show to every visitor after them, signed by
         # the shared manager, until the morning's seed, so it isn't kept, as for a rule (demo.no_note, set_setting).
         if settings.DEMO_SEED and note:
@@ -458,9 +488,9 @@ def void_advance(advance: Advance, *, reason: str, by: StaffMember) -> Advance:
     voided once with who, when and why, and counts for nothing; the right amount is typed again. Never brought back.
     `by`: who crosses it out, with money.advance on the whole shop, whoever typed it, and never the worker it was given
     to. A row crossed out already, by this request sent twice or by someone a moment before, is answered as it was
-    crossed out, never stamped again (CORE-3's Watch out). Refuses: one's own (advance.own); and, beside the reason's
-    box, no reason (advance.reason_missing), or on the demo a reason not the ready one (demo.ready_reasons). Returns the
-    row as saved."""
+    crossed out, never stamped again (CORE-3's Watch out). Refuses: one's own (advance.own); one of a day whose pay is
+    approved (pay.day_approved); and, beside the reason's box, no reason (advance.reason_missing), or on the demo a
+    reason not the ready one (demo.ready_reasons). Returns the row as saved."""
     # Who voids is a staff member of the row's own shop (T1): the void rule in the database checks only that the stamp
     # is filled whole, so this is the check it can't make with one column.
     if by.shop_id != advance.shop_id:
@@ -469,9 +499,12 @@ def void_advance(advance: Advance, *, reason: str, by: StaffMember) -> Advance:
     with transaction.atomic():
         require(by, Permission.MONEY_ADVANCE, None)
         # Never one's own (Jack: A): crossing it out would pay the money twice, so a worker never erases what they took.
-        # By the person, as typing one is.
-        if StaffMember.objects.get(pk=advance.staff_id).user_id == by.user_id:
+        # By the person, as typing one is. Their job locked, as typing one locks it.
+        if StaffMember.objects.select_for_update(no_key=True).get(pk=advance.staff_id).user_id == by.user_id:
             raise ValidationError("Nobody crosses out their own advance.", code="advance.own")
+        # Read afresh under the lock: one crossed out already is answered as it is, whatever was approved since.
+        if Advance.objects.get(pk=advance.pk).voided_at is None:
+            refuse_if_closed(Shop.objects.get(pk=advance.shop_id), advance.date, advance.staff_id)
         if not reason:
             raise ValidationError(
                 {"reason": [ValidationError("An advance crossed out says why.", code="advance.reason_missing")]}

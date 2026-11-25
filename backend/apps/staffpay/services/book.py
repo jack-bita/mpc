@@ -39,6 +39,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
 
@@ -62,7 +63,13 @@ from apps.staffpay.calculations import (
     work_out_day,
 )
 from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, PayRate, ReviewReason, TimeCheck
-from apps.staffpay.selectors import day_rules_between, meal_money_by_date, rates_between, rules_as_text
+from apps.staffpay.selectors import (
+    day_rules_between,
+    is_closed,
+    meal_money_by_date,
+    rates_between,
+    rules_as_text,
+)
 
 # Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
 # the owner and the worker, outside the system (01 §8.1), so a shop has no setting for it.
@@ -152,6 +159,14 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         # one (T1).
         with acting_as(_TheBook(shop.pk), device=None):
             return _keep(answered, kept)
+
+
+def refuse_if_closed(shop: Shop, day: dt.date, job: uuid.UUID | None = None) -> None:
+    """Refuse to change what an approved month's pay was made of (is_closed, WAGE-3, A3): pay.day_approved. A mistake
+    found after the approval is an adjustment in a later month (WAGE-9). Called once the lock is held, so an approval
+    and the change never both go through."""
+    if is_closed(shop, day, job):
+        raise ValidationError("The pay of this day is approved.", code="pay.day_approved")
 
 
 def lock_jobs(shop: Shop) -> list[StaffMember]:

@@ -24,6 +24,10 @@ And what each job was given before payday over a span (advances_between, WAGE-8)
 And the laptops that have sent nothing since a moment (quiet_laptops, WAGE-3), as taps of the month may still be inside:
 
     Laptop ya Vyakula, last sent on 28 Nov, asked on 1 Dec of November's end
+
+And whether the pay of a day is approved (is_closed, WAGE-3), so nothing it is made of may change any more:
+
+    November approved:   30 Nov and every day before it, for everyone        Neema approved alone: her days alone
 """
 
 import uuid
@@ -53,7 +57,7 @@ from apps.people.models import Device, DeviceStatus
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_settings_between
 from apps.staffpay.calculations import DayRules
-from apps.staffpay.models import Advance, MealMoney, PayRate
+from apps.staffpay.models import Advance, MealMoney, PayRate, PayRun, Payslip
 
 # Each part of a day's rules, by its name in DayRules, and the setting it is read from: one list, so the rules read and
 # the copy a day keeps always name the same nine, and a rule added to DayRules without its setting fails at once
@@ -215,6 +219,25 @@ def advances_between(shop: Shop, first: date, last: date) -> dict[uuid.UUID, Dec
         .annotate(total=Sum("amount"))
         .values_list("staff_id", "total")
     )
+
+
+def is_closed(shop: Shop, day: date, job: uuid.UUID | None = None) -> bool:
+    """Whether the pay of `day` is approved (WAGE-3, A3), so nothing it is made of may be added, decided or crossed out
+    any more: its month is approved, or a later one, as months are approved in order, so whatever an earlier month holds
+    would be on nobody's pay; or, for a job, its own pay up to then is, approved alone as it left. With no job: the
+    shop's own, its meal money, which one worker approved alone doesn't lock. Asked under the lock the approval takes
+    (lock_jobs), or the job's own row: before it, an approval a moment later would not be seen."""
+    # The same checks as the other reads', for the same reasons (ADR-0022): asked inside another shop's visit, the guard
+    # would hide the approval, and a closed month would take a change without a word.
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("is_closed was given a shop that is not the one open.")
+    if isinstance(day, datetime):
+        raise TypeError("is_closed needs the shop's business date, not a datetime.")
+    month = day.replace(day=1)
+    if PayRun.objects.filter(shop=shop, month__gte=month).exists():
+        return True
+    return job is not None and Payslip.objects.filter(shop=shop, staff_id=job, month__gte=month).exists()
 
 
 @dataclass(frozen=True)

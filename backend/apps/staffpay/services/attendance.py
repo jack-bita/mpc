@@ -62,7 +62,7 @@ from apps.staffpay.models import (
     ReviewReason,
     TimeCheck,
 )
-from apps.staffpay.selectors import rates_between, rules_from_text
+from apps.staffpay.selectors import is_closed, rates_between, rules_from_text
 from apps.staffpay.services.book import (
     SUNDAY,
     doubt_of,
@@ -70,6 +70,7 @@ from apps.staffpay.services.book import (
     falls_between,
     month_span,
     ran_on,
+    refuse_if_closed,
     where_it_falls,
     work_out_days,
 )
@@ -268,8 +269,9 @@ class WorkerDay:
     first_out: dt.time | None
     # A person's decision on the day, or None (ATT-6), shown beside what the book said, which stays (A2).
     decision: DayDecision | None
-    # What the day may be decided as, each with its fine (day_choices), in the sheet's order: none on an off day, or
-    # when the month is the viewer's own, as nobody decides their own day (Jack, ATT-6).
+    # What the day may be decided as, each with its fine (day_choices), in the sheet's order: none on an off day, on one
+    # whose pay is approved (WAGE-3), or when the month is the viewer's own, as nobody decides their own day (Jack,
+    # ATT-6).
     choices: list[DayOption]
     # Whether a tap of the day was added, arrived from a laptop, or was crossed out after the day was decided (Jack: A,
     # ATT-13): the decision stays, as the book never writes over one, and the day says its taps changed since, for
@@ -321,6 +323,8 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
     # Never one's own day (Jack, ATT-6): by the person, as decide_day asks it, so a person hired again (PPL-11) can't
     # decide the days of either of their jobs.
     yours = viewer is not None and viewer.user_id == job.user_id
+    # Whether the month's pay is approved, with everyone's or theirs alone (WAGE-3): then nothing of it may change.
+    closed = is_closed(shop, first, job.pk)
     # Who decided, by nickname, in one read for the whole month, never one per day.
     deciders = dict(
         StaffMember.objects.filter(pk__in={day.decided_by_id for day in days if day.decided_by_id}).values_list(
@@ -373,8 +377,11 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
                 first_in=day.first_in,
                 first_out=day.first_out,
                 decision=decision_of(day, deciders),
+                # None on a day whose pay is approved either (WAGE-3): it takes no decision, and its copy of the rules,
+                # which its choices' fines are read from, is never read again, so a rule added years from now, missing
+                # from that copy, stops no page from opening (ATT-6's review).
                 choices=[]
-                if yours or day.status == DayStatus.OFF
+                if yours or day.status == DayStatus.OFF or closed
                 else [
                     DayOption(choice=choice, fine=fine)
                     for choice, fine in day_choices(
@@ -518,10 +525,10 @@ def decide_day(
     its fine (day_choices, from the day's first Ingia and its own rules, T4), who, when and why. `replaces`: when the
     decision the person saw was made, or None if they saw none. `by`: who decides, with attendance.manage on the whole
     shop, and never the day's own worker. The same decision sent again by its maker, its first answer lost, is answered
-    as done. Refuses: one's own day (day.own); a day that isn't a working day gone by (day.not_working_day); someone
-    else decided it since (VersionConflict, 409); and, all together, each beside its
-    box, a choice the day can't take (day.choice_not_offered), no reason (day.reason_missing), or on the demo a reason
-    not one of the ready ones (demo.ready_reasons). Returns the day as saved."""
+    as done. Refuses: one's own day (day.own); a day that isn't a working day gone by (day.not_working_day); a day whose
+    pay is approved (pay.day_approved); someone else decided it since (VersionConflict, 409); and, all together, each
+    beside its box, a choice the day can't take (day.choice_not_offered), no reason (day.reason_missing), or on the demo
+    a reason not one of the ready ones (demo.ready_reasons). Returns the day as saved."""
     # A job of another shop deciding this shop's day is a bug in the calling code (T1), never a person's mistake: the
     # route finds the day and the person in the one shop open. A server error, before anything is read.
     if by.shop_id != day.shop_id:
@@ -543,7 +550,8 @@ def decide_day(
         # decision waits a moment for a manager opening the month, and the book for the decision; and both take the
         # jobs, then the days, in one order, so neither ever holds what the other waits for (a deadlock). Worked out
         # afresh too, so the fine below reads the day's first Ingia as it is now, a tap that came late included.
-        answered = work_out_days(Shop.objects.get(pk=day.shop_id), day.date, day.date)
+        shop = Shop.objects.get(pk=day.shop_id)
+        answered = work_out_days(shop, day.date, day.date)
         if not any(each.pk == day.pk for each in answered):
             raise ValidationError("Only a working day that is over can be decided.", code="day.not_working_day")
         # Then the day, with the light lock: two decisions on it at once take turns here (FOR NO KEY UPDATE, backend
@@ -570,6 +578,10 @@ def decide_day(
             reason,
         ):
             return day
+        # Its pay is approved (WAGE-3, A3): what the day was is final, and the mend is an adjustment in a later month.
+        # Under the book's lock, which the approval takes too, so the two never cross. After the answer above, as a
+        # decision made before the approval was made all the same.
+        refuse_if_closed(shop, day.date, day.staff_id)
         # Two managers on the same day at once: the second decided on a page that showed no decision, or an older one,
         # so theirs would write over a decision they never saw. Refused as an edit on an old copy is (409), so the page
         # reads the day again and shows them what was decided.
@@ -626,8 +638,9 @@ def add_tap(
     it the next time it works the day out. `tap_id`: the client's (ADR-0007), so the route answers a request sent twice
     with the tap it made (CreateOnceMixin). `by`: who adds it, with attendance.manage on the whole shop, never for
     themselves. Refuses: one's own tap (tap.own); a Sunday, a day outside the job's, or one attendance was off
-    (tap.not_working_day); and, all together, each beside its box, a minute still to come (tap.in_future), no reason
-    (tap.reason_missing), or on the demo a reason not the ready one (demo.ready_reasons). Returns the tap as saved."""
+    (tap.not_working_day); a day whose pay is approved (pay.day_approved); and, all together, each beside its box, a
+    minute still to come (tap.in_future), no reason (tap.reason_missing), or on the demo a reason not the ready one
+    (demo.ready_reasons). Returns the tap as saved."""
     # A job of another shop adding to this shop's book is a bug in the calling code (T1), never a person's mistake: the
     # route finds the worker and the person in the one shop open. A server error, before anything is read.
     if by.shop_id != staff.shop_id:
@@ -646,6 +659,9 @@ def add_tap(
         # off, so a tap there would be kept and count nothing (ATT-13's review).
         if date.weekday() == SUNDAY or not ran_on(job, date) or not get_setting(ATTENDANCE_ON, shop, on=date):
             raise ValidationError("Only a working day of the job takes a tap.", code="tap.not_working_day")
+        # A day already paid, or not, for good (WAGE-3, A3): a tap there would be kept and move nothing. Under the job's
+        # lock, one of those the approval takes.
+        refuse_if_closed(shop, date, job.pk)
         # A worker suspended or gone takes one too, and it counts (Jack: A, ATT-13's review): a laptop's tap let through
         # while a worker is suspended sends its day to review (X2, the push's flag), as nobody chose it; this one a
         # manager adds on purpose, with their name and why on it, so it counts as their word. Refusing it would also
@@ -692,7 +708,8 @@ def void_tap(tap: AttendanceEvent, *, reason: str, by: StaffMember) -> Attendanc
     (A2). Never brought back: a mistake is mended by adding a tap (add_tap). An added tap is crossed out like any other.
     `by`: who crosses it out, with attendance.manage on the whole shop, never on their own tap. A tap crossed out
     already, by this request sent twice or by someone a moment before, is answered as it was crossed out, never stamped
-    again (CORE-3's Watch out). Refuses: one's own tap (tap.own); no reason (tap.reason_missing), or on the demo a
+    again (CORE-3's Watch out). Refuses: one's own tap (tap.own); a tap of a day whose pay is approved
+    (pay.day_approved); no reason (tap.reason_missing), or on the demo a
     reason not the ready one (demo.ready_reasons), beside the reason's box. Returns the tap as saved."""
     # Who voids is a staff member of the tap's own shop (T1): the void rule in the database checks only that the stamp
     # is filled whole, so this is the check it can't make with one column (v1.58). Another shop's person here is a bug
@@ -702,6 +719,13 @@ def void_tap(tap: AttendanceEvent, *, reason: str, by: StaffMember) -> Attendanc
     reason = reason.strip()
     with recording_changes(tap.shop_id):
         _ready_to_fix(tap.staff_id, by)
+        # Read afresh under the lock: one crossed out already is answered as it is, whatever was approved since.
+        tap = AttendanceEvent.objects.get(pk=tap.pk)
+        if tap.voided_at is None:
+            # The tap's day, as the book places it (WAGE-3, A3): one paid for good takes no fix.
+            shop = Shop.objects.get(pk=tap.shop_id)
+            day, _ = where_it_falls(tap.trusted_time, tap.client_time, ZoneInfo(shop.timezone))
+            refuse_if_closed(shop, day, tap.staff_id)
         if not reason:
             raise ValidationError(
                 {"reason": [ValidationError("A tap crossed out says why.", code="tap.reason_missing")]}
