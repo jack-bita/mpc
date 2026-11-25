@@ -16,6 +16,10 @@ And each worker's pay rate on each day of a span (rates_between, WAGE-1), read t
 And each date's meal money (meal_money_by_date, WAGE-7), the sum of what was typed for it and not crossed out:
 
     23 Nov  5,000 + 3,000, and 30,000 crossed out      so 23 Nov: 8,000
+
+And what each job was given before payday over a span (advances_between, WAGE-8), the same way:
+
+    Juma  10 Nov 20,000   16 Nov 30,000, and 300,000 crossed out      so November: 50,000
 """
 
 import uuid
@@ -43,7 +47,7 @@ from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_settings_between
 from apps.staffpay.calculations import DayRules
-from apps.staffpay.models import MealMoney, PayRate
+from apps.staffpay.models import Advance, MealMoney, PayRate
 
 # Each part of a day's rules, by its name in DayRules, and the setting it is read from: one list, so the rules read and
 # the copy a day keeps always name the same nine, and a rule added to DayRules without its setting fails at once
@@ -164,4 +168,25 @@ def meal_money_by_date(shop: Shop, first: date, last: date) -> dict[date, Decima
         .values("date")
         .annotate(total=Sum("amount"))
         .values_list("date", "total")
+    )
+
+
+def advances_between(shop: Shop, first: date, last: date) -> dict[uuid.UUID, Decimal]:
+    """What each job was given before payday from `first` to `last`, both counted: {job id: the sum of its advances not
+    voided} (WAGE-8, 02 §12). A job given none, or whose every one is crossed out, has no key. One read for the span,
+    for every job of the shop, as the pay of a month asks it (pay_month)."""
+    # The same checks as the rates', for the same reasons (ADR-0022): asked inside another shop's visit, the guard would
+    # hide every row, and everyone would be paid money they already have, without a word.
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("advances_between was given a shop that is not the one open.")
+    if isinstance(first, datetime) or isinstance(last, datetime):
+        raise TypeError("advances_between needs the shop's business dates, not datetimes.")
+    # Added up by the database, exactly, as the meal money is (meal_money_by_date).
+    return dict(
+        Advance.objects.filter(shop=shop, date__range=(first, last), voided_at__isnull=True)
+        .order_by()
+        .values("staff_id")
+        .annotate(total=Sum("amount"))
+        .values_list("staff_id", "total")
     )

@@ -64,12 +64,25 @@ from apps.people.services import add_worker, end_permission, mark_left, suspend
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, Side
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
-from apps.staffpay.models import AttendanceEvent, DayStatus, MealMoney, NoPhoto, PayRate, ReviewReason, TimeCheck
+from apps.staffpay.models import (
+    Advance,
+    AttendanceEvent,
+    DayStatus,
+    MealMoney,
+    NoPhoto,
+    PayRate,
+    ReviewReason,
+    TimeCheck,
+)
 from apps.staffpay.services import (
+    advances_month,
     attendance_month,
     meal_money_days,
+    pay_month,
+    record_advance,
     record_meal_money,
     set_pay_rate,
+    void_advance,
     void_meal_money,
     work_out_days,
 )
@@ -150,12 +163,17 @@ def what_the_shop_holds() -> dict[str, Any]:
         )
         # The meal money (WAGE-7): which days, how much, and who typed it.
         meals = sorted(MealMoney.objects.values_list("date", "amount", "created_by__display_name"))
+        # The money given before payday (WAGE-8): to whom, when, how much, and who typed it.
+        advances = sorted(
+            Advance.objects.values_list("staff__display_name", "date", "amount", "created_by__display_name", "note")
+        )
     return {
         "shop": (shop.name, shop.code, shop.kind),
         "sides": side_list,
         "people": people,
         "taps": taps,
         "meals": meals,
+        "advances": advances,
     }
 
 
@@ -256,6 +274,12 @@ def test_seed_demo_is_repeatable(three_weeks: None) -> None:
     meals = first.pop("meals")
     assert len(meals) == len({day for day, _amount, _by in meals}) == 17
     assert {(str(amount), by) for _day, amount, by in meals} == {("3000.00", "Meneja")}
+    # The two advances, typed by Meneja, with no note, as none is kept on the demo (WAGE-8).
+    advances = first.pop("advances")
+    assert [(name, str(amount), by, note) for name, _day, amount, by, note in advances] == [
+        ("Asha", "20000.00", "Meneja", ""),
+        ("Baraka", "30000.00", "Meneja", ""),
+    ]
     assert first == {
         "shop": ("Duka la Mfano", "DEMO", ShopKind.DEMO),
         "sides": [("D", "Dawa"), ("F", "Vyakula")],
@@ -921,6 +945,68 @@ def test_seed_demo_keeps_todays_shop_whose_meal_money_a_visitor_changed(three_we
             void_meal_money(row, reason="wrong_amount", by=meneja)
         forgotten = services._working_days_back(shop_today(made))[services.FORGOTTEN_MEALS_BACK - 1]
         record_meal_money(made, money_id=uuid.uuid7(), date=forgotten, amount=Decimal("2500"), by=meneja)
+
+    assert seed_demo() == Seeded.KEPT
+    assert the_demo_shop() == made
+
+
+def test_seed_demo_gives_two_advances(three_weeks: None) -> None:
+    # WAGE-8's box, as Advansi and the pay read them: Baraka's 30,000 of the latest working day, and Asha's 20,000 of
+    # the eighth, each in the month of its own day, and off that month's pay. None of today, which waits for a visitor;
+    # and both within the three weeks, on days their jobs had.
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        today = shop_today(shop)
+        back = services._working_days_back(today)
+        meneja, asha, baraka = (StaffMember.objects.get(display_name=name) for name in ("Meneja", "Asha", "Baraka"))
+        # Meneja may type one, by his own role, so a visitor can; the sellers may not.
+        assert "money.advance" in effective_permissions(meneja, None)
+        assert "money.advance" not in effective_permissions(asha, None)
+        months = {day.replace(day=1) for day in back}
+        rows = [row for month in months for row in advances_month(shop, month, viewer=meneja).rows]
+        given = {month: advances_month(shop, month, viewer=meneja).total for month in months}
+        taken = {
+            month: sum((worker.pay.advances for worker in pay_month(shop, month).workers), Decimal("0"))
+            for month in months
+        }
+        # Whom a visitor may type one for: the two sellers, never Meneja, who is here.
+        offered = [worker.display_name for worker in advances_month(shop, today, viewer=meneja).workers]
+    assert sorted((row.display_name, row.date, row.amount, row.voided) for row in rows) == [
+        ("Asha", back[7], Decimal("20000"), None),
+        ("Baraka", back[0], Decimal("30000"), None),
+    ]
+    assert given == taken
+    assert sum(given.values()) == Decimal("50000")
+    assert offered == ["Asha", "Baraka"]
+    assert baraka.started_on <= back[0] and asha.started_on <= back[7]
+
+
+def test_seed_demo_makes_todays_shop_again_without_its_advances(
+    three_weeks: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # As for its meal money: WAGE-8's deploy finds the demo the older seed made that morning, with no advance, and makes
+    # the shop again at once, so Advansi has lines to show the same day.
+    with monkeypatch.context() as older_seed:
+        older_seed.setattr(services, "_give_the_advances", lambda *_args: None)
+        seed_demo(fresh=True)
+    made = the_demo_shop()
+
+    assert seed_demo() == Seeded.MADE
+    assert the_demo_shop() != made
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_keeps_todays_shop_whose_advances_a_visitor_changed(three_weeks: None) -> None:
+    # A visitor crossed out both and typed one more: the demo wakes with their work in it.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    with shop_context(made):
+        meneja, asha = (StaffMember.objects.get(display_name=name) for name in ("Meneja", "Asha"))
+        for row in Advance.objects.all():
+            void_advance(row, reason="wrong_amount", by=meneja)
+        record_advance(asha, advance_id=uuid.uuid7(), date=shop_today(made), amount=Decimal("5000"), by=meneja)
 
     assert seed_demo() == Seeded.KEPT
     assert the_demo_shop() == made

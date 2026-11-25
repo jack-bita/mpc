@@ -3,8 +3,8 @@
 //
 // GET /api/v1/staffpay/pay/?month=2026-11 answers everyone's pay of one month, and …/pay/{id}/ one worker's, each line by
 // line: the days that are over, and today apart, once the worker tapped Toka (Leo, Jack: A). The server works it all out
-// each time it is asked, from the book of days, the rates and the meals, and saves none of it (Jack); the page only shows
-// it, and never adds up or multiplies anything itself. Both behind the two keys of pay, settings.manage and staff.manage
+// each time it is asked, from the book of days, the rates, the meals and the money given before payday (WAGE-8), and saves
+// none of it (Jack); the page only shows it, and never adds up or multiplies anything itself. Both behind the two keys of pay, settings.manage and staff.manage
 // on the whole shop (maySeePay, features/workers/pay-rates.ts), which the server asks on every read.
 import { useQuery } from "@tanstack/react-query";
 

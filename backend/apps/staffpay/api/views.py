@@ -1,15 +1,17 @@
 """apps/staffpay/api/views.py — the staffpay routes an office screen calls, under /api/v1/staffpay/ (WAGE-1; 03 §5.10).
 
-Seven: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
+Eight: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
 read on Mahudhurio ya mwezi (ATT-5); one worker's month, their calendar and its days' taps (ATT-12); a decision on one
 of their days, sent from the sheet under the calendar (ATT-6); a manager's fixes to the taps, a tap added and a tap
-crossed out, each sent from its sheet under the calendar (ATT-13); the day's meal money, read, typed and crossed out
-on Hela ya chakula (WAGE-7); and the month's pay, everyone's on Mishahara and one worker's on their page, read alone
-(WAGE-2). Thin, as every route is (ADR-0015): who may set a rate, and what it may be, are
-set_pay_rate's (apps/staffpay/services.py); which rate is in force, the selectors'; what a month holds,
-attendance_month's; what a worker's month holds, worker_attendance's; who may decide a day, and how, decide_day's; who
-may fix a tap, and how, add_tap's and void_tap's; the meal money of any days, meal_money_days'; who may type it, and
-cross it out, and how, record_meal_money's and void_meal_money's; what the month pays, pay_month's and worker_pay's.
+crossed out, each sent from its sheet under the calendar (ATT-13); the day's meal money, read, typed and crossed out on
+Hela ya chakula (WAGE-7); money given before payday, read, typed and crossed out on Advansi (WAGE-8); and the month's
+pay, everyone's on Mishahara and one worker's on their page, read alone (WAGE-2). Thin, as every route is (ADR-0015):
+who may set a rate, and what it may be, are set_pay_rate's (apps/staffpay/services.py); which rate is in force, the
+selectors'; what a month holds, attendance_month's; what a worker's month holds, worker_attendance's; who may decide a
+day, and how, decide_day's; who may fix a tap, and how, add_tap's and void_tap's; the meal money of any days,
+meal_money_days'; who may type it, and cross it out, and how, record_meal_money's and void_meal_money's; the advances of
+a month, advances_month's; who may type one, and cross it out, and how, record_advance's and void_advance's; what the
+month pays, pay_month's and worker_pay's.
 """
 
 from datetime import date
@@ -29,6 +31,9 @@ from apps.shops.models import Shop
 from apps.shops.selectors import shop_today
 from apps.staffpay.api.serializers import (
     AddTapSerializer,
+    AdvanceAnswer,
+    AdvancePageAnswer,
+    AdvancesMonthAnswer,
     AttendanceMonthAnswer,
     AttendanceMonthQuery,
     DayDecisionSerializer,
@@ -41,24 +46,31 @@ from apps.staffpay.api.serializers import (
     PayRatesAnswer,
     PayRateSerializer,
     PayRatesQuery,
+    RecordAdvanceSerializer,
     RecordMealMoneySerializer,
     TapAnswer,
+    VoidAdvanceSerializer,
     VoidMealMoneySerializer,
     VoidTapSerializer,
     WorkerAttendanceAnswer,
     WorkerPayMonthAnswer,
 )
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayChoice, MealMoney, PayRate
+from apps.staffpay.models import Advance, AttendanceDay, AttendanceEvent, ClockKind, DayChoice, MealMoney, PayRate
 from apps.staffpay.selectors import NEWEST_FIRST, rate_in_force
 from apps.staffpay.services import (
     add_tap,
+    advance_line,
+    advances_month,
     attendance_month,
     decide_day,
     decision_of,
     meal_money_days,
     pay_month,
+    ready_advance_void_reasons,
+    record_advance,
     record_meal_money,
     set_pay_rate,
+    void_advance,
     void_meal_money,
     void_tap,
     worker_attendance,
@@ -340,6 +352,76 @@ class MealMoneyViewSet(CreateOnceMixin[MealMoney]):
     def _shop(self) -> Shop:
         # The visit's own shop, open already (ShopViewSet): everything below reads inside it, through the guard.
         return Shop.objects.get(pk=self.actor.shop_id)
+
+
+class AdvanceViewSet(CreateOnceMixin[Advance]):
+    # GET advances/?month=2026-11: the money given to workers before payday in a month, on Advansi (WAGE-8), and whom
+    # one may be typed for. GET advances/{id}/: one, on its own page. POST advances/: whoever holds the key types one.
+    # POST advances/{id}/void/: a wrong one crossed out. The row in an address is one of the visit's shop, found through
+    # the guard (get_object): another shop's, or an id no shop has, is "not found" alike (03 §5.4).
+    model = Advance
+    # A worker belongs to the whole shop, as their pay does: no side.
+    side_field = None
+    # The one key for all four, on the whole shop: the owner's and the managers' (Jack: A). A read too, as what a worker
+    # took is nobody's to see by only working there; and the list and the one name it, so a create sent again, which
+    # hands back the row it made, asks it as any read does (CreateOnceMixin). Not the two keys of pay: no answer here
+    # holds a rate or a day's pay. The services ask it again, inside their transactions, and refuse one's own.
+    action_permissions = {
+        "list": Permission.MONEY_ADVANCE,
+        "retrieve": Permission.MONEY_ADVANCE,
+        "create": Permission.MONEY_ADVANCE,
+        "void": Permission.MONEY_ADVANCE,
+    }
+    serializer_class = AdvanceAnswer
+    create_serializer_class = RecordAdvanceSerializer
+    # One answer, not pages: a shop gives a few dozen a month, and the page adds nothing up.
+    pagination_class = None
+
+    def base_rows(self) -> QuerySet[Advance]:
+        # Each names whose it is, who typed it and who crossed it out: their jobs come in the same read.
+        return super().base_rows().select_related("staff", "created_by", "voided_by")
+
+    @extend_schema(parameters=[AttendanceMonthQuery], responses=AdvancesMonthAnswer)
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        asked = AttendanceMonthQuery(data=request.query_params)
+        # No month named, or one that is no month: 400 under `month`, through the one error handler.
+        asked.is_valid(raise_exception=True)
+        # The visit's own shop, open already (ShopViewSet): everything below reads inside it, through the guard.
+        shop = Shop.objects.get(pk=self.actor.shop_id)
+        month = advances_month(shop, asked.validated_data["month"], viewer=cast(StaffMember, self.actor))
+        return Response(AdvancesMonthAnswer(month).data)
+
+    @extend_schema(responses=AdvancePageAnswer)
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        row = self.get_object()
+        # By the person, not the job, as void_advance asks: someone hired again crosses out none of their old job's.
+        own = row.staff.user_id == cast(StaffMember, self.actor).user_id
+        answer = {"advance": advance_line(row), "own": own, "ready_void_reasons": ready_advance_void_reasons()}
+        return Response(AdvancePageAnswer(answer).data)
+
+    def create_row(self, data: dict[str, Any]) -> Advance:
+        # The worker is one of the visit's shop (WorkerField); record_advance checks the rest, and refuses with its
+        # codes. cast: the login leaves the staff member acting in `request.auth`, which mypy reads as an Actor.
+        return record_advance(
+            data["staff"],
+            advance_id=data["id"],
+            date=data["date"],
+            amount=data["amount"],
+            note=data["note"],
+            by=cast(StaffMember, self.actor),
+        )
+
+    @extend_schema(request=VoidAdvanceSerializer, responses=AdvanceAnswer)
+    @action(detail=True, methods=["post"])
+    def void(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # The row first, through the guard, whatever was sent. The base found it already, before this ran (initial()),
+        # so an empty request for another shop's row is "not found" whatever comes next (03 §5.4); in this order here
+        # too, so the two never say otherwise.
+        row = self.get_object()
+        sent = VoidAdvanceSerializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        voided = void_advance(row, reason=sent.validated_data["reason"], by=cast(StaffMember, self.actor))
+        return Response(AdvanceAnswer(voided).data)
 
 
 class PayViewSet(ShopViewSet[StaffMember]):

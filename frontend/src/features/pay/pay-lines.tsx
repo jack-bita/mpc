@@ -6,13 +6,15 @@
 //   Faini             2              − 2,000
 //   Chakula          siku 16        − 16,000
 //   Leo: siku kamili                  10,000
+//   Advansi                         − 40,000
 //   ------------------------------------------
-//   Jumla ya kumlipa leo         TSh 142,000
+//   Jumla ya kumlipa leo         TSh 102,000
 //   ! Siku 1 inasubiri uamuzi
 //
 // On the worker's pay page (worker-pay-screen.tsx) and in the card of their own page (worker-month-pay.tsx), so both show
 // the same. Today's lines, once they tapped Toka, are apart, as today isn't over: its meals are split so far (Jack: A).
-// Every amount is the server's; the page multiplies and adds up nothing.
+// Then what they were given before payday (WAGE-8), today's with it, just above the total. Every amount is the server's;
+// the page multiplies and adds up nothing.
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
@@ -84,6 +86,15 @@ export function PayLines({
       what: t("todayLine.meals"),
       many: "",
       amount: less(today.meals),
+    });
+  // The last line before the total, as the money was given, and is no part of a day (WAGE-8). "0" as text: the shared
+  // Decimal refuses a plain number (rule 3).
+  if (new Decimal(pay.advances).gt("0"))
+    rows.push({
+      key: "advances",
+      what: t("advances"),
+      many: "",
+      amount: less(pay.advances),
     });
 
   return (

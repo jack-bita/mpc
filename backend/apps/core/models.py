@@ -198,8 +198,8 @@ class AppendOnlyError(Exception):
 
 class AppendOnly(ShopScoped):
     # The base of every ledger table (03 §5.3; the list is 03 §5.6): stock movements, balance entries,
-    # allocations, payments, money movements, meal money, attendance events, audit events, a flag's notes
-    # and the people it names, the change log, the push's answer log (sync.PushedDocument), the offline periods
+    # allocations, payments, money movements, meal money, advances, attendance events, audit events, a flag's
+    # notes and the people it names, the change log, the push's answer log (sync.PushedDocument), the offline periods
     # devices report (people.DeviceOutage), and the dated rules: prices, product costs, settings and pay
     # rates. A ledger is ShopScoped plus this: its rows are written once, and never changed or deleted
     # (T2). Its migration adds the trigger that refuses the same in PostgreSQL (apps/core/operations.py),
@@ -220,8 +220,8 @@ class AppendOnly(ShopScoped):
         # `_state.adding` is Django's own flag on every row object: True for a new one that was never
         # saved, False once it is saved or when it was read from the database. A new row goes on to
         # Django's save(), with the same arguments; saving an old row again would rewrite it.
-        # To void a row (payments, money movements, meal money, attendance events), a service fills the stamp
-        # with one update() on a query, which skips save(): the trigger checks that change.
+        # To void a row (payments, money movements, meal money, advances, attendance events), a service fills the
+        # stamp with one update() on a query, which skips save(): the trigger checks that change.
         # A fix is a new row. One copied from a loaded row (`row.pk = None`) still has `adding` False
         # and is refused here: set `row._state.adding = True` too, as Django's docs say for copying any
         # row, or build the new row fresh, which reads more clearly.

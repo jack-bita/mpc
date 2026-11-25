@@ -79,11 +79,12 @@ function ThePay({ answer }: { answer: WorkerPayMonth }) {
   return (
     <>
       {counted === null ? null : <p>{counted}</p>}
-      {/* Nothing more when the line above says no working day has come: whether they are paid by the day isn't known
-          yet. */}
-      {answer.no_day_yet ? null : answer.paid_by_day ? (
+      {/* Their line whenever there is one: money given on a 1st that is a Sunday is one, before any working day (WAGE-8).
+          With none, nothing more when the line above says no working day has come: whether they are paid by the day isn't
+          known yet. */}
+      {answer.paid_by_day ? (
         <PayLines answer={answer} worker={answer.worker} />
-      ) : (
+      ) : answer.no_day_yet ? null : (
         <p>{t("notPaidByDay")}</p>
       )}
     </>

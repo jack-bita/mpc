@@ -58,6 +58,7 @@ from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side, set_setting
 from apps.staffpay.api.views import (
+    AdvanceViewSet,
     AttendanceDayViewSet,
     AttendanceMonthViewSet,
     AttendanceTapViewSet,
@@ -66,7 +67,7 @@ from apps.staffpay.api.views import (
     PayRateViewSet,
     PayViewSet,
 )
-from apps.staffpay.models import AttendanceEvent, MealMoney, PayRate
+from apps.staffpay.models import Advance, AttendanceEvent, MealMoney, PayRate
 from apps.staffpay.tests.days import job, kept_day, switch_on
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
@@ -85,6 +86,9 @@ ATTENDANCE_TAPS = "/api/v1/staffpay/attendance-taps/"
 ATTENDANCE_TAP_VOID = "/api/v1/staffpay/attendance-taps/{}/void/"
 MEAL_MONEY = "/api/v1/staffpay/meal-money/"
 MEAL_MONEY_VOID = "/api/v1/staffpay/meal-money/{}/void/"
+ADVANCES = "/api/v1/staffpay/advances/"
+ADVANCE = "/api/v1/staffpay/advances/{}/"
+ADVANCE_VOID = "/api/v1/staffpay/advances/{}/void/"
 PAY = "/api/v1/staffpay/pay/"
 PAY_WORKER = "/api/v1/staffpay/pay/{}/"
 
@@ -1483,4 +1487,54 @@ def test_meal_money_route_names_its_permission() -> None:
         "list": Permission.MEALS_RECORD,
         "create": Permission.MEALS_RECORD,
         "void": Permission.MEALS_RECORD,
+    }
+
+
+@pytest.mark.django_db
+def test_advances_need_money_advance(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # Money given before payday (WAGE-8) is for the owner and the managers of the whole shop (Jack: A): Asha, a seller,
+    # may neither see, type nor cross out one, even with the address typed in; nor may she with the key on Dawa alone,
+    # as a worker's pay is the whole shop's. A manager may, with none of the two keys of pay.
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    juma = job(shop_a, "Juma")
+    with shop_context(shop_a):
+        PayRate(shop=shop_a, staff=juma, daily_rate=Decimal("10000.00"), effective_from=date(2026, 1, 1)).save()
+        row = Advance(shop=shop_a, staff=juma, date=date(2026, 11, 16), amount=Decimal("9000.00"), created_by=staff_a2)
+        row.save()
+    typed = {"id": str(uuid.uuid7()), "staff": str(juma.pk), "date": "2026-11-16", "amount": "5000.00", "note": ""}
+    crossed = {"reason": "Sifuri moja zaidi"}
+    november = {"month": "2026-11"}
+
+    def asked(person: StaffMember) -> list[Any]:
+        return [
+            client_for(person).get(ADVANCES, november),
+            client_for(person).get(ADVANCE.format(row.pk)),
+            client_for(person).post(ADVANCES, typed, format="json"),
+            # A create sent again hands back the row it made: with the id of one, nothing comes back (CreateOnceMixin).
+            client_for(person).post(ADVANCES, {**typed, "id": str(row.pk)}, format="json"),
+            client_for(person).post(ADVANCE_VOID.format(row.pk), crossed, format="json"),
+        ]
+
+    for give_the_key in (False, True):
+        if give_the_key:
+            with shop_context(shop_a):
+                grant_permission(staff_a, Permission.MONEY_ADVANCE, side=sides["D"], by=None)
+        for refused in asked(staff_a):
+            assert (refused.status_code, refused.json()["code"]) == (403, "permission_denied")
+            assert "9000" not in refused.content.decode()
+    assert [answer.status_code for answer in asked(staff_a2)] == [200, 200, 201, 201, 200]
+    assert client_for(staff_a2).get(PAY, november).status_code == 403
+
+
+def test_advances_route_names_its_permission() -> None:
+    # Its four actions, the reads too, behind the one key (WAGE-8): what a worker took is nobody's to see by only
+    # working there. Written out in full, as above.
+    assert AdvanceViewSet.action_permissions == {
+        "list": Permission.MONEY_ADVANCE,
+        "retrieve": Permission.MONEY_ADVANCE,
+        "create": Permission.MONEY_ADVANCE,
+        "void": Permission.MONEY_ADVANCE,
     }

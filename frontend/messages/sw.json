@@ -826,6 +826,44 @@
       "show": "Onyesha"
     }
   },
+  "advances": {
+    "title": "Advansi",
+    "total": "Jumla",
+    "rowsLabel": "Advansi za mwezi",
+    "line": "{weekday} {date} · {name}",
+    "voided": "Imebatilishwa",
+    "none": "Hakuna advansi katika mwezi huu.",
+    "record": {
+      "title": "Andika advansi",
+      "worker": "Mfanyakazi",
+      "workerLeft": "{name} (aliondoka {date})",
+      "nobody": "Hakuna mfanyakazi mwingine anayelipwa kwa siku katika mwezi huu.",
+      "date": "Siku",
+      "amount": "Kiasi (TSh)",
+      "note": "Maelezo (si lazima)",
+      "save": "Hifadhi",
+      "saved": "Imeandikwa: {amount}, {name}, {weekday} {date}."
+    },
+    "day": "{weekday} {date}",
+    "page": {
+      "title": "Advansi ya {name}",
+      "none": "Hakuna advansi iliyochaguliwa.",
+      "typedBy": "Imeandikwa na {by} · {date} {time}",
+      "voidedBy": "Imebatilishwa na {by}, {date}",
+      "reason": "Sababu: {reason}",
+      "own": "Hii ni advansi yako. Mtu mwingine ndiye anayeweza kuibatilisha."
+    },
+    "void": {
+      "title": "Batilisha {amount}",
+      "about": "{name} · {day}",
+      "aboutWithNote": "{name} · {day} · {note}",
+      "reason": "Sababu",
+      "action": "Batilisha"
+    },
+    "readyReason": {
+      "wrong_amount": "Kiasi kimekosewa"
+    }
+  },
   "pay": {
     "title": "Mishahara",
     "countedTo": "Hadi jana, {weekday} {date}",
@@ -848,6 +886,7 @@
     "fines": "Faini",
     "meals": "Chakula",
     "mealDays": "siku {count}",
+    "advances": "Advansi",
     "less": "− {amount}",
     "todayLine": {
       "full": "Leo: siku kamili",
@@ -1467,6 +1506,15 @@
       "reason_missing": "Andika sababu.",
       "days_backwards": "Hadi iko kabla ya Kuanzia.",
       "too_many_days": "Chagua siku zisizozidi mwaka mmoja."
+    },
+    "advance": {
+      "amount_invalid": "Andika kiasi cha shilingi nzima, zaidi ya sifuri.",
+      "amount_too_big": "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
+      "in_future": "Siku hii bado haijafika.",
+      "outside_job": "Siku hii ni kabla ya siku yake ya kwanza kazini, au baada ya siku yake ya mwisho.",
+      "not_paid_by_day": "Mfanyakazi huyu halipwi kwa siku.",
+      "own": "Huwezi kuandika wala kubatilisha advansi yako mwenyewe.",
+      "reason_missing": "Andika sababu."
     },
     "flag": {
       "note_required": "Andika maelezo.",

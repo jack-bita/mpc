@@ -1,7 +1,7 @@
 """apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12), the month the month
 page shows, worked out through it (ATT-5), a worker's own month (ATT-12), a person's decision on a day (ATT-6), a
-manager's fixes to the taps (ATT-13), each worker's daily pay rate (WAGE-1), the day's meal money (WAGE-7), and the
-month's pay, worked out from all of them (WAGE-2).
+manager's fixes to the taps (ATT-13), each worker's daily pay rate (WAGE-1), the day's meal money (WAGE-7), money given
+to a worker before payday (WAGE-8), and the month's pay, worked out from all of them (WAGE-2).
 
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
@@ -50,6 +50,11 @@ The day's meal money is typed by whoever the owner gave the key to (record_meal_
 and its meat, 3,000. A wrong one is crossed out, with who, when and why (void_meal_money), and the book splits what
 counts among who came, as above. Hela ya chakula asks for any days of it, and the whole of them, through
 meal_money_days, which works them out through the book too, so it writes as the month's page does.
+
+Money given before payday is typed on the day it is given by whoever holds money.advance, the owner or a manager, and
+never their own (record_advance, WAGE-8): Juma's 20,000 of the 10th. A wrong one is crossed out, with who, when and why
+(void_advance). Advansi asks for a month of them, and whom one may be typed for, through advances_month. No line in the
+change log, as for a rate. What each worker was given in a month comes off that month's pay.
 
 The month's pay is asked for by Mishahara (pay_month) and by one worker's page (worker_pay): the book's days, each at
 its own rate, added up by the sum (work_out_pay, apps/staffpay/calculations.py). The draft is never saved (Jack,
@@ -110,9 +115,11 @@ from apps.staffpay.calculations import (
 )
 from apps.staffpay.models import (
     DECISION_OF,
+    MOST_ADVANCE,
     MOST_DAILY_RATE,
     MOST_MEAL_MONEY,
     AbsenceType,
+    Advance,
     AttendanceDay,
     AttendanceEvent,
     ClockKind,
@@ -125,6 +132,7 @@ from apps.staffpay.models import (
     TimeCheck,
 )
 from apps.staffpay.selectors import (
+    advances_between,
     day_rules_between,
     meal_money_by_date,
     rates_between,
@@ -1315,9 +1323,10 @@ def set_pay_rate(
     return rate
 
 
-# On the demo, the ready reason a wrong amount of meal money is crossed out with, kept as its code, which the page says
-# in words, *Kiasi kimekosewa* (as DEMO_VOID_REASONS): a typed one would show to every visitor after.
-DEMO_MEAL_VOID_REASONS = ("wrong_amount",)
+# On the demo, the ready reason money typed wrong is crossed out with, meal money (WAGE-7) or an advance (WAGE-8), kept
+# as its code, which the page says in words, *Kiasi kimekosewa* (as DEMO_VOID_REASONS): a typed one would show to every
+# visitor after.
+DEMO_MONEY_VOID_REASONS = ("wrong_amount",)
 
 
 def record_meal_money(
@@ -1392,7 +1401,7 @@ def void_meal_money(money: MealMoney, *, reason: str, by: StaffMember) -> MealMo
             raise ValidationError(
                 {"reason": [ValidationError("Money crossed out says why.", code="meal_money.reason_missing")]}
             )
-        if settings.DEMO_SEED and reason not in DEMO_MEAL_VOID_REASONS:
+        if settings.DEMO_SEED and reason not in DEMO_MONEY_VOID_REASONS:
             raise ValidationError(
                 {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
             )
@@ -1467,7 +1476,7 @@ def meal_money_days(shop: Shop, first: dt.date, last: dt.date) -> MealMoneyDays:
     the whole of it. Worked out through the book (work_out_days), so it writes as the book does, and asked twice writes
     nothing the second time. The shop must be open, as for the book."""
     today = shop_today(shop)
-    ready = list(DEMO_MEAL_VOID_REASONS) if settings.DEMO_SEED else []
+    ready = list(DEMO_MONEY_VOID_REASONS) if settings.DEMO_SEED else []
     if today < first:
         # Days to come alone, when nobody has eaten yet: nothing to read. Answered as they were asked for, so the page
         # never heads them with a last day before the first.
@@ -1557,12 +1566,233 @@ def _works_today(shop: Shop, today: dt.date) -> bool:
     )
 
 
+def record_advance(
+    staff: StaffMember, *, advance_id: uuid.UUID, date: dt.date, amount: Decimal, note: str = "", by: StaffMember
+) -> Advance:
+    """Type money given to a worker before payday (WAGE-8, 02 §12): Juma asked for 20,000 on the 10th, and Meneja gave
+    it. It comes off the pay of its day's month the next time the pay is asked for. `advance_id`: the client's
+    (ADR-0007), so the route answers a request sent twice with the row it made (CreateOnceMixin). `by`: who types it,
+    with money.advance on the whole shop, and never the worker themself. Refuses: one's own (advance.own); and, all
+    together, each beside its box, a worker with no daily pay (advance.not_paid_by_day); an amount of 0 or less, or with
+    cents (advance.amount_invalid), or over ten million (advance.amount_too_big); a day to come (advance.in_future), or
+    one outside the job's days (advance.outside_job); and on the demo, a note (demo.no_note). Returns the row as
+    saved."""
+    # A job of another shop typing this shop's money is a bug in the calling code (T1), never a person's mistake: the
+    # route finds both in the one shop open. A server error, before anything is read.
+    if by.shop_id != staff.shop_id:
+        raise ShopMismatch("record_advance was given a person of another shop.")
+    # Spaces around a note say nothing, and "  " is no note.
+    note = note.strip()
+    # Not a recording_changes block: an advance writes no line in the change log, as no laptop gets one (03 §6.1). No
+    # lock either: the pay reads the advances each time it is asked (pay_month), so one typed beside a read of it is in
+    # the next. WAGE-3 takes one, once an approved month refuses new ones.
+    with transaction.atomic():
+        # First, so someone without it sets nothing to work; read afresh, so a key taken away a moment ago counts. On
+        # the whole shop, as a worker and their pay belong to it.
+        require(by, Permission.MONEY_ADVANCE, None)
+        # The job as it is now: its first or last day may have just moved (PPL-10). An advance may be of a day gone by,
+        # so a worker who left still takes one for a day they worked: a forgotten one, or their last pay would be wrong.
+        staff = StaffMember.objects.get(pk=staff.pk)
+        # Never one's own (Jack: A), as nobody sets their own rate or decides their own day: a manager alone in the shop
+        # would give themself its money on their own word. By the person, not the job: someone hired again (PPL-11) has
+        # two jobs, and neither's is theirs to type.
+        if staff.user_id == by.user_id:
+            raise ValidationError("Nobody types their own advance.", code="advance.own")
+        # The boxes, all together, so a person who got two wrong sees both at once, each beside its own (ADR-0040).
+        errors: dict[str, list[ValidationError]] = {}
+        # Only a worker the shop pays by the day, from whatever day: it comes off that pay, and off nothing else. The
+        # owner, who has no rate, takes the shop's money as a withdrawal, the drawer's (02 §10).
+        if not PayRate.objects.filter(shop_id=staff.shop_id, staff=staff).exists():
+            errors["staff"] = [ValidationError("This worker has no daily pay.", code="advance.not_paid_by_day")]
+        # As the table's rules hold: named here, beside the amount's box, where the table's own would name the whole
+        # row. to_integral_value() drops the places without rounding the check away: 20000.50 is not whole. One bigger
+        # than the pay so far is taken: the money was given, and the pay shows its minus.
+        if amount <= 0 or amount != amount.to_integral_value():
+            errors["amount"] = [ValidationError("An advance is a whole amount above 0.", code="advance.amount_invalid")]
+        elif amount > MOST_ADVANCE:
+            errors["amount"] = [ValidationError("An advance is at most ten million.", code="advance.amount_too_big")]
+        if date > shop_today(Shop.objects.get(pk=staff.shop_id)):
+            # Tomorrow's isn't given yet, so it is a wrong date. A Sunday's is taken, and a closed day's: money is asked
+            # for on any day, and nothing is shared or worked on it.
+            errors["date"] = [ValidationError("An advance is never of a day to come.", code="advance.in_future")]
+        elif not _ran_on(staff, date):
+            # Before the first day or after the last, the person wasn't a worker of this job, so it is a slip of the
+            # date; and a day outside the job is in no pay of it the worker would look for it in.
+            errors["date"] = [
+                ValidationError("An advance is of a day the worker had this job.", code="advance.outside_job")
+            ]
+        # On the demo every visitor logs in as Meneja (OPS-3): a note would show to every visitor after them, signed by
+        # the shared manager, until the morning's seed, so it isn't kept, as for a rule (demo.no_note, set_setting).
+        if settings.DEMO_SEED and note:
+            errors["note"] = [ValidationError("On the demo, a note isn't kept.", code="demo.no_note")]
+        if errors:
+            raise ValidationError(errors)
+        row = Advance(
+            id=advance_id, shop_id=staff.shop_id, staff=staff, date=date, amount=amount, note=note, created_by=by
+        )
+        # The row's own checks last, as a guard on what the boxes above already asked: a note too long, an id taken.
+        row.full_clean()
+        # An INSERT, never an UPDATE: an id another row holds clashes, loudly, and never overwrites it (03 §5.4).
+        row.save(force_insert=True)
+    return row
+
+
+def void_advance(advance: Advance, *, reason: str, by: StaffMember) -> Advance:
+    """Cross out an advance typed wrong (WAGE-8, 02 §12, T2): 300,000 for 30,000, "Sifuri moja zaidi". The row stays,
+    voided once with who, when and why, and counts for nothing; the right amount is typed again. Never brought back.
+    `by`: who crosses it out, with money.advance on the whole shop, whoever typed it, and never the worker it was given
+    to. A row crossed out already, by this request sent twice or by someone a moment before, is answered as it was
+    crossed out, never stamped again (CORE-3's Watch out). Refuses: one's own (advance.own); and, beside the reason's
+    box, no reason (advance.reason_missing), or on the demo a reason not the ready one (demo.ready_reasons). Returns the
+    row as saved."""
+    # Who voids is a staff member of the row's own shop (T1): the void rule in the database checks only that the stamp
+    # is filled whole, so this is the check it can't make with one column.
+    if by.shop_id != advance.shop_id:
+        raise ShopMismatch("void_advance was given a person of another shop.")
+    reason = reason.strip()
+    with transaction.atomic():
+        require(by, Permission.MONEY_ADVANCE, None)
+        # Never one's own (Jack: A): crossing it out would pay the money twice, so a worker never erases what they took.
+        # By the person, as typing one is.
+        if StaffMember.objects.get(pk=advance.staff_id).user_id == by.user_id:
+            raise ValidationError("Nobody crosses out their own advance.", code="advance.own")
+        if not reason:
+            raise ValidationError(
+                {"reason": [ValidationError("An advance crossed out says why.", code="advance.reason_missing")]}
+            )
+        if settings.DEMO_SEED and reason not in DEMO_MONEY_VOID_REASONS:
+            raise ValidationError(
+                {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
+            )
+        # The stamp, filled once, by one guarded UPDATE, as a row of meal money's (void_meal_money): only while the row
+        # is not crossed out, so two voids never both write it. Never save(), which AppendOnly refuses; the void trigger
+        # lets this UPDATE change the stamp and nothing else (ADR-0021).
+        Advance.objects.filter(pk=advance.pk, voided_at__isnull=True).update(
+            voided_at=timezone.now(), voided_by=by, void_reason=reason
+        )
+        # Read back as it is now: crossed out by this request, or by the same one sent before, its answer lost, or by
+        # someone a moment before, whose stamp the page is then shown.
+        return Advance.objects.get(pk=advance.pk)
+
+
+@dataclass(frozen=True)
+class VoidedAdvance:
+    # Who crossed out an advance, by nickname; when; and why. On the demo the reason is a ready one's code
+    # (`wrong_amount`), which the page says in words.
+    by: str
+    at: dt.datetime
+    reason: str
+
+
+@dataclass(frozen=True)
+class AdvanceLine:
+    # One advance, as Advansi's line and its own page show it: "Jumanne 10/11 · Juma  20,000", what it was for, who
+    # typed it and when, and who crossed it out, or None while it counts. Never the worker's rate or pay: whoever gives
+    # money early sees what was given, not what is earned (the two keys of pay, WAGE-1).
+    id: uuid.UUID
+    staff_id: uuid.UUID
+    display_name: str
+    date: dt.date
+    amount: Decimal
+    note: str
+    by: str
+    at: dt.datetime
+    voided: VoidedAdvance | None
+
+
+@dataclass(frozen=True)
+class AdvanceWorker:
+    # A worker one may be typed for: the job, the nickname, and their last day if they left, which the sheet says beside
+    # the name, as a person hired again in the month has two jobs of one name (PPL-11).
+    staff_id: uuid.UUID
+    display_name: str
+    left_on: dt.date | None
+
+
+@dataclass(frozen=True)
+class AdvancesMonth:
+    # Advansi's answer (WAGE-8): the month, as its first day; the shop's today; the sum of those that count; every one
+    # of the month, newest first, the crossed-out ones too (A2); and whom one may be typed for, by name.
+    month: dt.date
+    today: dt.date
+    total: Decimal
+    rows: list[AdvanceLine]
+    workers: list[AdvanceWorker]
+
+
+def ready_advance_void_reasons() -> list[str]:
+    """The ready reason one may be crossed out with, for the sheet to offer: the demo's, or none elsewhere, where it is
+    typed."""
+    return list(DEMO_MONEY_VOID_REASONS) if settings.DEMO_SEED else []
+
+
+def advances_month(shop: Shop, month: dt.date, *, viewer: StaffMember) -> AdvancesMonth:
+    """The money given before payday in the month of `month`, any day of it, as Advansi shows it (WAGE-8), and whom one
+    may be typed for: whoever the shop pays by the day and had a day of the job in the month, up to today, so one who
+    left stays for the months they worked; and never `viewer`, whoever's job it is (Jack: A). The shop must be open."""
+    # The same checks as the selectors', for the same reasons (ADR-0022): asked inside another shop's visit, the guard
+    # would hide every row, and the month would be empty without a word.
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("advances_month was given a shop that is not the one open.")
+    if isinstance(month, dt.datetime):
+        raise TypeError("advances_month needs the shop's business dates, not a datetime.")
+    first, last = _month_span(month)
+    today = shop_today(shop)
+    # Newest first: by day, then as they were typed, the id last, for two typed at the very same moment. The names come
+    # in the same read.
+    rows = [
+        advance_line(row)
+        for row in Advance.objects.filter(shop=shop, date__range=(first, last))
+        .select_related("staff", "created_by", "voided_by")
+        .order_by("-date", "-created_at", "-id")
+    ]
+    # Whoever has a rate, from whatever day, as record_advance asks; a first day to come takes none yet.
+    workers = (
+        StaffMember.objects.filter(shop=shop, started_on__lte=min(last, today))
+        .filter(Q(left_on__isnull=True) | Q(left_on__gte=first))
+        .filter(Exists(PayRate.objects.filter(shop=shop, staff=OuterRef("pk"))))
+        .exclude(user_id=viewer.user_id)
+    )
+    return AdvancesMonth(
+        month=first,
+        today=today,
+        total=add_up(row.amount for row in rows if row.voided is None),
+        rows=rows,
+        # By name, as Mishahara lists them; then the job's id, so two jobs of one name always come in one order.
+        workers=[
+            AdvanceWorker(staff_id=staff.pk, display_name=staff.display_name, left_on=staff.left_on)
+            for staff in sorted(workers, key=lambda staff: (staff.display_name.casefold(), staff.pk))
+        ],
+    )
+
+
+def advance_line(row: Advance) -> AdvanceLine:
+    """An advance as the pages show it, which the sheets' answers are too. Who typed it is always there, as the table
+    holds."""
+    by = cast(StaffMember, row.created_by)
+    voided = None
+    if row.voided_at is not None and row.voided_by is not None:
+        voided = VoidedAdvance(by=row.voided_by.display_name, at=row.voided_at, reason=row.void_reason)
+    return AdvanceLine(
+        id=row.pk,
+        staff_id=row.staff_id,
+        display_name=row.staff.display_name,
+        date=row.date,
+        amount=row.amount,
+        note=row.note,
+        by=by.display_name,
+        at=row.created_at,
+        voided=voided,
+    )
+
+
 @dataclass(frozen=True)
 class WorkerPay:
     # One worker's pay of a month (WAGE-2), a job's, as a day is a job's: a person hired again in the month has two,
     # each with its own days and rates (PPL-11). Whose, and their last day if they left, which the page says beside
-    # their name; the sum of the days that are over, line by line; today alone, once they tapped Toka, or None (Leo,
-    # Jack: A); and what is left to pay, the two together.
+    # their name; the sum of the days that are over, line by line, less what they were given before payday (WAGE-8);
+    # today alone, once they tapped Toka, or None (Leo, Jack: A); and what is left to pay, the two together.
     staff_id: uuid.UUID
     display_name: str
     left_on: dt.date | None
@@ -1574,8 +1804,9 @@ class WorkerPay:
 @dataclass(frozen=True)
 class PayMonth:
     # Mishahara's answer (WAGE-2): the month, as its first day; the shop's today; the last day counted, or None when no
-    # day of the month is over; a line per worker paid by the day, by name; the whole of it; and the jobs with a working
-    # day in it, over or today's, which says whether there is anything to pay yet.
+    # day of the month is over; a line per worker paid by the day, or given money before payday in it (WAGE-8), by name;
+    # the whole of it; and the jobs with a working day in it, over or today's, which says whether there is anything to
+    # pay yet.
     month: dt.date
     today: dt.date
     counted_to: dt.date | None
@@ -1590,17 +1821,18 @@ class PayMonth:
 
     @property
     def no_day_yet(self) -> bool:
-        # No working day of the month yet, not even today's: on a 1st that is a Sunday or a closed day. Nobody is listed
-        # then for want of a day, not of a rate, so "Hakuna mfanyakazi anayelipwa kwa siku" would be untrue (WAGE-2's
-        # review, as ATT-5's on the attendance month).
+        # No working day of the month yet, not even today's: on a 1st that is a Sunday or a closed day. Whoever isn't
+        # listed then isn't for want of a day, not of a rate, so "Hakuna mfanyakazi anayelipwa kwa siku" would be untrue
+        # (WAGE-2's review, as ATT-5's on the attendance month). Listed then is only who was given money (WAGE-8).
         return self.is_running and not self.worked
 
 
 @dataclass(frozen=True)
 class WorkerPayMonth:
     # One worker's pay of a month, as their page shows it: their line of Mishahara, with its month and its days; and,
-    # for the page to say why there is nothing, whether the shop pays them by the day in it, and whether their first
-    # working day of it is still to come: on a 1st that is a Sunday, or hired from the 28th and looked at on the 25th.
+    # for the page to say why there is nothing, whether there is a line of theirs, as the shop pays them by the day in
+    # it or gave them money in it (WAGE-8), and whether their first working day of it is still to come: on a 1st that is
+    # a Sunday, or hired from the 28th and looked at on the 25th.
     month: dt.date
     today: dt.date
     counted_to: dt.date | None
@@ -1610,11 +1842,11 @@ class WorkerPayMonth:
 
 
 def pay_month(shop: Shop, month: dt.date) -> PayMonth:
-    """The pay of the month of `month`, any day of it, for everyone the shop pays by the day, as Mishahara shows it
-    (WAGE-2; spec §8.1, 02 §15, 8): each worker's days that are over, each at its own rate, added up line by line;
-    today, for whoever has tapped Toka; and the whole of it. Worked out through the book (work_out_days), so it writes
-    as the book does, and asked twice writes nothing the second time; the pay itself is never kept. The shop must be
-    open, as for the book."""
+    """The pay of the month of `month`, any day of it, as Mishahara shows it (WAGE-2; spec §8.1, 02 §15, 8), for
+    everyone the shop pays by the day, or gave money before payday in it (WAGE-8): each worker's days that are over,
+    each at its own rate, added up line by line, less what they were given; today, for whoever has tapped Toka; and the
+    whole. Worked out through the book (work_out_days), so it writes as the book does, and asked twice writes nothing
+    the second time; the pay itself is never kept. The shop must be open, as for the book."""
     first, last = _month_span(month)
     # The shop's today, read once: the pay counts up to the day before it, and today apart, whatever the clock does
     # meanwhile. The book reads its own a moment later, and at midnight answers one day more, which for this answer is
@@ -1641,16 +1873,28 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
     # today.
     working = [day for day in [*days, *todays.values()] if day.status != DayStatus.OFF]
     workers = {day.staff_id: day.staff for day in working if (day.staff_id, day.date) in rates}
+    # What each was given before payday in the month, by its own days, today's with them: the money was given, whatever
+    # of today is worked yet (WAGE-8). None is of a day to come, so the whole month is asked for. Read after the book,
+    # as the rates are, so one typed between the two is in this answer, and one typed after it in the next.
+    advances = advances_between(shop, first, last)
+    # A worker given money is listed for it, though no working day of theirs has come, as on a 1st that is a Sunday, or
+    # their rate starts later: or the money would be on nobody's pay until then.
+    unlisted = advances.keys() - workers.keys()
+    if unlisted:
+        workers |= {staff.pk: staff for staff in StaffMember.objects.filter(shop=shop, pk__in=unlisted)}
     # The book answers date by date, so each worker's days come in their order, and so do the lines of their pay.
     over: dict[uuid.UUID, list[AttendanceDay]] = defaultdict(list)
     for day in days:
         over[day.staff_id].append(day)
 
-    def paid(some: Iterable[AttendanceDay]) -> Pay:
-        # Some days of one worker, each with its own rate and step.
+    def paid(some: Iterable[AttendanceDay], given: Decimal = NO_PAY) -> Pay:
+        # Some days of one worker, each with its own rate and step, less what they were given.
         return work_out_pay(
-            _to_pay(day, rates.get((day.staff_id, day.date)), settings_by_day[day.date][ROUNDING_STEP.key])
-            for day in some
+            (
+                _to_pay(day, rates.get((day.staff_id, day.date)), settings_by_day[day.date][ROUNDING_STEP.key])
+                for day in some
+            ),
+            advances=given,
         )
 
     lines = []
@@ -1663,7 +1907,9 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
         tonight = todays.get(job)
         waits = tonight is not None and tonight.review_reason == ReviewReason.TIME_UNKNOWN
         ended = [tonight] if tonight is not None and (tonight.first_out is not None or waits) else []
-        lines.append(_worker_pay(staff, paid(over[job]), paid(ended) if ended else None))
+        # The advances come off the days that are over, never off today's part too, or they would be taken twice.
+        pay = paid(over[job], advances.get(job, NO_PAY))
+        lines.append(_worker_pay(staff, pay, paid(ended) if ended else None))
     # By name, as the month page lists them; "asha" beside "Asha"; then the job's id, so two jobs of one name always
     # come in the same order, the one had first before the other (UUIDv7).
     lines.sort(key=lambda line: (line.display_name.casefold(), line.staff_id))
@@ -1680,8 +1926,8 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
 
 def worker_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
     """One job's pay of the month of `month`, any day of it (WAGE-2): the very line Mishahara shows of them (pay_month),
-    so the two pages never say two totals. A worker the shop doesn't pay by the day in it has nothing, and the answer
-    says so. The shop must be open, and the job one of it."""
+    so the two pages never say two totals. A worker the shop neither pays by the day in it nor gave money in it has
+    nothing, and the answer says so. The shop must be open, and the job one of it."""
     # The route finds the job through the guard, so another shop's never comes here; but a service checks what it is
     # given (T1), so a bug that passed one fails loudly.
     if job.shop_id != shop.pk:

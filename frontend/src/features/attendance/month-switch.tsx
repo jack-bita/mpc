@@ -1,6 +1,6 @@
 // month-switch.tsx — ‹ Novemba 2026 ›, the month a page shows and the two arrows that move it, and the clock that page
-// keeps, so › stops at this month (ATT-5). Mahudhurio ya mwezi wears it, Hela ya chakula (WAGE-7), Mishahara, and the
-// month's pay on a worker's page (WAGE-2): one switch, so they all move a month the same way.
+// keeps, so › stops at this month (ATT-5). Mahudhurio ya mwezi wears it, Hela ya chakula (WAGE-7), Mishahara, the month's
+// pay on a worker's page (WAGE-2), and Advansi (WAGE-8): one switch, so they all move a month the same way.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and keeps the page's clock.
 "use client";

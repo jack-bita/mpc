@@ -44,6 +44,12 @@ they pay for out of their pay, crossed out with a reason when typed wrong, and t
     23 Nov   5,000.00  Unga na maharage  Asha
     23 Nov  30,000.00  Nyama             Asha       by Baba: "Sifuri moja zaidi"
     23 Nov   3,000.00  Nyama             Asha
+
+And the money given to a worker before payday (Advance, WAGE-8), a ledger as well: typed on the day it is given, and
+taken off that month's pay (WAGE-2), so the pay so far is right every day:
+
+    who    date     amount     note          typed by   crossed out
+    Juma   10 Nov  20,000.00   Ada ya shule  Meneja
 """
 
 from decimal import Decimal
@@ -666,6 +672,108 @@ class MealMoney(AppendOnly):
             # How a span's money is read, the page's month (WAGE-7) and the book's (work_out_days), and a day's. Leads
             # with `shop`, as every index does (03 §9).
             models.Index(fields=["shop", "date"], name="staffpay_mealmoney_by_date"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.date:%Y-%m-%d} {self.amount}"
+
+
+# The most one advance may be (WAGE-8): see its rule below.
+MOST_ADVANCE = Decimal("10000000.00")
+
+
+class Advance(AppendOnly):
+    # Money given to a worker before payday (WAGE-8, 02 §12), whether they call it mid-month money or asked the owner
+    # for it (Jack, WAGE-1). Juma's 20,000 of 10 Nov comes off Juma's November pay (pay_month,
+    # apps/staffpay/services.py). Typed on the day it is given, by whoever holds money.advance, the owner and the
+    # managers (Jack: A); never their own (Jack: A), as nobody gives themself the shop's money, or erases what they
+    # took, on their own word. Who typed it is the row's `created_by` (ShopScoped). Money, so a ledger (rule 2, T2):
+    # written once, never changed or deleted. AppendOnly (CORE-3) refuses a second save() and any delete() in Python,
+    # and the trigger in this table's migration refuses the same in PostgreSQL (ADR-0021), all but the void stamp,
+    # filled once: a wrong one is voided, with who, when and why, and the right one typed. Never on a laptop: what a
+    # worker owes is part of their pay, and pay never sits on a shared device (03 §6.1), so the services write no line
+    # in the change log, and no sync answer carries one. Written only by record_advance and void_advance
+    # (apps/staffpay/services.py), which ask who may.
+
+    # Whose: a job, not a person, as a day's and a rate's are: a person hired again (PPL-11) has a new job, and the old
+    # job's advance stays on the old job's pay. PROTECT: nothing is deleted. No index of its own: every read starts from
+    # the days (below), and no row is ever deleted.
+    staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
+    # The day it was given, on the shop's own calendar: a business date, not a moment (02 §1). It says whose month it
+    # comes off. Today's or an earlier day's, Sundays too, within the job's days, which the service checks, as the job's
+    # first day can be fixed (PPL-10).
+    date = models.DateField()
+    # Money, so numeric(14,2) and a Decimal, never a float (rule 3, 03 §9); above 0, in whole shillings and at most ten
+    # million, as the rules below hold.
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    # What it was for, in the person's own words ("Ada ya shule"); optional.
+    note = models.CharField(max_length=200, blank=True)
+    # The void stamp (03 §5.6): empty while the row counts, filled once when it is crossed out, then frozen, as the
+    # trigger makes PostgreSQL hold it. The same shape as a row of meal money's. That whoever voids is of this row's
+    # shop is the void service's check (T1): the database can't hold it with one column. The fourth part,
+    # `void_approval`, comes with the Approval table (R1), if a void of an advance ever needs one.
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        "people.StaffMember", on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
+    void_reason = models.TextField(blank=True)
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). The amount's
+        # three rules carry the codes the page translates (ADR-0032), as the model's own checks (full_clean) name it to
+        # the person who typed it; the database holds the same rules for whatever writes past them.
+        constraints = [
+            # Money was given, so it is more than nothing. A row below 0 would add to the worker's pay, and nobody could
+            # tell why: a wrong row is voided instead.
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="staffpay_advance_above_zero",
+                violation_error_code="advance.amount_invalid",
+            ),
+            # Whole shillings, as every amount a person types (Jack, 16 Nov 2026). FLOOR of a whole amount is itself.
+            models.CheckConstraint(
+                condition=models.Q(amount=Floor("amount")),
+                name="staffpay_advance_whole_shillings",
+                violation_error_code="advance.amount_invalid",
+            ),
+            # No more than ten million: more than anyone's month, so a slip of the zeros, and an amount so big that a
+            # few could pass what a column of money holds and stop Mishahara from opening, for everyone. A technical
+            # guard, never a shop's rule: more than that, truly given, is typed in two rows.
+            models.CheckConstraint(
+                condition=models.Q(amount__lte=MOST_ADVANCE),
+                name="staffpay_advance_at_most",
+                violation_error_code="advance.amount_too_big",
+            ),
+            # It comes off a worker's pay, so it never stands with nobody's name on it. No code, here or on the rules
+            # below: the route always knows who sent the request, and the service refuses one's own first, in its own
+            # words, so such a row is a bug in our code, never a person's mistake.
+            models.CheckConstraint(
+                condition=models.Q(created_by__isnull=False), name="staffpay_advance_typed_by_someone"
+            ),
+            # Never one's own, typed or crossed out (Jack: A). What one row can say: the job. That a person hired again
+            # leaves their other job's alone too is the services' check, which read the person behind each job.
+            models.CheckConstraint(
+                condition=~models.Q(created_by=models.F("staff")), name="staffpay_advance_typed_by_another"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(voided_by__isnull=True) | ~models.Q(voided_by=models.F("staff")),
+                name="staffpay_advance_voided_by_another",
+            ),
+            # A void says who and why (T2), as CORE-3's Watch out asks of each void table: the void rule only checks
+            # that the stamp is filled once. All three empty, or all three filled, the reason with at least one
+            # character that isn't a space.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(voided_at__isnull=True, voided_by__isnull=True, void_reason="")
+                    | models.Q(voided_at__isnull=False, voided_by__isnull=False, void_reason__regex=r"\S")
+                ),
+                name="staffpay_advance_void_complete",
+            ),
+        ]
+        indexes = [
+            # How a month's are read: Advansi's page, and the pay's, every worker's at once (advances_between). Leads
+            # with `shop`, as every index does (03 §9).
+            models.Index(fields=["shop", "date"], name="staffpay_advance_by_date"),
         ]
 
     def __str__(self) -> str:

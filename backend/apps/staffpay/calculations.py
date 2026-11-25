@@ -506,8 +506,8 @@ class Pay:
 
 def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY) -> Pay:
     """A worker's pay over `days`, in their order (WAGE-2; spec §8.1, 02 §15, 8): each paid alone (pay_day), then added
-    up and grouped by what they pay. `advances`: money given before payday, which comes off it; nothing gives any until
-    WAGE-3. The sum reads nothing itself, so any days are paid by it: a month's, a leaver's, or today alone."""
+    up and grouped by what they pay. `advances`: money given before payday (WAGE-8), which comes off it. The sum reads
+    nothing itself, so any days are paid by it: a month's, a leaver's, or today alone."""
     if advances < 0:
         # Money the worker already took: below 0 it would pay them a second time, so a bug in our code.
         raise ValueError(f"Advances of {advances}: an advance is never below 0.")

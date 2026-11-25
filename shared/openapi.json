@@ -2639,6 +2639,205 @@
                 }
             }
         },
+        "/api/v1/staffpay/advances/": {
+            "get": {
+                "operationId": "staffpay_advances_list",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                            "example": "2026-11"
+                        },
+                        "description": "The month, as 2026-11.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdvancesMonthAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "staffpay_advances_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecordAdvanceRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdvanceAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/staffpay/advances/{id}/": {
+            "get": {
+                "operationId": "staffpay_advances_retrieve",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this advance.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdvancePageAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/staffpay/advances/{id}/void/": {
+            "post": {
+                "operationId": "staffpay_advances_void_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this advance.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VoidAdvanceRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdvanceAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/staffpay/attendance-days/{id}/decide/": {
             "post": {
                 "operationId": "staffpay_attendance_days_decide_create",
@@ -3310,6 +3509,199 @@
                     "reason",
                     "staff",
                     "time"
+                ]
+            },
+            "AdvanceAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "note": {
+                        "type": "string"
+                    },
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/VoidedAdvance"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "amount",
+                    "at",
+                    "by",
+                    "date",
+                    "display_name",
+                    "id",
+                    "note",
+                    "staff",
+                    "voided"
+                ]
+            },
+            "AdvanceLine": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "note": {
+                        "type": "string"
+                    },
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/VoidedAdvance"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "amount",
+                    "at",
+                    "by",
+                    "date",
+                    "display_name",
+                    "id",
+                    "note",
+                    "staff",
+                    "voided"
+                ]
+            },
+            "AdvancePageAnswer": {
+                "type": "object",
+                "properties": {
+                    "advance": {
+                        "$ref": "#/components/schemas/AdvanceLine"
+                    },
+                    "own": {
+                        "type": "boolean",
+                        "description": "Whether it was given to the person asking, by whichever job of theirs."
+                    },
+                    "ready_void_reasons": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MoneyVoidReasonEnum"
+                        },
+                        "description": "On the demo, the ready reasons it may be crossed out with, as codes; elsewhere none."
+                    }
+                },
+                "required": [
+                    "advance",
+                    "own",
+                    "ready_void_reasons"
+                ]
+            },
+            "AdvanceWorker": {
+                "type": "object",
+                "properties": {
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "left_on": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "left_on",
+                    "staff"
+                ]
+            },
+            "AdvancesMonthAnswer": {
+                "type": "object",
+                "properties": {
+                    "month": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11"
+                    },
+                    "today": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "total": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "description": "Those not crossed out, added up."
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AdvanceLine"
+                        }
+                    },
+                    "workers": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AdvanceWorker"
+                        }
+                    }
+                },
+                "required": [
+                    "month",
+                    "rows",
+                    "today",
+                    "total",
+                    "workers"
                 ]
             },
             "ApiError": {
@@ -5027,7 +5419,7 @@
                     "ready_void_reasons": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/MealMoneyDaysAnswerReadyVoidReasonsEnum"
+                            "$ref": "#/components/schemas/MoneyVoidReasonEnum"
                         },
                         "description": "On the demo, the ready reasons a row may be crossed out with, as codes; elsewhere none."
                     }
@@ -5040,13 +5432,6 @@
                     "today",
                     "total"
                 ]
-            },
-            "MealMoneyDaysAnswerReadyVoidReasonsEnum": {
-                "enum": [
-                    "wrong_amount"
-                ],
-                "type": "string",
-                "description": "* `wrong_amount` - wrong_amount"
             },
             "MealMoneyLine": {
                 "type": "object",
@@ -5092,6 +5477,13 @@
                     "note",
                     "voided"
                 ]
+            },
+            "MoneyVoidReasonEnum": {
+                "enum": [
+                    "wrong_amount"
+                ],
+                "type": "string",
+                "description": "* `wrong_amount` - wrong_amount"
             },
             "NoPhotoEnum": {
                 "enum": [
@@ -5437,7 +5829,7 @@
                     },
                     "no_day_yet": {
                         "type": "boolean",
-                        "description": "Whether no working day of this month has come yet: nobody is listed for want of a day."
+                        "description": "Whether no working day of this month has come yet: listed then is only who was given money in it."
                     },
                     "total": {
                         "type": "string",
@@ -5997,6 +6389,39 @@
                 ],
                 "type": "string",
                 "description": "* `outside_job` - Outside the job's days\n* `closed_day` - The shop was closed\n* `not_working` - Suspended or gone\n* `clock_disagrees` - A later tap disagrees\n* `time_unknown` - Time not trusted\n* `no_in` - No Ingia\n* `came_late` - Came late\n* `no_out` - No Toka\n* `left_early` - Left early"
+            },
+            "RecordAdvanceRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "note": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "amount",
+                    "date",
+                    "id",
+                    "staff"
+                ]
             },
             "RecordMealMoneyRequest": {
                 "type": "object",
@@ -7127,6 +7552,18 @@
                     "reason"
                 ]
             },
+            "VoidAdvanceRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "reason"
+                ]
+            },
             "VoidMealMoneyRequest": {
                 "type": "object",
                 "properties": {
@@ -7148,6 +7585,26 @@
                     }
                 },
                 "required": [
+                    "reason"
+                ]
+            },
+            "VoidedAdvance": {
+                "type": "object",
+                "properties": {
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "at",
+                    "by",
                     "reason"
                 ]
             },
@@ -7478,7 +7935,7 @@
                     },
                     "paid_by_day": {
                         "type": "boolean",
-                        "description": "Whether the worker has a daily pay rate on a working day of the month: with none, there is no pay."
+                        "description": "Whether the month has a line of theirs: a daily rate on a working day, or money given before payday."
                     },
                     "no_day_yet": {
                         "type": "boolean",

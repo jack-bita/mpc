@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { makeQueryClient } from "@/api/query-client";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
+import { MENEJA } from "@/test/advances";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
 import { WITH_THE_KEY } from "@/test/meals";
@@ -217,6 +218,35 @@ describe("the office's home page", () => {
       expect(
         screen.queryByRole("link", { name: "Hela ya chakula" }),
       ).toBeNull();
+      shown.unmount();
+    }
+  });
+
+  it("opens Advansi for whoever may give a worker money before payday (WAGE-8)", async () => {
+    // Meneja, with money.advance on the whole shop and neither key of pay: no Mishahara beside it.
+    answer("GET", ME, { status: 200, body: MENEJA });
+
+    render(<OfficeHome />);
+
+    const link = await screen.findByRole("link", { name: "Advansi" });
+    expect(link.getAttribute("href")).toMatch(/^\/advances\/?$/);
+    expect(screen.queryByRole("link", { name: "Mishahara" })).toBeNull();
+  });
+
+  it("offers no Advansi without its key, nor for the key on one side alone", async () => {
+    // Whoever sees the pay gives no money by it; and a worker's pay is the whole shop's, so the server would refuse a key
+    // held on Dawa alone.
+    for (const permissions of [
+      ["settings.manage", "staff.manage"],
+      ["money.advance"],
+    ]) {
+      answer("GET", ME, {
+        status: 200,
+        body: whoIsHere([{ side: DAWA, permissions }]),
+      });
+      const shown = render(<OfficeHome />);
+      await screen.findByRole("link", { name: "Mipangilio ya duka" });
+      expect(screen.queryByRole("link", { name: "Advansi" })).toBeNull();
       shown.unmount();
     }
   });

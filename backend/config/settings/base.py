@@ -316,6 +316,9 @@ SPECTACULAR_SETTINGS = {
         "NoPhotoEnum": "apps.staffpay.models.NoPhoto",
         "PhotoStateEnum": "apps.staffpay.services.PhotoState",
         "TapDoubtEnum": "apps.staffpay.api.serializers.TAP_DOUBTS",
+        # The demo's ready reason for money typed wrong, which meal money's answer and an advance's both carry (WAGE-8):
+        # one list, one name.
+        "MoneyVoidReasonEnum": "apps.staffpay.services.DEMO_MONEY_VOID_REASONS",
     },
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.

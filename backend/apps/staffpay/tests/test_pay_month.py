@@ -14,6 +14,10 @@ by the book's own rule and never kept:
 
             Leo, full day                   10,000 less 4,000 of the 8,000 that two ate today
 
+And money given before payday (WAGE-8) comes off the pay of its day's month, the same day it is typed:
+
+            Asha, three full days           30,000 less the 5,000 of Mon 16 and the 8,000 of Wed 18: 17,000 to pay
+
 Which days a worker had is the book's (test_attendance_book.py), and what they add up to the sum's (test_pay.py); here,
 who is listed, on which days, at which rate, and that nothing is kept. The clock is fixed, so the days are the same
 whenever the tests run. The amounts are made up (rule 10). Fake data only: the repo is public.
@@ -41,15 +45,18 @@ from apps.people.services import change_worker, hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
 from apps.staffpay import services
 from apps.staffpay.calculations import PaidAs, Pay, PayLine
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayChoice, MealMoney, PayRate
+from apps.staffpay.models import Advance, AttendanceDay, AttendanceEvent, ClockKind, DayChoice, MealMoney, PayRate
+from apps.staffpay.selectors import advances_between
 from apps.staffpay.services import (
     PayMonth,
     WorkerPay,
     add_tap,
     decide_day,
     pay_month,
+    record_advance,
     record_meal_money,
     set_pay_rate,
+    void_advance,
     void_meal_money,
     void_tap,
     worker_pay,
@@ -116,6 +123,11 @@ def typed(by: StaffMember, day: dt.date, amount: str) -> MealMoney:
     with shop_context(by.shop_id):
         shop = Shop.objects.get(pk=by.shop_id)
         return record_meal_money(shop, money_id=uuid.uuid7(), date=day, amount=Decimal(amount), by=by)
+
+
+def give(staff: StaffMember, by: StaffMember, day: dt.date, amount: str) -> Advance:
+    with shop_context(staff.shop_id):
+        return record_advance(staff, advance_id=uuid.uuid7(), date=day, amount=Decimal(amount), by=by)
 
 
 def month(shop: Shop, of: dt.date = NOVEMBER) -> PayMonth:
@@ -452,21 +464,175 @@ def test_the_pay_is_never_kept(shop_a: Shop, asha: StaffMember) -> None:
 
 
 def test_the_month_is_read_in_a_few_queries(shop_a: Shop, baba: StaffMember) -> None:
-    # However many workers and days: the book's dozen queries, with the meals' two, one for the rates and one for the
-    # step; and today's five, its jobs, taps, closed days, rules and meal money. Counted on the second visit, as on the
-    # first every day is new (test_attendance_month.py).
+    # However many workers and days: the book's dozen queries, with the meals' two, one for the rates, one for the step
+    # and one for the advances; and today's five, its jobs, taps, closed days, rules and meal money. Counted on the
+    # second visit, as on the first every day is new (test_attendance_month.py).
     for name in ("Asha", "Baraka", "Juma", "Zawadi"):
         staff = paid(shop_a, name)
         for day in (MON, TUE, WED, THU, FRI):
             kept_day(staff, *FULL, date=day)
         tapped(staff, *FULL, date=TODAY)
+        give(staff, baba, MON, "5000")
+        give(staff, baba, TUE, "3000")
     typed(baba, MON, "8000")
     typed(baba, TODAY, "8000")
     month(shop_a)
     with shop_context(shop_a), CaptureQueriesContext(connection) as queries:
         answer = pay_month(shop_a, NOVEMBER)
     assert len(answer.workers) == 4
-    assert len(queries) <= 22
+    assert len(queries) <= 23
+
+
+# Money given before payday (WAGE-8).
+
+
+def test_an_advance_comes_off_the_pay(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Three full days, 30,000; given 5,000 and 8,000: 17,000 to pay, on Asha's line and no other, and in the whole.
+    paid(shop_a, "Juma")
+    for day in (MON, TUE, WED):
+        kept_day(asha, *FULL, date=day)
+    give(asha, baba, MON, "5000")
+    give(asha, baba, WED, "8000")
+    answer = month(shop_a)
+    worker = line_of(answer, "Asha")
+    assert (worker.pay.lines, worker.pay.advances) == ((full(3),), Decimal("13000.00"))
+    assert worker.total == Decimal("17000.00")
+    assert (line_of(answer, "Juma").pay.advances, line_of(answer, "Juma").total) == (NOTHING, NOTHING)
+    assert answer.total == Decimal("17000.00")
+    # Asha's own page says the very same.
+    with shop_context(shop_a):
+        assert worker_pay(shop_a, asha, NOVEMBER).worker == worker
+
+
+def test_an_advance_crossed_out_comes_back(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Typed 80,000 for 8,000, crossed out, typed again: the pay follows at each read.
+    kept_day(asha, *FULL, date=MON)
+    wrong = give(asha, baba, MON, "80000")
+    assert line_of(month(shop_a), "Asha").total == Decimal("-70000.00")
+    with shop_context(shop_a):
+        void_advance(wrong, reason="Sifuri moja zaidi", by=baba)
+    assert (line_of(month(shop_a), "Asha").pay.advances, line_of(month(shop_a), "Asha").total) == (
+        NOTHING,
+        Decimal("10000.00"),
+    )
+    give(asha, baba, MON, "8000")
+    assert line_of(month(shop_a), "Asha").total == Decimal("2000.00")
+
+
+def test_todays_advance_comes_off_at_once(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Given this morning, with no Toka yet: today's work isn't counted, and today's money is, as it was given. Asha may
+    # leave at noon, and is paid what is left.
+    kept_day(asha, *FULL, date=YESTERDAY)
+    tapped(asha, (ClockKind.IN, 7, 20), date=TODAY)
+    give(asha, baba, TODAY, "4000")
+    worker = line_of(month(shop_a), "Asha")
+    assert (worker.today, worker.pay.advances, worker.total) == (None, Decimal("4000.00"), Decimal("6000.00"))
+
+
+def test_an_advance_is_taken_once_with_leo(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # And in the evening, with Leo beside the days that are over: taken off once, never off each of the two parts.
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 11, 24, 19, 0)))
+    kept_day(asha, *FULL, date=YESTERDAY)
+    tapped(asha, *FULL, date=TODAY)
+    give(asha, baba, TODAY, "4000")
+    worker = line_of(month(shop_a), "Asha")
+    assert (worker.pay.advances, todays(worker).advances) == (Decimal("4000.00"), NOTHING)
+    assert worker.total == Decimal("16000.00")
+
+
+def test_an_advance_bigger_than_the_pay_leaves_a_minus(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # The money was given, so the pay says so: 10,000 earned, 25,000 taken. And the whole takes it off too.
+    juma = paid(shop_a, "Juma")
+    for staff in (asha, juma):
+        kept_day(staff, *FULL, date=MON)
+    give(asha, baba, MON, "25000")
+    answer = month(shop_a)
+    assert line_of(answer, "Asha").total == Decimal("-15000.00")
+    assert answer.total == Decimal("-5000.00")
+
+
+def test_an_advance_comes_off_its_own_month(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Saturday 31 October is October's, and Sunday 1 November is November's, each month's first and last day counted.
+    for day, amount in (
+        (OCTOBER, "1000"),
+        (dt.date(2026, 10, 31), "2000"),
+        (NOVEMBER, "4000"),
+        (TODAY, "8000"),
+    ):
+        give(asha, baba, day, amount)
+    assert line_of(month(shop_a, OCTOBER), "Asha").pay.advances == Decimal("3000.00")
+    assert line_of(month(shop_a), "Asha").pay.advances == Decimal("12000.00")
+    assert line_of(month(shop_a, dt.date(2026, 9, 1)), "Asha").pay.advances == NOTHING
+
+
+def test_one_who_left_is_paid_less_their_advance(shop_a: Shop, baba: StaffMember) -> None:
+    # Neema left on Wednesday 18 with 30,000 earned; on the 24th Baba remembers the 10,000 of Tuesday, and types it: her
+    # last pay is right.
+    neema = paid(shop_a, "Neema")
+    for day in (MON, TUE, WED):
+        kept_day(neema, *FULL, date=day)
+    with shop_context(shop_a):
+        mark_left(neema, left_on=WED, by=baba, reason="Amehama")
+    give(neema, baba, TUE, "10000")
+    assert line_of(month(shop_a), "Neema").total == Decimal("20000.00")
+
+
+def test_each_jobs_advance_stays_on_its_own_line(shop_a: Shop, baba: StaffMember) -> None:
+    # Juma left on Monday 16 and was hired again from Thursday 19: the old job's 4,000 comes off the old job's pay.
+    old = paid(shop_a, "Juma")
+    kept_day(old, *FULL, date=MON)
+    give(old, baba, MON, "4000")
+    with shop_context(shop_a):
+        mark_left(old, left_on=MON, by=baba, reason="Amehama")
+        new = hire_again(old, display_name="Juma", started_on=THU, by=None)
+    new_rate(new, "10000", THU)
+    kept_day(new, *FULL, date=THU)
+    assert {line.staff_id: line.total for line in month(shop_a).workers} == {
+        old.pk: Decimal("6000.00"),
+        new.pk: Decimal("10000.00"),
+    }
+
+
+def test_an_advance_is_shown_before_any_working_day(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 1 November 2026 is a Sunday: nobody has worked a day of the month yet, and Asha asks for 20,000. She is listed for
+    # it alone, with nothing earned, or the money would be nowhere until Monday; Juma, who took none, is not.
+    paid(shop_a, "Juma")
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 11, 1, 10, 0)))
+    give(asha, baba, NOVEMBER, "20000")
+    answer = month(shop_a)
+    assert [(line.display_name, line.pay.lines, line.total) for line in answer.workers] == [
+        ("Asha", (), Decimal("-20000.00"))
+    ]
+    assert answer.no_day_yet is True
+    with shop_context(shop_a):
+        hers = worker_pay(shop_a, asha, NOVEMBER)
+    assert (hers.paid_by_day, hers.no_day_yet, hers.worker.total) == (True, True, Decimal("-20000.00"))
+
+
+def test_an_advance_lists_one_whose_rate_starts_later(shop_a: Shop, baba: StaffMember) -> None:
+    # Zawadi's daily pay starts in December, and she was given 5,000 in November: listed in November for it alone.
+    zawadi = paid(shop_a, "Zawadi", since=dt.date(2026, 12, 1))
+    give(zawadi, baba, MON, "5000")
+    assert [(line.display_name, line.total) for line in month(shop_a).workers] == [("Zawadi", Decimal("-5000.00"))]
+
+
+def test_advances_are_read_inside_their_own_shop(
+    shop_a: Shop, shop_b: Shop, baba: StaffMember, asha: StaffMember
+) -> None:
+    # advances_between's own guards: another shop open would answer "none" without a word (ADR-0022), and a datetime is
+    # a moment, not the shop's day.
+    give(asha, baba, MON, "5000")
+    with shop_context(shop_a):
+        assert advances_between(shop_a, MON, MON) == {asha.pk: Decimal("5000.00")}
+    with shop_context(shop_b), pytest.raises(ShopMismatch):
+        advances_between(shop_a, NOVEMBER, MON)
+    moment = dt.datetime(2026, 11, 16, tzinfo=dt.UTC)
+    with shop_context(shop_a), pytest.raises(TypeError):
+        advances_between(shop_a, moment, moment)
 
 
 # Leo: today, still running, once the worker taps Toka (Jack: A).

@@ -11,8 +11,9 @@ sends to every device route (sweep_device_clients, AUTH-2); dated rules, which t
 days each shop is closed, which the closures route lists (ATT-8); a worker's photo with its file, whose id the sweep
 sends the photo routes as shop B (CTRL-3); a worker's pay rate, which the pay rates route lists, asked about shop
 A's worker (WAGE-1); a worker paid by the day with their days in the book, whom the month page lists (ATT-5); a flag
-about a record a laptop sent, with a note, which *Tofauti* lists (CTRL-4); and a day's meal money, with a note, which
-*Hela ya chakula* lists (WAGE-7). The demo seed (DATA-1) could fill the shops later.
+about a record a laptop sent, with a note, which *Tofauti* lists (CTRL-4); a day's meal money, with a note, which *Hela
+ya chakula* lists (WAGE-7); and money given to a worker before payday, with a note, which *Advansi* lists (WAGE-8). The
+demo seed (DATA-1) could fill the shops later.
 
 The sweep knows shop A's rows by their ids, and by the texts and amounts only shop A holds, so that a leak
 with no ids, like a report of names and totals, is found too. So give shop A values of its own: names and
@@ -45,7 +46,7 @@ from apps.people.services import Outage, add_staff, confirm_pairing, record_outa
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side
-from apps.staffpay.models import AttendanceEvent, ClockKind, MealMoney, NoPhoto, TimeCheck
+from apps.staffpay.models import Advance, AttendanceEvent, ClockKind, MealMoney, NoPhoto, TimeCheck
 from apps.staffpay.services import set_pay_rate, work_out_days
 from apps.sync.models import PushedDocument, PushedStatus
 
@@ -63,13 +64,15 @@ def sweep_shops(
     sweep_attendance: tuple[Shop, Shop],
     sweep_flags: tuple[Shop, Shop],
     sweep_meal_money: tuple[Shop, Shop],
+    sweep_advances: tuple[Shop, Shop],
 ) -> tuple[Shop, Shop]:
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
     # sides, a paired device each, which the office device list shows (AUTH-5), with an offline period the health page
     # shows (SYNC-14), dated rules, which the bootstrap sends (SYNC-2), days closed, which the closures route lists
-    # (ATT-8), a photo with its file, which the photo routes are asked about (CTRL-3), a worker's pay rate, which
-    # the pay rates route lists (WAGE-1), a worker's days in the book, which the month page lists (ATT-5), a flag with
-    # its note, which the flags' page lists (CTRL-4), and a day's meal money, which Hela ya chakula lists (WAGE-7).
+    # (ATT-8), a photo with its file, which the photo routes are asked about (CTRL-3), a worker's pay rate, which the
+    # pay rates route lists (WAGE-1), a worker's days in the book, which the month page lists (ATT-5), a flag with its
+    # note, which the flags' page lists (CTRL-4), a day's meal money, which Hela ya chakula lists (WAGE-7), and money
+    # given before payday, which Advansi lists (WAGE-8).
     return sweep_sides
 
 
@@ -221,6 +224,34 @@ def sweep_meal_money(
 
 
 @pytest.fixture
+def sweep_advances(
+    sweep_attendance: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember
+) -> tuple[Shop, Shop]:
+    # Money given yesterday to each shop's worker paid by the day (sweep_attendance), of an amount and with a note only
+    # that shop holds (WAGE-8): the sweep asks for it as shop B (sweep_queries), and sends shop A's row to be read and
+    # to be crossed out. Written past record_advance, whose maker would need the key. And one crossed out, with a reason
+    # only that shop holds.
+    for shop, staff, name, amount, note, why in (
+        (sweep_attendance[0], staff_a, "Mhudhuriaji Mfano", "15937", "Advansi ya Mfano", "Kosa la advansi Mfano"),
+        (sweep_attendance[1], staff_b, "Mhudhuriaji Jirani", "73951", "Advansi ya Jirani", "Kosa la advansi Jirani"),
+    ):
+        with shop_context(shop):
+            yesterday = shop_today(shop) - timedelta(days=1)
+            worker = StaffMember.objects.get(display_name=name)
+            facts = {
+                "shop": shop,
+                "staff": worker,
+                "date": yesterday,
+                "amount": Decimal(amount),
+                "created_by": staff,
+            }
+            Advance.objects.create(note=note, **facts)
+            crossed = {"voided_at": timezone.now(), "voided_by": staff, "void_reason": why}
+            Advance.objects.create(**facts, **crossed)
+    return sweep_attendance
+
+
+@pytest.fixture
 def sweep_device_keys(
     sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember, give_role: GiveRole
 ) -> tuple[str, str]:
@@ -306,13 +337,14 @@ def sweep_queries(shop_a: Shop, staff_a: StaffMember) -> dict[str, dict[str, str
     # page names its month (ATT-5): yesterday's, as the book keeps no day before it is over, so on the 1st this
     # month would list nobody. A worker's month names its month the same way (ATT-12); its worker is in the address,
     # each of shop A's in turn, as for any route of one row. The meal money names its days (WAGE-7): yesterday's, which
-    # sweep_meal_money types. The pay names its month as the attendance does (WAGE-2).
+    # sweep_meal_money types. The pay names its month as the attendance does (WAGE-2), and so do the advances (WAGE-8).
     yesterday = shop_today(shop_a) - timedelta(days=1)
     return {
         "pay-rate-list": {"staff": str(staff_a.pk)},
         "attendance-month-list": {"month": yesterday.strftime("%Y-%m")},
         "attendance-worker-detail": {"month": yesterday.strftime("%Y-%m")},
         "meal-money-list": {"first": yesterday.isoformat(), "last": yesterday.isoformat()},
+        "advance-list": {"month": yesterday.strftime("%Y-%m")},
         "pay-list": {"month": yesterday.strftime("%Y-%m")},
         "pay-detail": {"month": yesterday.strftime("%Y-%m")},
     }

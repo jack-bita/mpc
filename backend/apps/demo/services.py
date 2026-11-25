@@ -31,6 +31,10 @@ ya chakula how each day's is split, and can type today's: 3,000 on each working 
 calls Haijaandikwa. What a visitor types takes no note, and crossing out one takes the ready reason, as typed words
 would show to every visitor after them (record_meal_money, void_meal_money).
 
+And two advances of those days (WAGE-8), typed by Meneja, who holds their key, money.advance, as every manager does:
+Asha's and Baraka's, which Advansi lists and their pay takes off, and one of which a visitor can cross out, with the
+ready reason, as for the meal money (record_advance, void_advance).
+
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
 the tests log in as these people, with the logins written again in frontend/e2e/pair-and-pin-login.spec.ts. Change
@@ -50,9 +54,10 @@ safe only on a database that holds nothing but demo data, so the seed refuses, b
 Once a day, not on every start (DATA-1's plan, 8 Nov 2026): the free demo sleeps after 15 minutes with no visitor,
 and every wake-up runs its start again. A visitor back from a break should find the PIN screen with their work still
 there (the idle lock, UI-4), so a start keeps a demo shop made today, in the shop's own time, and makes it again only
-when it was made on an earlier day, or lacks a rule, a closure, a person's extra key or rate, the taps or the meal money
-of the days before today, or the flags this seed sets, as a demo an older seed made that morning does on a deploy's day
-(ATT-2, ATT-8, #275, WAGE-1, DATA-8, WAGE-7, CTRL-4). `fresh=True` makes it again whatever its day.
+when it was made on an earlier day, or lacks a rule, a closure, a person's extra key or rate, the taps, the meal money
+or the advances of the days before today, or the flags this seed sets, as a demo an older seed made that morning does on
+a deploy's day (ATT-2, ATT-8, #275, WAGE-1, DATA-8, WAGE-7, WAGE-8, CTRL-4). `fresh=True` makes it again whatever its
+day.
 
 Made through the services, as a real shop is set up (set_up_shop, add_staff, assign_role, set_pin), never by writing
 rows: the demo can't hold anything a real shop couldn't, and a service that changes its rules changes the demo too.
@@ -103,8 +108,8 @@ from apps.people.services import (
 from apps.shops.models import Closure, Setting, Shop, ShopKind, Side, SideBand
 from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide, add_closure, set_setting, switch_side
-from apps.staffpay.models import AttendanceEvent, ClockKind, MealMoney, NoPhoto, PayRate
-from apps.staffpay.services import SUNDAY, record_meal_money, set_pay_rate
+from apps.staffpay.models import Advance, AttendanceEvent, ClockKind, MealMoney, NoPhoto, PayRate
+from apps.staffpay.services import SUNDAY, record_advance, record_meal_money, set_pay_rate
 from apps.sync.api.serializers import MOST_DOCUMENTS
 from apps.sync.models import PushedDocument, PushedStatus
 from apps.sync.push import Answer, Sent, push
@@ -229,6 +234,13 @@ HISTORY_DAYS = 21
 MEALS_A_DAY = Decimal("3000")
 FORGOTTEN_MEALS_BACK = 5
 
+# The money given before payday (WAGE-8), made up: to whom, on which of the working days before today, as an OddDay's
+# `back`, and how much. Baraka's of the latest, so this month's Advansi has a line from its second working day on.
+ADVANCES = (
+    ("Asha", 8, Decimal("20000")),
+    ("Baraka", 1, Decimal("30000")),
+)
+
 # The demo's own laptop (DATA-8), which sends the taps of the days before today: on Dawa, as a shop's laptop sits on a
 # side. Anyone working at the shop may clock in on it (Jack, ATT-1), Baraka of Vyakula too.
 DEMO_LAPTOP_NAME = "Laptop ya Dawa"
@@ -336,6 +348,7 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
         and _holds_its_rates(shop)
         and _holds_its_taps(shop)
         and _holds_its_meals(shop)
+        and _holds_its_advances(shop)
         and _holds_its_flags(shop)
     ):
         return Seeded.KEPT
@@ -479,6 +492,15 @@ def _holds_its_meals(shop: Shop) -> bool:
     return set(_days_with_meals(shop_today(shop))) <= held
 
 
+def _holds_its_advances(shop: Shop) -> bool:
+    # Whether today's demo holds the advances this seed types (WAGE-8): as for its meal money. Known by whose and which
+    # day: a nickname is one current worker's, and the seed's people stay (demo.people_fixed), so it is theirs. One a
+    # visitor crosses out is still there (T2), and what they type only adds to them.
+    with shop_context(shop):
+        held = set(Advance.objects.filter(shop=shop).values_list("staff__display_name", "date"))
+    return {(name, day) for name, day, _amount in _advances_of(shop_today(shop))} <= held
+
+
 def _holds_its_flags(shop: Shop) -> bool:
     # Whether today's demo holds the flags this seed raises (CTRL-4): as for its taps, a deploy whose seed raises them
     # must not keep a demo an older seed made that morning without them. Known by the refused record's line, sent last,
@@ -520,6 +542,7 @@ def _make_the_shop() -> Shop:
         _send_the_taps(laptop, people, taps, today)
         _send_a_refused_record(laptop, people, taps)
         _type_the_meals(shop, manager, today)
+        _give_the_advances(people, manager, today)
     return shop
 
 
@@ -685,6 +708,22 @@ def _type_the_meals(shop: Shop, manager: StaffMember, today: date) -> None:
     # `today`: the shop's day the taps were made from.
     for day in reversed(_days_with_meals(today)):
         record_meal_money(shop, money_id=uuid.uuid7(), date=day, amount=MEALS_A_DAY, by=manager)
+
+
+def _advances_of(today: date) -> list[tuple[str, date, Decimal]]:
+    # Whom the seed gives money before payday, on which day and how much, oldest first (ADVANCES). From the date alone,
+    # as for the meals. None on a seed with fewer working days before today than one counts back.
+    days = _working_days_back(today)
+    given = [(name, days[back - 1], amount) for name, back, amount in ADVANCES if back <= len(days)]
+    return sorted(given, key=lambda advance: advance[1])
+
+
+def _give_the_advances(people: dict[str, StaffMember], manager: StaffMember, today: date) -> None:
+    # The money given before payday (WAGE-8), typed by Meneja through the service, as a person types it; with no note,
+    # as none is kept on the demo. The pay takes it off when a page asks. `today`: the shop's day the taps were made
+    # from.
+    for name, day, amount in _advances_of(today):
+        record_advance(people[name], advance_id=uuid.uuid7(), date=day, amount=amount, by=manager)
 
 
 def _send_a_refused_record(laptop: Device, people: dict[str, StaffMember], taps: list[_DemoTap]) -> None:

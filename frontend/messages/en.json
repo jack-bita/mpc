@@ -826,6 +826,44 @@
       "show": "Show"
     }
   },
+  "advances": {
+    "title": "Advances",
+    "total": "Total",
+    "rowsLabel": "The month's advances",
+    "line": "{weekday} {date} · {name}",
+    "voided": "Crossed out",
+    "none": "No advances in this month.",
+    "record": {
+      "title": "Record an advance",
+      "worker": "Worker",
+      "workerLeft": "{name} (left {date})",
+      "nobody": "No other worker is paid by the day in this month.",
+      "date": "Day",
+      "amount": "Amount (TSh)",
+      "note": "Note (optional)",
+      "save": "Save",
+      "saved": "Recorded: {amount}, {name}, {weekday} {date}."
+    },
+    "day": "{weekday} {date}",
+    "page": {
+      "title": "{name}'s advance",
+      "none": "No advance was chosen.",
+      "typedBy": "Recorded by {by} · {date} {time}",
+      "voidedBy": "Crossed out by {by}, {date}",
+      "reason": "Why: {reason}",
+      "own": "This advance is yours. Only someone else can cross it out."
+    },
+    "void": {
+      "title": "Cross out {amount}",
+      "about": "{name} · {day}",
+      "aboutWithNote": "{name} · {day} · {note}",
+      "reason": "Why",
+      "action": "Cross out"
+    },
+    "readyReason": {
+      "wrong_amount": "The amount is wrong"
+    }
+  },
   "pay": {
     "title": "Pay",
     "countedTo": "Up to yesterday, {weekday} {date}",
@@ -848,6 +886,7 @@
     "fines": "Fines",
     "meals": "Meals",
     "mealDays": "{count, plural, one {1 day} other {# days}}",
+    "advances": "Advances",
     "less": "− {amount}",
     "todayLine": {
       "full": "Today: full day",
@@ -1467,6 +1506,15 @@
       "reason_missing": "Write why.",
       "days_backwards": "To is before From.",
       "too_many_days": "Choose at most a year of days."
+    },
+    "advance": {
+      "amount_invalid": "Type a whole number of shillings, above 0.",
+      "amount_too_big": "This amount is too big. Check its zeros.",
+      "in_future": "This day hasn't come yet.",
+      "outside_job": "This day is before the worker's first day, or after their last.",
+      "not_paid_by_day": "This worker has no daily pay.",
+      "own": "You can't record or cross out your own advance.",
+      "reason_missing": "Write why."
     },
     "flag": {
       "note_required": "Write a note.",

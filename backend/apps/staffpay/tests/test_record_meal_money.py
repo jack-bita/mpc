@@ -26,6 +26,7 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.utils import timezone
 from pytest_django import Settings
 
 from apps.core.models import Change
@@ -121,7 +122,7 @@ def test_several_a_day_add_up(shop_a: Shop, asha: StaffMember, baba: StaffMember
 
 def test_today_and_a_day_gone_by_take_money_and_a_day_to_come_does_not(shop_a: Shop, asha: StaffMember) -> None:
     # Typed each day, and a forgotten day later. Tomorrow's meals aren't cooked yet: a wrong date, so it is refused
-    # beside its box. The shop's own today, never UTC's. Whole days either side, so no Sunday is in the way.
+    # beside its box. Whole days either side, so no Sunday is in the way.
     with shop_context(shop_a):
         today = shop_today(shop_a)
     to_come = today + dt.timedelta(days=1 if today.weekday() != 5 else 2)
@@ -132,6 +133,18 @@ def test_today_and_a_day_gone_by_take_money_and_a_day_to_come_does_not(shop_a: S
         type_money(asha, day=today)
     type_money(asha, day=MONDAY)
     assert rows_of(shop_a) == (2 if today.weekday() != 6 else 1)
+
+
+def test_today_is_the_shops_own(shop_a: Shop, asha: StaffMember, monkeypatch: pytest.MonkeyPatch) -> None:
+    # 01:30 on Tuesday 1 December in Arusha, when UTC still says Monday 30 November: today takes money, and the 2nd
+    # doesn't (WAGE-8's review).
+    moment = dt.datetime(2026, 12, 1, 1, 30, tzinfo=dt.timezone(dt.timedelta(hours=3)))
+    monkeypatch.setattr(timezone, "now", lambda: moment)
+    with pytest.raises(ValidationError) as refused:
+        type_money(asha, day=dt.date(2026, 12, 2))
+    assert codes_of(refused) == {"date": {"meal_money.in_future"}}
+    type_money(asha, day=dt.date(2026, 12, 1))
+    assert rows_of(shop_a) == 1
 
 
 def test_a_sunday_takes_no_money(shop_a: Shop, asha: StaffMember) -> None:

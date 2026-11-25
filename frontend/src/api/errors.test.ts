@@ -140,6 +140,16 @@ const CODES_THE_API_SENDS = [
   "meal_money.reason_missing",
   "meal_money.days_backwards",
   "meal_money.too_many_days",
+  // Money given to a worker before payday (WAGE-8, record_advance and void_advance): an amount of 0 or less, or with
+  // cents; one of zeros too many; a day to come; a day outside the job's; a worker with no daily pay; one's own, typed or
+  // crossed out; crossing out with no reason. On the demo, a note is demo.no_note and a reason demo.ready_reasons.
+  "advance.amount_invalid",
+  "advance.amount_too_big",
+  "advance.in_future",
+  "advance.outside_job",
+  "advance.not_paid_by_day",
+  "advance.own",
+  "advance.reason_missing",
   // Explaining or closing a flag (CTRL-4, apps/control/services.py): no words; one closed already; one that names the
   // person closing it. On the demo, a note that isn't a ready one is demo.ready_reasons above.
   "flag.note_required",

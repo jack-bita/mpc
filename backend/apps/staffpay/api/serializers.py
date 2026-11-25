@@ -19,6 +19,11 @@ meal_money_days, for the span in the address (MealMoneyQuery); and a row typed (
 out (VoidMealMoneySerializer), which record_meal_money and void_meal_money check and keep, each answered as the day's
 page shows it (MealMoneyAnswer).
 
+And money given before payday (WAGE-8), for the month in the address (AttendanceMonthQuery): the month's, and whom one
+may be typed for (AdvancesMonthAnswer), read by advances_month; one, for its own page (AdvancePageAnswer); and one typed
+(RecordAdvanceSerializer) or crossed out (VoidAdvanceSerializer), which record_advance and void_advance check and keep,
+each answered as the pages show it (AdvanceAnswer).
+
 And the month's pay (WAGE-2), for the month in the address (AttendanceMonthQuery): everyone's (PayMonthAnswer), worked
 out by pay_month, and one worker's (WorkerPayMonthAnswer), by worker_pay, each line by line.
 """
@@ -38,6 +43,7 @@ from apps.staffpay.calculations import PaidAs
 from apps.staffpay.models import (
     DECIDED,
     AbsenceType,
+    Advance,
     AttendanceEvent,
     ClockKind,
     DayChoice,
@@ -49,10 +55,11 @@ from apps.staffpay.models import (
 )
 from apps.staffpay.services import (
     DEMO_ADD_REASONS,
-    DEMO_MEAL_VOID_REASONS,
+    DEMO_MONEY_VOID_REASONS,
     DEMO_REASONS,
     DEMO_VOID_REASONS,
     PhotoState,
+    advance_line,
     meal_line,
     tap_line,
 )
@@ -420,7 +427,7 @@ class MealMoneyDaysAnswer(serializers.Serializer[Any]):
     total = serializers.DecimalField(max_digits=14, decimal_places=2)
     days = MealDaySerializer(many=True)
     ready_void_reasons = serializers.ListField(
-        child=serializers.ChoiceField(choices=DEMO_MEAL_VOID_REASONS),
+        child=serializers.ChoiceField(choices=DEMO_MONEY_VOID_REASONS),
         help_text="On the demo, the ready reasons a row may be crossed out with, as codes; elsewhere none.",
     )
 
@@ -448,6 +455,83 @@ class MealMoneyAnswer(MealMoneyLineSerializer):
         return super().to_representation(meal_line(instance))
 
 
+class VoidedAdvanceSerializer(serializers.Serializer[Any]):
+    # Who crossed out an advance, by nickname; when; and why. On the demo the reason is a ready one's code
+    # (`wrong_amount`), which the page says in words.
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+    reason = serializers.CharField()
+
+
+class AdvanceLineSerializer(serializers.Serializer[Any]):
+    # One advance, as Advansi's line and its own page show it (WAGE-8): whose, by their job and nickname; the day; how
+    # much, a string (rule 3), for what; who typed it, by nickname, and when; and who crossed it out, or null while it
+    # counts. One crossed out still comes, to be shown struck through (A2).
+    id = serializers.UUIDField()
+    staff = serializers.UUIDField(source="staff_id")
+    display_name = serializers.CharField()
+    date = serializers.DateField()
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    note = serializers.CharField()
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+    voided = VoidedAdvanceSerializer(allow_null=True)
+
+
+class AdvanceWorkerSerializer(serializers.Serializer[Any]):
+    # A worker one may be typed for: the job, the nickname, and their last day if they left. Nothing of their pay.
+    staff = serializers.UUIDField(source="staff_id")
+    display_name = serializers.CharField()
+    left_on = serializers.DateField(allow_null=True)
+
+
+# One object, not a list, as for the month's answer above.
+@extend_schema_serializer(many=False)
+class AdvancesMonthAnswer(serializers.Serializer[Any]):
+    # Advansi's answer (WAGE-8): the month; the shop's today, as a phone's date can be wrong; the sum of those that
+    # count; every one of it, newest first; and whom one may be typed for, by name.
+    month = MonthField()
+    today = serializers.DateField()
+    total = serializers.DecimalField(max_digits=14, decimal_places=2, help_text="Those not crossed out, added up.")
+    rows = AdvanceLineSerializer(many=True)
+    workers = AdvanceWorkerSerializer(many=True)
+
+
+class AdvancePageAnswer(serializers.Serializer[Any]):
+    # One advance, as its own page reads it (WAGE-8): the very line of the list; whether it is the asker's own, whom the
+    # page offers no Batilisha (Jack: A); and the reasons its sheet offers on the demo.
+    advance = AdvanceLineSerializer()
+    own = serializers.BooleanField(help_text="Whether it was given to the person asking, by whichever job of theirs.")
+    ready_void_reasons = serializers.ListField(
+        child=serializers.ChoiceField(choices=DEMO_MONEY_VOID_REASONS),
+        help_text="On the demo, the ready reasons it may be crossed out with, as codes; elsewhere none.",
+    )
+
+
+class RecordAdvanceSerializer(serializers.Serializer[Any]):
+    # An advance as the sheet sends it (WAGE-8): its id, made on the phone (ADR-0007), required and a UUIDv7, as every
+    # create's; whose, a job of the visit's shop (WorkerField: another shop's "not found", as an id no shop has); the
+    # day; the amount, a string; and what it was for, which may be left out. The amount's shape is checked here (a
+    # number, at most two places); the rest is record_advance's, each beside its box in its own code.
+    id = serializers.UUIDField(validators=[uuid7_only])
+    staff = WorkerField()
+    date = serializers.DateField()
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    note = serializers.CharField(max_length=200, allow_blank=True, default="")
+
+
+class VoidAdvanceSerializer(serializers.Serializer[Any]):
+    # An advance crossed out, as the sheet sends it: why. Empty here is void_advance's to refuse, beside the box.
+    reason = serializers.CharField(max_length=200, allow_blank=True)
+
+
+class AdvanceAnswer(AdvanceLineSerializer):
+    # One typed or crossed out, answered as the pages show it (advance_line). The fields are AdvanceLineSerializer's
+    # own, so the schema describes the answer by itself, as a tap's does (TapAnswer).
+    def to_representation(self, instance: Advance) -> Any:
+        return super().to_representation(advance_line(instance))
+
+
 class PayLineSerializer(serializers.Serializer[Any]):
     # One line of a worker's pay (WAGE-2): so many full days, or half ones, at so much each, and what they come to. The
     # amounts are strings (rule 3), and the page multiplies nothing itself.
@@ -461,8 +545,9 @@ class PayLineSerializer(serializers.Serializer[Any]):
 
 class PaySerializer(serializers.Serializer[Any]):
     # A worker's pay over some days (Pay, apps/staffpay/calculations.py): the lines, the full days first; the fines and
-    # the meals, each with how many days; the advances, none until WAGE-3; how many days wait for a decision, and how
-    # many paid days have no rate, neither paid; and what is left, which may be below 0.
+    # the meals, each with how many days; the money given before payday (WAGE-8), on the days that are over and never on
+    # today's part; how many days wait for a decision, and how many paid days have no rate, neither paid; and what is
+    # left, which may be below 0.
     lines = PayLineSerializer(many=True)
     fined_days = serializers.IntegerField()
     fines = serializers.DecimalField(max_digits=14, decimal_places=2)
@@ -490,12 +575,12 @@ class WorkerPaySerializer(serializers.Serializer[Any]):
 class PayMonthAnswer(serializers.Serializer[Any]):
     # Mishahara's answer (WAGE-2): the month; the shop's today, as a phone's date can be wrong; the last day counted, or
     # null when none is over; whether no working day of it has come yet; the whole of it; and a line per worker paid by
-    # the day, by name.
+    # the day, or given money before payday in it (WAGE-8), by name.
     month = MonthField()
     today = serializers.DateField()
     counted_to = serializers.DateField(allow_null=True)
     no_day_yet = serializers.BooleanField(
-        help_text="Whether no working day of this month has come yet: nobody is listed for want of a day."
+        help_text="Whether no working day of this month has come yet: listed then is only who was given money in it."
     )
     total = serializers.DecimalField(max_digits=14, decimal_places=2)
     workers = WorkerPaySerializer(many=True)
@@ -503,12 +588,14 @@ class PayMonthAnswer(serializers.Serializer[Any]):
 
 class WorkerPayMonthAnswer(serializers.Serializer[Any]):
     # One worker's pay of a month: their line of Mishahara, with its month and its days; and, for the page to say why
-    # there is nothing, whether the shop pays them by the day in it, and whether their first working day is to come.
+    # there is nothing, whether there is a line at all, and whether their first working day is to come. The line's field
+    # is named for what it first said (WAGE-2), before money given made a line too (WAGE-8): renamed, a page still open
+    # in an older copy of the app would read nothing, and say that nobody is paid.
     month = MonthField()
     today = serializers.DateField()
     counted_to = serializers.DateField(allow_null=True)
     paid_by_day = serializers.BooleanField(
-        help_text="Whether the worker has a daily pay rate on a working day of the month: with none, there is no pay."
+        help_text="Whether the month has a line of theirs: a daily rate on a working day, or money given before payday."
     )
     no_day_yet = serializers.BooleanField(
         help_text="Whether the worker's first working day of this month is still to come."
