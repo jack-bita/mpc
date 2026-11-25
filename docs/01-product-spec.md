@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.9 · 19 Nov 2026 · Portion 1 of the planning pack
+**Version:** 1.10 · 25 Nov 2026 · Portion 1 of the planning pack
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Open questions are collected in §14. Key decisions are recorded as ADRs in `docs/adr/`.
 
 **Changes in v1.1** (18 Oct 2026): applies the build plan's Appendix A (`04-build-plan.md`). Attendance (R1b) is built and switched on first, then the Drugs side (R1), then the Foods side (R2); every part lives in the one website and is switched on in settings (§7.8, §10, §11, §14 — 04 BP7, ADR-0033). §6 now states the side decision (02 D1, ADR-0001).
@@ -22,6 +22,8 @@
 **Changes in v1.8** (19 Nov 2026, from Jack, ATT-11): §8.1, a day with a tap in doubt needs review: a tap by a worker who was suspended or had left, a tap whose time a later one disagrees with, and a tap before the worker's first day or after their last (02 v1.46, 04 v1.142). Marked **(v1.8)**.
 
 **Changes in v1.9** (19 Nov 2026, ATT-11's review): §8.1, a tap the server timed itself, sent at once, is never in doubt for a later tap that disagrees with it, as no laptop's clock can make the server's time wrong (02 v1.47, 04 v1.144). Marked **(v1.9)**.
+
+**Changes in v1.10** (25 Nov 2026, from Jack, WAGE-2): §8.1, a fine never takes a day's pay below 0; half a day's pay is rounded once, by itself; and one who leaves is paid for the day they leave as soon as they clock out, with that day's meals (02 v1.66, 04 v1.197). Marked **(v1.10)**.
 
 ---
 
@@ -235,8 +237,8 @@ In this order: a price list with in-stock status (browse by animal and problem) 
 - **A tap in doubt** **(v1.8)**: a day needs review, for the owner or a manager to decide, when one of its taps is in doubt: made by a worker who was suspended or had left, as an offline laptop doesn't know yet; a tap whose time the next tap on the same laptop disagrees with, as one of the two clocks was wrong and nobody knows which, unless the server timed it itself, as a tap sent at once is **(v1.9)**; or a tap before the worker's first day or after their last, as when a manager moves the first day later.
 - **Absent:** office duty → paid; with permission → unpaid; no-show → unpaid.
 - **Meals** **(v1.2)**: the cook makes the workers' meals at the shop, and each worker pays for their own. Each day, the day's meal money is typed in and split equally among the workers who came that day, half days included; the cook pays no share. So a worker who came 10 days pays 10 days of meals, not a share of the whole month.
-- **Pay** = (full days × daily rate) + (half days × daily rate ÷ 2) − each day's fine **(v1.6)** − meal shares − advances. Paid monthly. The daily rate is set per worker. Sundays are not paid.
-- **Leaving mid-month** **(v1.2)**: a worker who leaves is paid up to their last day. The system already holds that pay, worked out day by day, so the owner reads it and pays.
+- **Pay** = (full days × daily rate) + (half days × daily rate ÷ 2) − each day's fine **(v1.6)** − meal shares − advances. Paid monthly. The daily rate is set per worker. Sundays are not paid. A fine takes no more than its day pays, so a day never goes below 0 **(v1.10)**. Half a day's pay is rounded once, by itself, to the shop's rounding step **(v1.10)**.
+- **Leaving mid-month** **(v1.2)**: a worker who leaves is paid up to their last day. The system already holds that pay, worked out day by day, so the owner reads it and pays. The day they leave counts as soon as they clock out, less their share of that day's meals, split among those who have come by then **(v1.10)**.
 
 Examples (these become automated tests):
 

@@ -1,5 +1,5 @@
 // worker-page.tsx — one worker's own page, opened by tapping their name on Wafanyakazi (PPL-6): everything of theirs,
-// in five headed cards, each with the buttons that change what it shows (UI-10).
+// in six headed cards, each with the buttons that change what it shows (UI-10).
 //
 // As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Since UI-10 (20 Nov 2026, his
 // "professional"), cards, each under its heading, so a manager's phone finds each thing by its name:
@@ -11,8 +11,9 @@
 //   - Cheo: their roles, then their extra keys, each by its name and side, with Ongeza kazi on the heading's row,
 //     which opens its form on a page of its own (PPL-8, UI-11, worker-roles.tsx, give-screen.tsx);
 //   - Malipo kwa siku: their daily pay rate and its history, for whoever holds settings.manage and staff.manage
-//     (WAGE-1, worker-pay.tsx).
-// Later cards add here: the pay so far (WAGE-2), so the owner pays one who leaves at once.
+//     (WAGE-1, worker-pay.tsx);
+//   - Malipo ya mwezi: the month's pay so far, line by line, for them too, so the owner pays one who leaves at once
+//     (WAGE-2, worker-month-pay.tsx).
 //
 // At /workers/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address
 // (app/(office)/workers/view/page.tsx). It asks GET /api/v1/people/staff/{id}/, and shows the list's copy at once when
@@ -31,14 +32,19 @@ import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { PageHeader } from "@/components/design/page-header";
+import { monthOf } from "@/features/attendance/attendance-month";
+import { usePagesClock } from "@/features/attendance/month-switch";
 import { askDemoOpen, DEMO_OPEN } from "@/features/devices/demo";
+import { useWorkerPay } from "@/features/pay/pay";
 import { useWhoIsHere } from "@/features/people/who-is-here";
 import { formatDay, formatPhone } from "@/lib/format";
+import { shopToday } from "@/offline/rules";
 
 import { forgetNews, type PageNews, peekNews } from "./page-news";
 import { maySeePay, usePayRates } from "./pay-rates";
 import { WorkerActions } from "./worker-actions";
 import { WorkerLogins } from "./worker-logins";
+import { WorkerMonthPay } from "./worker-month-pay";
 import { WorkerPay } from "./worker-pay";
 import { WorkerPhoto } from "./worker-photo";
 import { WorkerRoles } from "./worker-roles";
@@ -95,6 +101,24 @@ export function WorkerScreen({ id }: { id: string | null }) {
     data: ratesRead.data,
     error: ratesRead.error,
     isPending: ratesRead.isPending,
+  };
+  // The month's pay (WAGE-2), for them too: this month on the shop's clock, as the page opened, until ‹ › chooses another
+  // for this worker; on another worker's page, as the browser's back and forward move the address, this month again.
+  const { openedAt, now } = usePagesClock();
+  const thisMonthAt = (moment: number) =>
+    who.data ? monthOf(shopToday(who.data.shop.timezone, moment)) : null;
+  const thisMonth = thisMonthAt(now);
+  const [chosen, setChosen] = useState<{ id: string; month: string }>();
+  const payOf =
+    chosen !== undefined && chosen.id === id
+      ? chosen.month
+      : thisMonthAt(openedAt);
+  // Asked for nobody else, as the server would refuse it.
+  const payRead = useWorkerPay(seesPay ? id : null, payOf);
+  const monthPay = {
+    data: payRead.data,
+    error: payRead.error,
+    isPending: payRead.isPending,
   };
   // No form opens inside this page (UI-11): the four long ones have pages of their own, and the short ones are sheets,
   // which shut the page off behind them (UI-10). So one change is made at a time with no rule of the page's own, where
@@ -163,6 +187,15 @@ export function WorkerScreen({ id }: { id: string | null }) {
               worker={worker.data}
               me={who.data}
               rates={rates}
+            />
+          ) : null}
+          {/* Under it, as Jack pictured it (WAGE-2): what a day pays, then what the month comes to. */}
+          {seesPay && id !== null && payOf !== null && thisMonth !== null ? (
+            <WorkerMonthPay
+              month={payOf}
+              thisMonth={thisMonth}
+              onChoose={(month) => setChosen({ id, month })}
+              read={monthPay}
             />
           ) : null}
         </>

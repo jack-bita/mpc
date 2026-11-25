@@ -306,11 +306,13 @@ def sweep_queries(shop_a: Shop, staff_a: StaffMember) -> dict[str, dict[str, str
     # page names its month (ATT-5): yesterday's, as the book keeps no day before it is over, so on the 1st this
     # month would list nobody. A worker's month names its month the same way (ATT-12); its worker is in the address,
     # each of shop A's in turn, as for any route of one row. The meal money names its days (WAGE-7): yesterday's, which
-    # sweep_meal_money types.
+    # sweep_meal_money types. The pay names its month as the attendance does (WAGE-2).
     yesterday = shop_today(shop_a) - timedelta(days=1)
     return {
         "pay-rate-list": {"staff": str(staff_a.pk)},
         "attendance-month-list": {"month": yesterday.strftime("%Y-%m")},
         "attendance-worker-detail": {"month": yesterday.strftime("%Y-%m")},
         "meal-money-list": {"first": yesterday.isoformat(), "last": yesterday.isoformat()},
+        "pay-list": {"month": yesterday.strftime("%Y-%m")},
+        "pay-detail": {"month": yesterday.strftime("%Y-%m")},
     }

@@ -12,6 +12,7 @@ import type { components } from "@/api/schema";
 import { MOVED_IN_APP } from "@/components/in-app-moves";
 import { DAWA } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
+import { PayAsked, payIsAnswered } from "@/test/pay";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
 import { MANAGER, role, STAFF, worker } from "@/test/workers";
@@ -211,6 +212,32 @@ describe("Badilisha", () => {
       ),
     );
   });
+
+  it.each([
+    ["saved", { status: 200, body: { ...ASHA, version: 2 } }],
+    ["fixed by someone else first", refusal(409, "version_conflict")],
+  ])(
+    "asks the pay again, as a first day moved moves the days she is paid for: %s (WAGE-2)",
+    async (_how, reply) => {
+      theServerHas(ASHA);
+      answer("PATCH", ASHAS, reply);
+      const asked = payIsAnswered();
+      render(
+        <>
+          <PayAsked />
+          <EditWorkerScreen id={ASHA.id} />
+        </>,
+      );
+      await screen.findByLabelText("Jina kamili");
+      await waitFor(() => expect(asked()).toEqual([1, 1]));
+
+      typeInto(box("Kazi"), "Muuzaji");
+      typeInto(box("Sababu"), WHY);
+      fireEvent.click(button("Hifadhi"));
+
+      await waitFor(() => expect(asked()).toEqual([2, 2]));
+    },
+  );
 
   it("goes to Asha's page in its own place when opened from a bookmark, so the arrow there leads to the list", async () => {
     const server = theServerHas(ASHA);

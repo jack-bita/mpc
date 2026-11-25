@@ -8,8 +8,10 @@ These helpers make a day the way the shop does: taps on the shop's laptop, then 
     job(shop, "Juma")     a job since 1 January, so every day decided here is one of its days
     kept_day(juma)        Monday 16 Nov: in at 07:50, no Toka, waiting for a decision
     kept_day(juma, (ClockKind.OUT, 18, 45))   the same Monday with the taps named instead
+    tapped(juma, (ClockKind.IN, 7, 20), date=today)   the taps alone, for a day still running, never kept
     absent_day(juma)      a day with no tap: absent, or off on a Sunday
-    doubted_tap(juma, 7, 20)  an Ingia whose time the server doesn't trust, for a day whose time is in doubt
+    doubted_tap(juma, 7, 20)  an Ingia whose time the server doesn't trust, for a day whose time is in doubt; or a
+                              Toka, with kind=ClockKind.OUT
 
 The shop must hold one laptop (the `device_a` fixture for shop A). Fake data only: the repo is public.
 """
@@ -65,9 +67,16 @@ def job(shop: Shop, name: str) -> StaffMember:
 def kept_day(staff: StaffMember, *taps: tuple[ClockKind, int, int], date: dt.date = MONDAY) -> AttendanceDay:
     """The day as the book keeps it, from taps made on the shop's laptop: Juma's Monday, in at 07:50 and no Toka, sent
     to review, unless the test names its own taps, as (ClockKind.OUT, 18, 45)."""
+    tapped(staff, *(taps or ((ClockKind.IN, 7, 50),)), date=date)
+    return absent_day(staff, date)
+
+
+def tapped(staff: StaffMember, *taps: tuple[ClockKind, int, int], date: dt.date) -> None:
+    """Taps made on the shop's laptop, and nothing else: the book isn't asked for their day, as it answers no day still
+    running (WAGE-2)."""
     with shop_context(staff.shop_id):
         laptop = Device.objects.get(shop=staff.shop_id)
-        for kind, hour, minute in taps or ((ClockKind.IN, 7, 50),):
+        for kind, hour, minute in taps:
             moment = dt.datetime(date.year, date.month, date.day, hour, minute, tzinfo=ARUSHA)
             AttendanceEvent(
                 shop_id=staff.shop_id,
@@ -84,12 +93,13 @@ def kept_day(staff: StaffMember, *taps: tuple[ClockKind, int, int], date: dt.dat
                 clock_error=dt.timedelta(0),
                 no_photo="demo",
             ).save()
-    return absent_day(staff, date)
 
 
-def doubted_tap(staff: StaffMember, hour: int, minute: int, date: dt.date = MONDAY) -> None:
-    """An Ingia whose time the server doesn't trust (`unverified`, ATT-1): the laptop's clock moved for it, so it keeps
-    only the laptop's time, and its day waits for a decision with the reason time_unknown (ATT-4)."""
+def doubted_tap(
+    staff: StaffMember, hour: int, minute: int, date: dt.date = MONDAY, *, kind: ClockKind = ClockKind.IN
+) -> None:
+    """An Ingia, or a Toka, whose time the server doesn't trust (`unverified`, ATT-1): the laptop's clock moved for it,
+    so it keeps only the laptop's time, and its day waits for a decision with the reason time_unknown (ATT-4)."""
     moment = dt.datetime(date.year, date.month, date.day, hour, minute, tzinfo=ARUSHA)
     with shop_context(staff.shop_id):
         AttendanceEvent(
@@ -100,7 +110,7 @@ def doubted_tap(staff: StaffMember, hour: int, minute: int, date: dt.date = MOND
             received_at=moment + dt.timedelta(hours=1),
             created_by=staff,
             staff=staff,
-            kind=ClockKind.IN,
+            kind=kind,
             trusted_time=None,
             time_check=TimeCheck.UNVERIFIED,
             last_server_time=moment - dt.timedelta(minutes=30),

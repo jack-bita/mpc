@@ -6,7 +6,12 @@
 import { describe, expect, it } from "vitest";
 
 import { Decimal } from "./decimal";
-import { formatMoney, formatMoneyExact, formatQuantity } from "./format";
+import {
+  formatAmount,
+  formatMoney,
+  formatMoneyExact,
+  formatQuantity,
+} from "./format";
 
 const tsh = (text: string) => formatMoney(new Decimal(text));
 
@@ -34,6 +39,24 @@ describe("formatMoney", () => {
   it("refuses cents instead of rounding them away", () => {
     // Only roundMoney rounds money (ADR-0024).
     expect(() => tsh("458.50")).toThrow("roundMoney");
+  });
+});
+
+describe("formatAmount, for a line of a worker's pay (WAGE-2)", () => {
+  const amount = (text: string) => formatAmount(new Decimal(text));
+
+  it("writes the amount with a comma between thousands, and no TSh", () => {
+    expect(amount("10000.00")).toBe("10,000");
+    expect(amount("140000.00")).toBe("140,000");
+    expect(amount("0.00")).toBe("0");
+  });
+
+  it("writes one below zero with the same minus as formatMoney", () => {
+    expect(amount("-1500.00")).toBe("-1,500");
+  });
+
+  it("refuses cents instead of rounding them away", () => {
+    expect(() => amount("4500.50")).toThrow("roundMoney");
   });
 });
 

@@ -10,6 +10,7 @@ import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
 import { WITH_THE_KEY } from "@/test/meals";
+import { OWNER } from "@/test/pay";
 import { render } from "@/test/render";
 import { MANAGER } from "@/test/workers";
 
@@ -218,6 +219,44 @@ describe("the office's home page", () => {
       ).toBeNull();
       shown.unmount();
     }
+  });
+
+  it("opens Mishahara for whoever may see a worker's pay (WAGE-2)", async () => {
+    answer("GET", ME, { status: 200, body: OWNER });
+
+    render(<OfficeHome />);
+
+    const link = await screen.findByRole("link", { name: "Mishahara" });
+    expect(link.getAttribute("href")).toMatch(/^\/pay\/?$/);
+  });
+
+  it("offers no Mishahara without both keys of pay on the whole shop", async () => {
+    // A manager who prepares the pay sees nobody's rate, and the pay shows it ("14 × 10,000"); nor one handed the shop's
+    // rules alone, or the workers alone (Jack, WAGE-1); nor someone who holds both on Dawa alone.
+    const both = ["settings.manage", "staff.manage"];
+    for (const whole_shop of [["pay.run"], both.slice(0, 1), both.slice(1)]) {
+      answer("GET", ME, {
+        status: 200,
+        body: {
+          ...whoIsHere([]),
+          permissions: {
+            whole_shop,
+            sides: [{ ...DAWA, permissions: whole_shop }],
+          },
+        },
+      });
+      const shown = render(<OfficeHome />);
+      await screen.findByRole("link", { name: "Mipangilio ya duka" });
+      expect(screen.queryByRole("link", { name: "Mishahara" })).toBeNull();
+      shown.unmount();
+    }
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: both }]),
+    });
+    render(<OfficeHome />);
+    await screen.findByRole("link", { name: "Mipangilio ya duka" });
+    expect(screen.queryByRole("link", { name: "Mishahara" })).toBeNull();
   });
 
   it("says when there is nothing to open, for someone who works on no side", async () => {

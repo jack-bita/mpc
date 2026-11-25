@@ -826,6 +826,41 @@
       "show": "Show"
     }
   },
+  "pay": {
+    "title": "Pay",
+    "countedTo": "Up to yesterday, {weekday} {date}",
+    "nothingOverYet": "No working day of this month is over yet.",
+    "totalOfAll": "Total for everyone",
+    "workersLabel": "Each worker's pay",
+    "waiting": "{count, plural, one {1 day waits for a decision} other {# days wait for a decision}}",
+    "noRate": "{count, plural, one {1 day has no daily pay} other {# days have no daily pay}}",
+    "withToday": "Today included",
+    "todayWaits": "Today waits for a decision",
+    "left": "Left {date}",
+    "nobody": "No worker paid by the day in this month.",
+    "monthAndCounted": "{month} · {counted}",
+    "linesCaption": "The pay, line by line",
+    "line": {
+      "full": "Full days",
+      "half": "Half days"
+    },
+    "times": "{days} × {each}",
+    "fines": "Fines",
+    "meals": "Meals",
+    "mealDays": "{count, plural, one {1 day} other {# days}}",
+    "less": "− {amount}",
+    "todayLine": {
+      "full": "Today: full day",
+      "half": "Today: half day",
+      "fines": "Today: fine",
+      "meals": "Today: meals"
+    },
+    "totalToday": "Total to pay today",
+    "totalMonth": "Total for the month",
+    "notPaidByDay": "No daily pay in this month.",
+    "worker": "A worker's pay",
+    "cardTitle": "The month's pay"
+  },
   "attendanceWorker": {
     "title": "A worker's attendance",
     "intro": "One worker's days, the whole month.",
@@ -1409,6 +1444,7 @@
     },
     "pay_rate": {
       "amount_invalid": "Type a whole number of shillings, above 0.",
+      "amount_too_big": "This amount is too big. Check its zeros.",
       "before_first_day": "A rate can't start before this worker's first day."
     },
     "day": {

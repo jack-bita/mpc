@@ -8,6 +8,7 @@ import type { components } from "@/api/schema";
 import { Decimal } from "@/lib/decimal";
 import { formatMoney } from "@/lib/format";
 import { answer, refusal, sent } from "@/test/fake-server";
+import { notPaidByDay } from "@/test/pay";
 import { PAY_RATES_ROUTE, payRate, payRates } from "@/test/pay-rates";
 import { render } from "@/test/render";
 import { BABA, MANAGER, STAFF, worker } from "@/test/workers";
@@ -43,6 +44,7 @@ function theServerHas(
   answer("GET", ME, { status: 200, body: who });
   answer("GET", `${STAFF}${shown.id}/`, { status: 200, body: shown });
   answer("GET", PAY_RATES_ROUTE, { status: 200, body: rates });
+  notPaidByDay(shown.id);
 }
 
 /** The card, once its heading shows. */
@@ -227,6 +229,7 @@ describe("Malipo kwa siku", () => {
     answer("GET", ME, { status: 200, body: BABA });
     answer("GET", `${STAFF}${JUMA.id}/`, { status: 200, body: JUMA });
     answer("GET", PAY_RATES_ROUTE, refusal(403, "permission_denied"));
+    notPaidByDay(JUMA.id);
 
     render(<WorkerScreen id={JUMA.id} />);
     const card = await theCard();

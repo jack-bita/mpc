@@ -52,6 +52,7 @@ import { Card, CardContent } from "@/components/design/card";
 import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
 import { TextLink } from "@/components/design/text-link";
+import { PAY } from "@/features/pay/pay";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { formatDay } from "@/lib/format";
@@ -157,8 +158,9 @@ export function WorkerActions({
   function cancelled() {
     setOpen(null);
     // Asked again: a send whose answer was lost may have changed the worker, and the page would go on showing
-    // Simamisha for a worker the server suspended (PPL-6's review).
+    // Simamisha for a worker the server suspended (PPL-6's review), or a pay past the last day of one who left.
     void store.invalidateQueries({ queryKey: WORKERS });
+    void store.invalidateQueries({ queryKey: PAY });
   }
 
   /** A button opens its sheet. The shop's today is read as it opens: a page left open overnight starts on the new
@@ -342,6 +344,8 @@ function ActionSheet({
       // The worker as they are now, on their page and in the list at once, then both asked again (workers.ts).
       keepWorker(store, changed);
       void store.invalidateQueries({ queryKey: WORKERS });
+      // One who left is paid up to their last day: the pay under these buttons must say so at once (WAGE-2).
+      void store.invalidateQueries({ queryKey: PAY });
       onDone(action, changed);
     },
     onError: (error) => {
@@ -351,6 +355,8 @@ function ActionSheet({
         CHANGED_MEANWHILE.has(error.body.code)
       ) {
         void store.invalidateQueries({ queryKey: WORKERS });
+        // And the pay under the buttons: theirs ended, or goes on (the review).
+        void store.invalidateQueries({ queryKey: PAY });
         onChangedMeanwhile(codeMessage(codes, error.body.code));
       }
     },

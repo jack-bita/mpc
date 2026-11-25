@@ -577,6 +577,13 @@ class PayRate(AppendOnly):
         return f"{self.daily_rate} from {self.effective_from}"
 
 
+# The most a day's pay may be (WAGE-2's review): more than anyone's day, so a slip of the zeros, and a rate so big that
+# a month of it could pass what a column of money holds (numeric(14,2)) and stop Mishahara from opening, for everyone. A
+# technical guard, never a shop's rule. set_pay_rate holds it, the one way a rate is written, so the table needs no
+# migration for it.
+MOST_DAILY_RATE = Decimal("10000000.00")
+
+
 # The most one row of meal money may be (WAGE-7): see its rule below.
 MOST_MEAL_MONEY = Decimal("10000000.00")
 

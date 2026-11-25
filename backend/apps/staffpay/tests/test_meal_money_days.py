@@ -141,7 +141,8 @@ def test_the_days_of_november_as_jack_drew_them(
 
 
 def test_the_share_shown_is_the_one_kept(shop_a: Shop, baba: StaffMember, asha: StaffMember, juma: StaffMember) -> None:
-    # The page never works a share out: it shows what the book kept on each worker's day, which WAGE-2 will pay by.
+    # The page never works a share out: it shows what the book kept on each worker's day, which the pay takes off
+    # (WAGE-2).
     for each in (asha, juma, paid(shop_a, "Neema")):
         kept_day(each, *FULL_DAY, date=MONDAY)
     typed(baba, MONDAY, "1000")

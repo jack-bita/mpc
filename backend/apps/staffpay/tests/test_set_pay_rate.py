@@ -157,6 +157,18 @@ def test_a_rate_is_whole_shillings_above_nothing(baba: StaffMember, juma: StaffM
     assert rates_of(juma) == 0
 
 
+def test_a_rate_with_zeros_too_many_is_refused(baba: StaffMember, juma: StaffMember) -> None:
+    # Ten million is more than anyone's day: a slip of the zeros. And a rate of twelve figures, two days of it, stopped
+    # Mishahara from opening for everyone (WAGE-2's review). Ten million itself is taken; the system is refused too.
+    for by in (baba, None):
+        with pytest.raises(ValidationError) as refused:
+            set_rate(juma, by=by, daily_rate=Decimal("10000001"))
+        assert codes_of(refused) == {"daily_rate": {"pay_rate.amount_too_big"}}
+    assert rates_of(juma) == 0
+    set_rate(juma, by=baba, daily_rate=Decimal("10000000"))
+    assert rates_of(juma) == 1
+
+
 def test_every_mistake_comes_back_at_once(baba: StaffMember, juma: StaffMember) -> None:
     # Two boxes typed wrong: both are named, each beside its box, so Baba mends them in one go.
     with pytest.raises(ValidationError) as refused:

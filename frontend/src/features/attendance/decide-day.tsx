@@ -42,6 +42,7 @@ import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
 import { MEAL_MONEY } from "@/features/meals/meal-money";
+import { PAY } from "@/features/pay/pay";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { Decimal } from "@/lib/decimal";
 import { clockPart, formatDay, formatMoney, weekdayOf } from "@/lib/format";
@@ -132,6 +133,12 @@ export function DecideDay({
       // Someone decided it meanwhile: the month read again, so the day behind the sheet shows what they decided.
       if (error instanceof ApiRefusal && error.status === 409)
         void store.invalidateQueries({ queryKey: WORKER_MONTHS });
+    },
+    onSettled: () => {
+      // The pay, whatever the answer (WAGE-2): someone else's decision moved it, and with no answer, or one the server
+      // failed at, this one may have been saved all the same. An old total on the screen is money paid wrong (the
+      // review).
+      void store.invalidateQueries({ queryKey: PAY });
     },
   });
 

@@ -22,8 +22,8 @@ calls (PPL-4; 03 §5.10). What may and may not be done is the services'; these t
 Each worker comes with their full name, phone, nickname, job title, first day, status and leaving day, each role and
 extra key they were given, with its side (none: every side), whether they have a PIN (PPL-12), the photo they show
 (PPL-9), the version a fix sends back, and, for a job that ended, the job the person came back as, once they are hired
-again (PPL-11). Only for whoever holds staff.manage on the whole shop (PPL-4's card): the page shows roles, and later
-pay (WAGE-2).
+again (PPL-11). Only for whoever holds staff.manage on the whole shop (PPL-4's card): the page shows roles, and pay to
+whoever may see it (WAGE-2).
 
     shop     side          who          what they were given
     MFANO    Dawa (D)      Baba         Owner, every side

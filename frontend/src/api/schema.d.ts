@@ -935,6 +935,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staffpay/pay/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["staffpay_pay_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/pay-rates/": {
         parameters: {
             query?: never;
@@ -963,6 +979,22 @@ export interface paths {
          *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
          */
         post: operations["staffpay_pay_rates_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffpay/pay/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["staffpay_pay_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1673,10 +1705,52 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Staff"][];
         };
+        /**
+         * @description * `full` - full
+         *     * `half` - half
+         * @enum {string}
+         */
+        PaidAsEnum: "full" | "half";
         PairingStart: {
             readonly code: string;
             /** Format: date-time */
             readonly expires_at: string;
+        };
+        Pay: {
+            lines: components["schemas"]["PayLine"][];
+            fined_days: number;
+            /** Format: decimal */
+            fines: string;
+            meal_days: number;
+            /** Format: decimal */
+            meals: string;
+            /** Format: decimal */
+            advances: string;
+            waiting: number;
+            no_rate: number;
+            /** Format: decimal */
+            total: string;
+        };
+        PayLine: {
+            paid_as: components["schemas"]["PaidAsEnum"];
+            days: number;
+            /** Format: decimal */
+            each: string;
+            /** Format: decimal */
+            amount: string;
+        };
+        PayMonthAnswer: {
+            /** @example 2026-11 */
+            month: string;
+            /** Format: date */
+            today: string;
+            /** Format: date */
+            counted_to: string | null;
+            /** @description Whether no working day of this month has come yet: nobody is listed for want of a day. */
+            no_day_yet: boolean;
+            /** Format: decimal */
+            total: string;
+            workers: components["schemas"]["WorkerPay"][];
         };
         PayRate: {
             /** Format: uuid */
@@ -2325,6 +2399,30 @@ export interface components {
             half: number;
             absent: number;
             needs_review: number;
+        };
+        WorkerPay: {
+            /** Format: uuid */
+            staff: string;
+            display_name: string;
+            /** Format: date */
+            left_on: string | null;
+            pay: components["schemas"]["Pay"];
+            today: components["schemas"]["Pay"] | null;
+            /** Format: decimal */
+            total: string;
+        };
+        WorkerPayMonthAnswer: {
+            /** @example 2026-11 */
+            month: string;
+            /** Format: date */
+            today: string;
+            /** Format: date */
+            counted_to: string | null;
+            /** @description Whether the worker has a daily pay rate on a working day of the month: with none, there is no pay. */
+            paid_by_day: boolean;
+            /** @description Whether the worker's first working day of this month is still to come. */
+            no_day_yet: boolean;
+            worker: components["schemas"]["WorkerPay"];
         };
     };
     responses: never;
@@ -4284,6 +4382,36 @@ export interface operations {
             };
         };
     };
+    staffpay_pay_list: {
+        parameters: {
+            query: {
+                /** @description The month, as 2026-11. */
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayMonthAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     staffpay_pay_rates_list: {
         parameters: {
             query: {
@@ -4333,6 +4461,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PayRate"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_pay_retrieve: {
+        parameters: {
+            query: {
+                /** @description The month, as 2026-11. */
+                month: string;
+            };
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerPayMonthAnswer"];
                 };
             };
             default: {

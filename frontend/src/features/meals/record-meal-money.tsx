@@ -39,6 +39,7 @@ import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
 import type { Weekday } from "@/features/attendance/attendance-month";
 import { WORKER_MONTHS } from "@/features/attendance/worker-month";
+import { PAY } from "@/features/pay/pay";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { Decimal } from "@/lib/decimal";
 import { formatDay, formatMoney, weekdayOf } from "@/lib/format";
@@ -169,9 +170,10 @@ function RecordSheet({
       ),
     onSettled: () => {
       // The days asked again, whatever the answer: with none, the row may have been made all the same, and the list then
-      // shows it. And the workers' months, whose days' shares move with the money.
+      // shows it. And the workers' months, whose days' shares move with the money, and so the pay (WAGE-2).
       void store.invalidateQueries({ queryKey: MEAL_MONEY });
       void store.invalidateQueries({ queryKey: WORKER_MONTHS });
+      void store.invalidateQueries({ queryKey: PAY });
     },
   });
 

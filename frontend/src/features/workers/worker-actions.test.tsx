@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { components } from "@/api/schema";
 import { DAWA } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
+import { PayAsked, payIsAnswered } from "@/test/pay";
 import { render } from "@/test/render";
 import { MANAGER, role, STAFF, worker } from "@/test/workers";
 
@@ -231,6 +232,48 @@ describe("the buttons on a worker's page", () => {
     );
     expect(screen.queryByRole("button", { name: "Ameondoka" })).toBeNull();
   });
+
+  it.each([
+    ["Ameondoka", "saved"],
+    ["Ghairi", "its answer lost"],
+    ["a refusal", "someone else marked her left first"],
+  ])(
+    "asks the pay again after %s, as a last day ends it: %s (WAGE-2)",
+    async (ends) => {
+      // One who left is paid up to their last day: the pay under these buttons must say so at once, after a send whose
+      // answer was lost too, and when someone else marked her left first (the review).
+      theServerHas(ASHA);
+      const left = { ...ASHA, status: "left" as const, left_on: "2026-11-18" };
+      answer("POST", route("leave"), () => {
+        if (ends === "Ghairi") throw new TypeError("Failed to fetch");
+        if (ends === "a refusal")
+          return Response.json(
+            { code: "staff.left", message: "", fields: {}, params: {} },
+            { status: 400 },
+          );
+        return Response.json(left);
+      });
+      const asked = payIsAnswered();
+      render(
+        <>
+          <PayAsked />
+          <WorkerScreen id={ASHA.id} />
+        </>,
+      );
+      fireEvent.click(await findButton("Ameondoka"));
+      await waitFor(() => expect(asked()).toEqual([1, 1]));
+
+      typeInto(reasonBox(), "Amepata kazi nyingine");
+      fireEvent.click(sheetButton("Ameondoka"));
+      if (ends === "Ghairi") {
+        await screen.findByRole("alert");
+        expect(asked()).toEqual([1, 1]);
+        fireEvent.click(sheetButton("Ghairi"));
+      }
+
+      await waitFor(() => expect(asked()).toEqual([2, 2]));
+    },
+  );
 
   it("says an empty reason at once, beside Sababu, and sends nothing", async () => {
     theServerHas(ASHA);

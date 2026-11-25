@@ -249,7 +249,8 @@ class StaffViewSet(
     side_field = None
     # staff.manage, the owner's own key, which he may hand to a manager (Jack, 4 Nov 2026). The workers too are for
     # whoever manages them, not for everyone who works there (PPL-4's card, default): the page shows each one's roles,
-    # and later their pay (WAGE-2). Each service asks the key again, with the rest of who may (apps/people/services.py).
+    # and their pay to whoever may see it (WAGE-2). Each service asks the key again, with the rest of who may
+    # (apps/people/services.py).
     action_permissions = {
         "list": Permission.STAFF_MANAGE,
         "retrieve": Permission.STAFF_MANAGE,

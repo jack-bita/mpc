@@ -54,6 +54,8 @@ None of them can open the admin: nobody the seed makes is `is_staff`. And nobody
 
 **Meal money** (WAGE-7). Meneja holds `meals.record`, the owner's key to the workers' meal money, so *Hela ya chakula* on the office home shows those same three weeks: a made-up 3,000 on each of the 18 working days but one, the fifth back from today, which says *Haijaandikwa* for a visitor to type. Each day's 3,000 is split among whoever came: 1,000 each when all three did. A visitor types today or a day gone by, with no *Maelezo* (`demo.no_note`), and crosses out any row with the one ready reason, *Kiasi kimekosewa* (`demo.ready_reasons`): what they typed, and what they crossed out, stays until the next reset. Asha and Baraka lack the key, so a laptop's PIN screen shows them no *Hela ya chakula*.
 
+**The month's pay** (WAGE-2). Meneja holds the two keys of pay, so *Mishahara* on the office home shows the same weeks' pay: a total for Asha, Baraka and himself, and the total of all; a name opens that worker's lines, and a worker's own page shows them too, in *Malipo ya mwezi*. Nothing of it is kept: it follows whatever a visitor decides, types or crosses out, and a visitor who taps *Ingia* and *Toka* on a laptop adds *Leo*, which mostly waits for a decision, as the two taps come minutes apart. On a month's first days most of the weeks are in the month before, one ‹ away.
+
 **When it is made again.** The seed runs on every start of the demo, after the migrations:
 - on a new database (the first setup, or every 30 days) it makes the shop;
 - on the first start of a new day, in Arusha's time, it wipes the database and makes the shop again, so whatever visitors changed is gone;

@@ -15,6 +15,7 @@ import { MOVED_IN_APP } from "@/components/in-app-moves";
 import { MESSAGES } from "@/i18n/language";
 import { DAWA, VYAKULA } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
+import { notPaidByDay } from "@/test/pay";
 import { PAY_RATES_ROUTE, payRates } from "@/test/pay-rates";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
@@ -66,8 +67,9 @@ function theServerHas(start: Worker, me: WhoIsHere = BABA) {
   answer("GET", ME, { status: 200, body: me });
   answer("GET", `${STAFF}${start.id}/`, () => Response.json(held));
   answer("GET", ROLES_ROUTE, { status: 200, body: rolesPage(SHOP_ROLES) });
-  // Baba sees a worker's pay too (WAGE-1), so the page asks for it: Juma has no rate yet.
+  // Baba sees a worker's pay too (WAGE-1, WAGE-2), so the page asks for it: Juma has no rate yet.
   answer("GET", PAY_RATES_ROUTE, { status: 200, body: payRates([], null) });
+  notPaidByDay(start.id);
   return {
     now(changed: Worker) {
       held = changed;

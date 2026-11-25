@@ -16,7 +16,8 @@
 // ready reasons in the sheet, and the day shows his decision beside what the system said, and leaves Zinahitaji
 // uamuzi. A decision is never taken back, so it runs last of the tests that read Asha's day to decide: after
 // attendance-month.spec.ts, as the tests run one at a time, file by file in their names' order (playwright.config.ts),
-// and after the test above, in this file's order. No later file reads the month.
+// and after the test above, in this file's order. Of the later files, only pay.spec.ts reads the month, and asks nothing
+// of a day to decide.
 //
 // The third fixes the taps of another of Asha's days to decide, her third latest, out at 15:00 (ATT-13): Meneja crosses
 // out the 15:00 Toka in its sheet, as tapped by mistake, adds Toka 18:45, as she left after closing, and the day is a

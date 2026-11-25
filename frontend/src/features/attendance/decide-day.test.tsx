@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { components } from "@/api/schema";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { MealMoneyAsked, mealMoneyIsAnswered } from "@/test/meals";
+import { PayAsked, payIsAnswered } from "@/test/pay";
 import { render } from "@/test/render";
 
 import { choiceOf, DecideDay } from "./decide-day";
@@ -202,23 +203,25 @@ describe("Amua siku hii", () => {
     ]);
   });
 
-  it("asks the meal money again, as the date is split again with the decision (WAGE-7)", async () => {
+  it("asks the meal money and the pay again, as the date is split again with the decision (WAGE-7, WAGE-2)", async () => {
     // Juma's waiting day decided a full day: he shares the date's meals too, so everyone's share moves.
     answer("POST", DECIDE, { status: 200, body: DECIDED });
     const asked = mealMoneyIsAnswered();
+    const payAsked = payIsAnswered();
     render(
       <>
         <MealMoneyAsked />
+        <PayAsked />
         <DecideDay day={THURSDAYS} answer={month()} open onClose={vi.fn()} />
       </>,
     );
-    await waitFor(() => expect(asked()).toBe(1));
+    await waitFor(() => expect([asked(), payAsked()]).toEqual([1, [1, 1]]));
 
     fireEvent.click(within(choices()).getByText("Siku kamili"));
     fireEvent.change(reasonBox(), { target: { value: "Alisahau Toka" } });
     fireEvent.click(save());
 
-    await waitFor(() => expect(asked()).toBe(2));
+    await waitFor(() => expect([asked(), payAsked()]).toEqual([2, [2, 2]]));
   });
 
   it("sends the decision on the screen as it opened, though the month brings a newer one meanwhile", async () => {
@@ -248,6 +251,28 @@ describe("Amua siku hii", () => {
       { choice: "half", reason: "Aliondoka mchana", replaces: null },
     ]);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["someone decided it meanwhile", refusal(409, "version_conflict")],
+    ["its answer was lost", refusal(503, "server_error")],
+  ])("asks the pay again when %s (WAGE-2)", async (_how, reply) => {
+    // Theirs moved it; or the server saved this one and its answer never came.
+    answer("POST", DECIDE, reply);
+    const asked = payIsAnswered();
+    render(
+      <>
+        <PayAsked />
+        <DecideDay day={THURSDAYS} answer={month()} open onClose={vi.fn()} />
+      </>,
+    );
+    await waitFor(() => expect(asked()).toEqual([1, 1]));
+
+    fireEvent.click(within(choices()).getByText("Siku kamili"));
+    fireEvent.change(reasonBox(), { target: { value: "Alisahau" } });
+    fireEvent.click(save());
+
+    await waitFor(() => expect(asked()).toEqual([2, 2]));
   });
 
   it("says someone decided it meanwhile above the buttons, and stays open", async () => {

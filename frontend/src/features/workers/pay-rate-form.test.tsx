@@ -16,6 +16,7 @@ import {
   MonthsAsked,
   monthsAreAnswered,
 } from "@/test/meals";
+import { notPaidByDay, PayAsked, payIsAnswered } from "@/test/pay";
 import { PAY_RATES_ROUTE, payRate, payRates, TODAY } from "@/test/pay-rates";
 import { render } from "@/test/render";
 import { BABA, STAFF, worker } from "@/test/workers";
@@ -53,6 +54,7 @@ function theServerHas(rates: PayRates): void {
   answer("GET", ME, { status: 200, body: BABA });
   answer("GET", `${STAFF}${JUMA.id}/`, { status: 200, body: JUMA });
   answer("GET", PAY_RATES_ROUTE, { status: 200, body: rates });
+  notPaidByDay(JUMA.id);
   answer("POST", PAY_RATES_ROUTE, async (request) => {
     const body = (await request.json()) as PayRate;
     return Response.json(
@@ -153,23 +155,29 @@ describe("Weka malipo", () => {
 });
 
 describe("after a save", () => {
-  it("asks the months and the meal money again, as a rate says who is paid and who shares the meals", async () => {
+  it("asks the months, the meal money and the pay again, as a rate says who is paid and who shares the meals", async () => {
     // Baba makes Juma the cook, then opens Hela ya chakula within the minute its answer is kept: the split must be the
     // new one (WAGE-7's review). And a first rate puts him on the month page, his days' shares on his own.
     theServerHas(payRates([], null));
     const meals = mealMoneyIsAnswered();
     const months = monthsAreAnswered();
+    const payAsked = payIsAnswered();
     render(
       <>
         <MealMoneyAsked />
         <MonthsAsked />
+        <PayAsked />
         <WorkerScreen id={JUMA.id} />
       </>,
     );
     fireEvent.click(await screen.findByRole("button", { name: "Weka malipo" }));
     await screen.findByRole("dialog", { name: "Malipo mapya ya Juma" });
     await waitFor(() =>
-      expect([meals(), months()]).toEqual([1, { month: 1, worker: 1 }]),
+      expect([meals(), months(), payAsked()]).toEqual([
+        1,
+        { month: 1, worker: 1 },
+        [1, 1],
+      ]),
     );
 
     typeInto(box("Kiasi kwa siku"), "10000");
@@ -177,7 +185,11 @@ describe("after a save", () => {
     fireEvent.click(sheetButton("Hifadhi malipo"));
 
     await waitFor(() =>
-      expect([meals(), months()]).toEqual([2, { month: 2, worker: 2 }]),
+      expect([meals(), months(), payAsked()]).toEqual([
+        2,
+        { month: 2, worker: 2 },
+        [2, 2],
+      ]),
     );
   });
 
@@ -188,6 +200,7 @@ describe("after a save", () => {
     answer("GET", ME, { status: 200, body: BABA });
     answer("GET", `${STAFF}${JUMA.id}/`, { status: 200, body: JUMA });
     answer("GET", PAY_RATES_ROUTE, () => Response.json(held));
+    notPaidByDay(JUMA.id);
     answer("POST", PAY_RATES_ROUTE, async (request) => {
       const body = (await request.json()) as PayRate;
       const saved = payRate({ ...body, daily_rate: `${body.daily_rate}.00` });
@@ -262,6 +275,7 @@ describe("Badilisha malipo", () => {
     const coming = payRate({ staff: zawadi.id, effective_from: "2026-11-25" });
     answer("GET", ME, { status: 200, body: BABA });
     answer("GET", `${STAFF}${zawadi.id}/`, { status: 200, body: zawadi });
+    notPaidByDay(zawadi.id);
     answer("GET", PAY_RATES_ROUTE, {
       status: 200,
       body: payRates([coming], null),
@@ -333,6 +347,25 @@ describe("what the form says itself", () => {
 });
 
 describe("the server's refusals", () => {
+  it("shows a rate with zeros too many beside its box (WAGE-2's review)", async () => {
+    theServerHas(payRates([], null));
+    answer(
+      "POST",
+      PAY_RATES_ROUTE,
+      refusal(400, "invalid", {}, { daily_rate: ["pay_rate.amount_too_big"] }),
+    );
+    await openTheForm("Weka malipo");
+
+    typeInto(box("Kiasi kwa siku"), "999999999999");
+    fireEvent.click(sheetButton("Hifadhi malipo"));
+
+    await waitFor(() =>
+      expect(errorOf(box("Kiasi kwa siku"))).toBe(
+        "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
+      ),
+    );
+  });
+
   it("shows a box's refusal beside it, as the demo's note", async () => {
     theServerHas(payRates([], null));
     answer(
@@ -405,9 +438,19 @@ describe("leaving the form", () => {
     );
   });
 
-  it("gives the keyboard back to the button on Ghairi, and asks the rates again", async () => {
+  it("gives the keyboard back to the button on Ghairi, and asks the rates and the pay again", async () => {
     theServerHas(payRates([], null));
-    await openTheForm("Weka malipo");
+    const payAsked = payIsAnswered();
+    // One store for both, as the app has.
+    render(
+      <>
+        <PayAsked />
+        <WorkerScreen id={JUMA.id} />
+      </>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Weka malipo" }));
+    await screen.findByRole("dialog", { name: "Malipo mapya ya Juma" });
+    await waitFor(() => expect(payAsked()).toEqual([1, 1]));
     const before = reads();
 
     fireEvent.click(sheetButton("Ghairi"));
@@ -416,6 +459,8 @@ describe("leaving the form", () => {
       expect(document.activeElement).toBe(button("Weka malipo")),
     );
     await waitFor(() => expect(reads()).toBeGreaterThan(before));
+    // A save whose answer was lost may have been made, and moved the pay (WAGE-2).
+    await waitFor(() => expect(payAsked()).toEqual([2, 2]));
     expect(await posted()).toEqual([]);
   });
 
