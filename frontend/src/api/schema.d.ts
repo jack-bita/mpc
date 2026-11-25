@@ -778,6 +778,90 @@ export interface paths {
         patch: operations["shops_sides_partial_update"];
         trace?: never;
     };
+    "/api/v1/staffpay/advances/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        get: operations["staffpay_advances_list"];
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_advances_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffpay/advances/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        get: operations["staffpay_advances_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffpay/advances/{id}/void/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_advances_void_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/attendance-days/{id}/decide/": {
         parameters: {
             query?: never;
@@ -1023,6 +1107,65 @@ export interface components {
             /** Format: time */
             time: string;
             reason: string;
+        };
+        AdvanceAnswer: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            staff: string;
+            display_name: string;
+            /** Format: date */
+            date: string;
+            /** Format: decimal */
+            amount: string;
+            note: string;
+            by: string;
+            /** Format: date-time */
+            at: string;
+            voided: components["schemas"]["VoidedAdvance"] | null;
+        };
+        AdvanceLine: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            staff: string;
+            display_name: string;
+            /** Format: date */
+            date: string;
+            /** Format: decimal */
+            amount: string;
+            note: string;
+            by: string;
+            /** Format: date-time */
+            at: string;
+            voided: components["schemas"]["VoidedAdvance"] | null;
+        };
+        AdvancePageAnswer: {
+            advance: components["schemas"]["AdvanceLine"];
+            /** @description Whether it was given to the person asking, by whichever job of theirs. */
+            own: boolean;
+            /** @description On the demo, the ready reasons it may be crossed out with, as codes; elsewhere none. */
+            ready_void_reasons: components["schemas"]["MoneyVoidReasonEnum"][];
+        };
+        AdvanceWorker: {
+            /** Format: uuid */
+            staff: string;
+            display_name: string;
+            /** Format: date */
+            left_on: string | null;
+        };
+        AdvancesMonthAnswer: {
+            /** @example 2026-11 */
+            month: string;
+            /** Format: date */
+            today: string;
+            /**
+             * Format: decimal
+             * @description Those not crossed out, added up.
+             */
+            total: string;
+            rows: components["schemas"]["AdvanceLine"][];
+            workers: components["schemas"]["AdvanceWorker"][];
         };
         ApiError: {
             code: string;
@@ -1576,13 +1719,8 @@ export interface components {
             total: string;
             days: components["schemas"]["MealDay"][];
             /** @description On the demo, the ready reasons a row may be crossed out with, as codes; elsewhere none. */
-            ready_void_reasons: components["schemas"]["MealMoneyDaysAnswerReadyVoidReasonsEnum"][];
+            ready_void_reasons: components["schemas"]["MoneyVoidReasonEnum"][];
         };
-        /**
-         * @description * `wrong_amount` - wrong_amount
-         * @enum {string}
-         */
-        MealMoneyDaysAnswerReadyVoidReasonsEnum: "wrong_amount";
         MealMoneyLine: {
             /** Format: uuid */
             id: string;
@@ -1596,6 +1734,11 @@ export interface components {
             at: string;
             voided: components["schemas"]["VoidedMealMoney"] | null;
         };
+        /**
+         * @description * `wrong_amount` - wrong_amount
+         * @enum {string}
+         */
+        MoneyVoidReasonEnum: "wrong_amount";
         /**
          * @description * `no_camera` - No camera
          *     * `blocked` - Camera blocked
@@ -1988,6 +2131,18 @@ export interface components {
          * @enum {string}
          */
         ReasonEnum: "outside_job" | "closed_day" | "not_working" | "clock_disagrees" | "time_unknown" | "no_in" | "came_late" | "no_out" | "left_early";
+        RecordAdvanceRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            staff: string;
+            /** Format: date */
+            date: string;
+            /** Format: decimal */
+            amount: string;
+            /** @default  */
+            note: string;
+        };
         RecordMealMoneyRequest: {
             /** Format: uuid */
             id: string;
@@ -2319,10 +2474,19 @@ export interface components {
             password: string;
             reason: string;
         };
+        VoidAdvanceRequest: {
+            reason: string;
+        };
         VoidMealMoneyRequest: {
             reason: string;
         };
         VoidTapRequest: {
+            reason: string;
+        };
+        VoidedAdvance: {
+            by: string;
+            /** Format: date-time */
+            at: string;
             reason: string;
         };
         VoidedMealMoney: {
@@ -4111,6 +4275,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Side"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_advances_list: {
+        parameters: {
+            query: {
+                /** @description The month, as 2026-11. */
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvancesMonthAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_advances_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordAdvanceRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvanceAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_advances_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this advance. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvancePageAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_advances_void_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this advance. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidAdvanceRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvanceAnswer"];
                 };
             };
             default: {

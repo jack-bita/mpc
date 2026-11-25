@@ -53,8 +53,8 @@ meal_money_days, which works them out through the book too, so it writes as the 
 
 Money given before payday is typed on the day it is given by whoever holds money.advance, the owner or a manager, and
 never their own (record_advance, WAGE-8): Juma's 20,000 of the 10th. A wrong one is crossed out, with who, when and why
-(void_advance). No line in the change log, as for a rate. What each worker was given in a month comes off that month's
-pay.
+(void_advance). Advansi asks for a month of them, and whom one may be typed for, through advances_month. No line in the
+change log, as for a rate. What each worker was given in a month comes off that month's pay.
 
 The month's pay is asked for by Mishahara (pay_month) and by one worker's page (worker_pay): the book's days, each at
 its own rate, added up by the sum (work_out_pay, apps/staffpay/calculations.py). The draft is never saved (Jack,
@@ -1323,9 +1323,10 @@ def set_pay_rate(
     return rate
 
 
-# On the demo, the ready reason a wrong amount of meal money is crossed out with, kept as its code, which the page says
-# in words, *Kiasi kimekosewa* (as DEMO_VOID_REASONS): a typed one would show to every visitor after.
-DEMO_MEAL_VOID_REASONS = ("wrong_amount",)
+# On the demo, the ready reason money typed wrong is crossed out with, meal money (WAGE-7) or an advance (WAGE-8), kept
+# as its code, which the page says in words, *Kiasi kimekosewa* (as DEMO_VOID_REASONS): a typed one would show to every
+# visitor after.
+DEMO_MONEY_VOID_REASONS = ("wrong_amount",)
 
 
 def record_meal_money(
@@ -1400,7 +1401,7 @@ def void_meal_money(money: MealMoney, *, reason: str, by: StaffMember) -> MealMo
             raise ValidationError(
                 {"reason": [ValidationError("Money crossed out says why.", code="meal_money.reason_missing")]}
             )
-        if settings.DEMO_SEED and reason not in DEMO_MEAL_VOID_REASONS:
+        if settings.DEMO_SEED and reason not in DEMO_MONEY_VOID_REASONS:
             raise ValidationError(
                 {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
             )
@@ -1475,7 +1476,7 @@ def meal_money_days(shop: Shop, first: dt.date, last: dt.date) -> MealMoneyDays:
     the whole of it. Worked out through the book (work_out_days), so it writes as the book does, and asked twice writes
     nothing the second time. The shop must be open, as for the book."""
     today = shop_today(shop)
-    ready = list(DEMO_MEAL_VOID_REASONS) if settings.DEMO_SEED else []
+    ready = list(DEMO_MONEY_VOID_REASONS) if settings.DEMO_SEED else []
     if today < first:
         # Days to come alone, when nobody has eaten yet: nothing to read. Answered as they were asked for, so the page
         # never heads them with a last day before the first.
@@ -1563,11 +1564,6 @@ def _works_today(shop: Shop, today: dt.date) -> bool:
         and today not in closed_days(shop, today, today)
         and bool(get_setting(ATTENDANCE_ON, shop, on=today))
     )
-
-
-# On the demo, the ready reason a wrong advance is crossed out with, kept as its code, which the page says in words, as
-# for meal money (DEMO_MEAL_VOID_REASONS): a typed one would show to every visitor after.
-DEMO_ADVANCE_VOID_REASONS = ("wrong_amount",)
 
 
 def record_advance(
@@ -1664,7 +1660,7 @@ def void_advance(advance: Advance, *, reason: str, by: StaffMember) -> Advance:
             raise ValidationError(
                 {"reason": [ValidationError("An advance crossed out says why.", code="advance.reason_missing")]}
             )
-        if settings.DEMO_SEED and reason not in DEMO_ADVANCE_VOID_REASONS:
+        if settings.DEMO_SEED and reason not in DEMO_MONEY_VOID_REASONS:
             raise ValidationError(
                 {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
             )
@@ -1677,6 +1673,118 @@ def void_advance(advance: Advance, *, reason: str, by: StaffMember) -> Advance:
         # Read back as it is now: crossed out by this request, or by the same one sent before, its answer lost, or by
         # someone a moment before, whose stamp the page is then shown.
         return Advance.objects.get(pk=advance.pk)
+
+
+@dataclass(frozen=True)
+class VoidedAdvance:
+    # Who crossed out an advance, by nickname; when; and why. On the demo the reason is a ready one's code
+    # (`wrong_amount`), which the page says in words.
+    by: str
+    at: dt.datetime
+    reason: str
+
+
+@dataclass(frozen=True)
+class AdvanceLine:
+    # One advance, as Advansi's line and its own page show it: "Jumanne 10/11 · Juma  20,000", what it was for, who
+    # typed it and when, and who crossed it out, or None while it counts. Never the worker's rate or pay: whoever gives
+    # money early sees what was given, not what is earned (the two keys of pay, WAGE-1).
+    id: uuid.UUID
+    staff_id: uuid.UUID
+    display_name: str
+    date: dt.date
+    amount: Decimal
+    note: str
+    by: str
+    at: dt.datetime
+    voided: VoidedAdvance | None
+
+
+@dataclass(frozen=True)
+class AdvanceWorker:
+    # A worker one may be typed for: the job, the nickname, and their last day if they left, which the sheet says beside
+    # the name, as a person hired again in the month has two jobs of one name (PPL-11).
+    staff_id: uuid.UUID
+    display_name: str
+    left_on: dt.date | None
+
+
+@dataclass(frozen=True)
+class AdvancesMonth:
+    # Advansi's answer (WAGE-8): the month, as its first day; the shop's today; the sum of those that count; every one
+    # of the month, newest first, the crossed-out ones too (A2); and whom one may be typed for, by name.
+    month: dt.date
+    today: dt.date
+    total: Decimal
+    rows: list[AdvanceLine]
+    workers: list[AdvanceWorker]
+
+
+def ready_advance_void_reasons() -> list[str]:
+    """The ready reason one may be crossed out with, for the sheet to offer: the demo's, or none elsewhere, where it is
+    typed."""
+    return list(DEMO_MONEY_VOID_REASONS) if settings.DEMO_SEED else []
+
+
+def advances_month(shop: Shop, month: dt.date, *, viewer: StaffMember) -> AdvancesMonth:
+    """The money given before payday in the month of `month`, any day of it, as Advansi shows it (WAGE-8), and whom one
+    may be typed for: whoever the shop pays by the day and had a day of the job in the month, up to today, so one who
+    left stays for the months they worked; and never `viewer`, whoever's job it is (Jack: A). The shop must be open."""
+    # The same checks as the selectors', for the same reasons (ADR-0022): asked inside another shop's visit, the guard
+    # would hide every row, and the month would be empty without a word.
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("advances_month was given a shop that is not the one open.")
+    if isinstance(month, dt.datetime):
+        raise TypeError("advances_month needs the shop's business dates, not a datetime.")
+    first, last = _month_span(month)
+    today = shop_today(shop)
+    # Newest first: by day, then as they were typed, the id last, for two typed at the very same moment. The names come
+    # in the same read.
+    rows = [
+        advance_line(row)
+        for row in Advance.objects.filter(shop=shop, date__range=(first, last))
+        .select_related("staff", "created_by", "voided_by")
+        .order_by("-date", "-created_at", "-id")
+    ]
+    # Whoever has a rate, from whatever day, as record_advance asks; a first day to come takes none yet.
+    workers = (
+        StaffMember.objects.filter(shop=shop, started_on__lte=min(last, today))
+        .filter(Q(left_on__isnull=True) | Q(left_on__gte=first))
+        .filter(Exists(PayRate.objects.filter(shop=shop, staff=OuterRef("pk"))))
+        .exclude(user_id=viewer.user_id)
+    )
+    return AdvancesMonth(
+        month=first,
+        today=today,
+        total=add_up(row.amount for row in rows if row.voided is None),
+        rows=rows,
+        # By name, as Mishahara lists them; then the job's id, so two jobs of one name always come in one order.
+        workers=[
+            AdvanceWorker(staff_id=staff.pk, display_name=staff.display_name, left_on=staff.left_on)
+            for staff in sorted(workers, key=lambda staff: (staff.display_name.casefold(), staff.pk))
+        ],
+    )
+
+
+def advance_line(row: Advance) -> AdvanceLine:
+    """An advance as the pages show it, which the sheets' answers are too. Who typed it is always there, as the table
+    holds."""
+    by = cast(StaffMember, row.created_by)
+    voided = None
+    if row.voided_at is not None and row.voided_by is not None:
+        voided = VoidedAdvance(by=row.voided_by.display_name, at=row.voided_at, reason=row.void_reason)
+    return AdvanceLine(
+        id=row.pk,
+        staff_id=row.staff_id,
+        display_name=row.staff.display_name,
+        date=row.date,
+        amount=row.amount,
+        note=row.note,
+        by=by.display_name,
+        at=row.created_at,
+        voided=voided,
+    )
 
 
 @dataclass(frozen=True)
