@@ -124,9 +124,13 @@ class PayRatesQuery(serializers.Serializer[Any]):
 class PayRatesAnswer(serializers.Serializer[Any]):
     # A worker's rates, newest first, as the page's history shows them; the shop's today, from which the form's date
     # starts; and the one in force today, which the page shows first ("Sasa"), or none: worked out here, on the shop's
-    # own date, as a phone's date can be wrong.
+    # own date, as a phone's date can be wrong. And whether no rate may be typed any more, of one who left and whose pay
+    # up to their last day is approved (WAGE-3's review): the page then offers no button the server would only refuse.
     today = serializers.DateField()
     in_force = serializers.UUIDField(allow_null=True, help_text="The rate in force on the shop's today, or none.")
+    closed = serializers.BooleanField(
+        help_text="Whether the worker left and the pay of their last day is approved: no rate can be typed any more."
+    )
     rates = PayRateSerializer(many=True)
 
 

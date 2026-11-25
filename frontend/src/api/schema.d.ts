@@ -2024,6 +2024,8 @@ export interface components {
              * @description The rate in force on the shop's today, or none.
              */
             in_force: string | null;
+            /** @description Whether the worker left and the pay of their last day is approved: no rate can be typed any more. */
+            closed: boolean;
             rates: components["schemas"]["PayRate"][];
         };
         PayRunAnswer: {

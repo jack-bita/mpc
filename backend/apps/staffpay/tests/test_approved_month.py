@@ -339,12 +339,17 @@ def test_one_approved_alone_takes_no_change(shop_a: Shop, baba: StaffMember, nee
         assert rows() == before
 
 
-def test_a_rate_of_one_approved_alone_is_refused(shop_a: Shop, neema: StaffMember) -> None:
-    # By a person, as she left (staff.left); and by the system, whom that rule lets through for no one who left either:
-    # so asked of the rule itself, as a later card may let the system mend a rate.
+@pytest.mark.parametrize("by_the_system", [False, True])
+def test_a_rate_of_one_approved_alone_is_refused(
+    shop_a: Shop, baba: StaffMember, neema: StaffMember, by_the_system: bool
+) -> None:
+    # Her last day was paid at the rate there was, and no day of hers comes after it: one typed now could only say
+    # another, for the system too.
     with shop_context(shop_a):
-        assert is_closed(shop_a, MON, neema.pk) is True
-        assert is_closed(shop_a, NOVEMBER, neema.pk) is True
+        for day in (NOVEMBER, MON):
+            with pytest.raises(ValidationError) as refusal:
+                set_pay_rate(neema, daily_rate=Decimal("20000"), effective_from=day, by=None if by_the_system else baba)
+            assert codes(refusal.value) == {"pay.day_approved"}
 
 
 @pytest.mark.parametrize("name", WRITES)

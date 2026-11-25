@@ -75,8 +75,8 @@ def set_pay_rate(
     the row (ADR-0007), if it made one. `by`: who sets it, under the PIN's rule and with settings.manage on the whole
     shop; None for the system or the superuser. Refuses, all together, each beside its box: an amount of 0 or less, or
     with cents (pay_rate.amount_invalid), or over ten million (pay_rate.amount_too_big); a day before the job's first
-    (pay_rate.before_first_day), or one whose pay is approved (pay.day_approved); and on the demo, a person's note
-    (demo.no_note). Returns the rate as saved."""
+    (pay_rate.before_first_day), after the last of a job that ended (pay_rate.after_last_day), or one whose pay is
+    approved (pay.day_approved); and on the demo, a person's note (demo.no_note). Returns the rate as saved."""
     # Spaces around a note say nothing, and "  " is no note.
     note = note.strip()
     # One transaction: the lock below holds until the rate is saved, so who may is asked of the jobs as they are when it
@@ -86,17 +86,15 @@ def set_pay_rate(
         # whoever sets a rate sets a worker's pay, as whoever sets a PIN can act as them. So staff.manage on the whole
         # shop, holding every key the worker was given; never one's own rate (a manager raising his own pay); an owner's
         # only by the superuser. The same lock the book of days takes on every job (work_out_days), so a rate set while
-        # a manager opens the month waits a moment for it.
-        staff, by = lock_worker_for_a_change(staff, by)
+        # a manager opens the month waits a moment for it. One who left too: a day he worked before his first rate would
+        # otherwise hold the month's approval, and every later month's, for good, with nothing able to mend it (WAGE-3's
+        # review).
+        staff, by = lock_worker_for_a_change(staff, by, left_too=True)
         # And the key that changes the shop's rules and rates, the owner's (spec §6): a manager handed staff.manage to
         # reset PINs, or to add a loader, may not change anyone's pay with it (WAGE-1's card). Read afresh, after the
         # lock, as the rule above reads its own key: a key taken away a moment ago counts.
         if by is not None:
             require(by, Permission.SETTINGS_MANAGE, None)
-        # A job that ended is history: its pay up to its last day is worked out with the rates it had. Asked of a person
-        # by the rule above already; here for the system too, as change_worker asks it.
-        if staff.status == StaffStatus.LEFT:
-            raise ValidationError("This person has already left.", code="staff.left")
         # The boxes, all together, so a person who typed two wrong sees both at once, each beside its box. Each a code
         # the page translates (ADR-0040).
         errors: dict[str, list[ValidationError]] = {}
@@ -118,6 +116,12 @@ def set_pay_rate(
         if effective_from < staff.started_on:
             errors["effective_from"] = [
                 ValidationError("A rate can't start before the worker's first day.", code="pay_rate.before_first_day")
+            ]
+        # Nor after the last day of a job that ended: it has no day there to pay, and a rate that starts then would mend
+        # nothing. Its own days alone, until their pay is approved.
+        elif staff.status == StaffStatus.LEFT and effective_from > cast(dt.date, staff.left_on):
+            errors["effective_from"] = [
+                ValidationError("A rate can't start after the worker's last day.", code="pay_rate.after_last_day")
             ]
         # Nor from a day whose pay is approved (WAGE-3, A3), the shop's or this worker's alone: those days were paid at
         # the rate there was, so a raise starts after them, from the next open month. Under the lock on the job, one of

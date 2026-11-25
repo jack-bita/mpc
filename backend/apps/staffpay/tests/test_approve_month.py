@@ -393,6 +393,21 @@ def test_a_day_with_no_rate_refuses_it_and_is_named(shop_a: Shop, baba: StaffMem
     assert line_of(month(shop_a), "Juma").total == Decimal("20000.00")
 
 
+def test_one_who_left_with_a_day_and_no_rate_can_be_mended(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Juma came on the 16th and the 17th, his rate was typed from the 17th, and he was marked as gone on the 18th. Baba
+    # may still type the 16th's: nothing else could, so November, and every month after it, would wait for ever.
+    juma = paid(shop_a, "Juma", since=TUE)
+    for day in (MON, TUE):
+        kept_day(juma, *FULL, date=day)
+    with shop_context(shop_a):
+        mark_left(juma, left_on=WED, by=baba, reason="Amehamia Moshi")
+    assert refused(shop_a, baba).code == "pay_run.days_without_rate"
+    with shop_context(shop_a):
+        set_pay_rate(juma, daily_rate=Decimal("10000"), effective_from=MON, by=baba)
+    approve(shop_a, baba)
+    assert line_of(month(shop_a), "Juma").total == Decimal("20000.00")
+
+
 def test_an_earlier_month_still_open_refuses_it(
     shop_a: Shop, baba: StaffMember, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
 ) -> None:

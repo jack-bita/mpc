@@ -1512,7 +1512,8 @@
     "pay_rate": {
       "amount_invalid": "Andika kiasi cha shilingi nzima, zaidi ya sifuri.",
       "amount_too_big": "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
-      "before_first_day": "Malipo hayawezi kuanza kabla ya siku ya kwanza ya kazi ya mfanyakazi huyu."
+      "before_first_day": "Malipo hayawezi kuanza kabla ya siku ya kwanza ya kazi ya mfanyakazi huyu.",
+      "after_last_day": "Malipo hayawezi kuanza baada ya siku ya mwisho ya kazi ya mfanyakazi huyu."
     },
     "day": {
       "own": "Huwezi kuamua siku yako mwenyewe.",

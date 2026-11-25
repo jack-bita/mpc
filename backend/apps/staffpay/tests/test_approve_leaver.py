@@ -310,6 +310,10 @@ def test_a_last_day_with_no_rate_is_named(shop_a: Shop, baba: StaffMember, neema
     leaves(juma, baba)
     assert waits_for(juma).no_rate == [OpenDay(juma.pk, "Juma", TODAY)]
     assert refused(juma, baba).code == "pay_run.days_without_rate"
+    # Baba types it, though Juma has left (WAGE-3's review), and he is approved: his day, less what he was given.
+    with shop_context(shop_a):
+        set_pay_rate(juma, daily_rate=Decimal("10000"), effective_from=TODAY, by=baba)
+    assert approve(juma, baba).total == Decimal("9000.00")
 
 
 def test_one_who_did_not_come_on_the_last_day_is_approved(shop_a: Shop, baba: StaffMember, neema: StaffMember) -> None:

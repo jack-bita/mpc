@@ -113,11 +113,13 @@ const CODES_THE_API_SENDS = [
   "closure.reason_required",
   "closure.not_active",
   "closure.started",
-  // A worker's daily pay rate (WAGE-1, set_pay_rate): an amount of 0 or less, or with cents, or over ten million, and a
-  // day before the worker's first day; on the demo, a note is demo.no_note above.
+  // A worker's daily pay rate (WAGE-1, set_pay_rate): an amount of 0 or less, or with cents, or over ten million, a day
+  // before the worker's first day, and one after the last of a worker who left (WAGE-3's review); on the demo, a note is
+  // demo.no_note above.
   "pay_rate.amount_invalid",
   "pay_rate.amount_too_big",
   "pay_rate.before_first_day",
+  "pay_rate.after_last_day",
   // Deciding a day (ATT-6, decide_day): one's own day, which the owner decides; a day that isn't a working day gone
   // by; a choice the day can't take (Amechelewa with no late Ingia); no reason; and on the demo, a reason that isn't one
   // of the three ready ones. Someone deciding it meanwhile is version_conflict above.

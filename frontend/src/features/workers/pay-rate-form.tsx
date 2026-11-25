@@ -7,17 +7,20 @@
 // saves (UI-10). A first rate starts on the worker's first day, as Juma, hired on the 10th, is paid from the 10th
 // though Baba types it on the 19th; a change starts today, or on the first day for a worker who hasn't started yet,
 // with the amount and the meals of the rate in force, so a raise to 12,000 is a change of one digit (WAGE-1's
-// defaults). The date box offers nothing before the worker's first day: a day gone by is fine, as the days before today
-// are paid at the rate their own day had (rates_between), but no day before the job.
+// defaults). One who left starts on their first day, with a rate or none: what they lack is the rate of a day before the
+// first one typed, which holds their approval until it is (WAGE-3's review). The date box offers nothing before the
+// worker's first day, nor after the last of one who left: a day gone by is fine, as the days before today are paid at the
+// rate their own day had (rates_between), but no day outside the job.
 //
 // A rate is never changed: a mistake is mended by a new rate for the same day, which counts, as the newest (rule 2).
 // So the form always adds one.
 //
 // What the form can see itself is said at once, in the server's own sentences, and nothing is sent: an amount that is
 // empty, 0, or has cents (pay_rate.amount_invalid), an empty day (required), a day before the first
-// (pay_rate.before_first_day). The server says the rest: who may (staff.own, staff.superuser_only, staff.more_keys,
-// staff.left, on the demo demo.people_fixed, and a bare permission_denied), above the sheet's buttons, as they are
-// about the person, not a box; and on the demo, a note (demo.no_note), beside its box.
+// (pay_rate.before_first_day) or after the last (pay_rate.after_last_day). The server says the rest: who may (staff.own,
+// staff.superuser_only, staff.more_keys, on the demo demo.people_fixed, and a bare permission_denied), above the sheet's
+// buttons, as they are about the person, not a box; a day whose pay is approved (pay.day_approved), and on the demo a
+// note (demo.no_note), each beside its box.
 //
 // The id is sent again with every try of the same amount, day, meals and note (ADR-0007): a send whose answer the
 // network lost, tried again, gets the stored rate back, never a second one. A changed try gets a new id, as the server
@@ -103,7 +106,9 @@ export function PayRateForm({
   // before the first day (pay_rate.before_first_day): Zawadi, starting on the 25th, gets her second rate from the 25th
   // too, never a day the server would refuse. Days as text sort as days do.
   const [day, setDay] = useState(() =>
-    rates.rates.length === 0 || rates.today < worker.started_on
+    rates.rates.length === 0 ||
+    rates.today < worker.started_on ||
+    worker.left_on !== null
       ? worker.started_on
       : rates.today,
   );
@@ -151,7 +156,9 @@ export function PayRateForm({
           ? "required"
           : day < worker.started_on
             ? "pay_rate.before_first_day"
-            : undefined,
+            : worker.left_on !== null && day > worker.left_on
+              ? "pay_rate.after_last_day"
+              : undefined,
     };
     setOwn(checks);
     if (amount === null || checks.effective_from) return;
@@ -209,8 +216,9 @@ export function PayRateForm({
         hint={t("form.fromHint")}
         error={said(own.effective_from) ?? byField.effective_from}
         type="date"
-        // The phone's calendar offers nothing before the worker's first day.
+        // The phone's calendar offers nothing before the worker's first day, nor after the last of one who left.
         min={worker.started_on}
+        max={worker.left_on ?? undefined}
         value={day}
         onChange={(event) => setDay(event.target.value)}
       />

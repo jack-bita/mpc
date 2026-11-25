@@ -27,7 +27,7 @@ from rest_framework.response import Response
 
 from apps.core.api.base import CreateOnceMixin, ShopViewSet
 from apps.core.permissions import Permission
-from apps.people.models import StaffMember
+from apps.people.models import StaffMember, StaffStatus
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_today
 from apps.staffpay.api.serializers import (
@@ -150,9 +150,19 @@ class PayRateViewSet(CreateOnceMixin[PayRate]):
         # The worker's rates, through get_queryset(), inside the visit's shop: another shop's worker, or an id no shop
         # has, has none here, so the answer tells nothing of them (03 §5.4).
         rates = list(self.get_queryset().filter(staff_id=asked.validated_data["staff"]).order_by(*NEWEST_FIRST))
-        today = shop_today(Shop.objects.get(pk=self.actor.shop_id))
+        shop = Shop.objects.get(pk=self.actor.shop_id)
+        today = shop_today(shop)
         in_force = rate_in_force(rates, today)
-        answer = {"today": today, "in_force": None if in_force is None else in_force.pk, "rates": rates}
+        # The job itself, through the guard too, only if it ended: one that still runs has days to come.
+        gone = StaffMember.objects.filter(
+            shop=shop, pk=asked.validated_data["staff"], status=StaffStatus.LEFT, left_on__isnull=False
+        ).first()
+        answer = {
+            "today": today,
+            "in_force": None if in_force is None else in_force.pk,
+            "closed": gone is not None and is_closed(shop, cast(date, gone.left_on), gone.pk),
+            "rates": rates,
+        }
         return Response(PayRatesAnswer(answer).data)
 
     def create_row(self, data: dict[str, Any]) -> PayRate:

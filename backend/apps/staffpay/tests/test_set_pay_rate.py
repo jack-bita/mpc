@@ -11,10 +11,11 @@ check (lock_worker_for_a_change), with one key more, the one that changes the sh
     sets their own rate                                      staff.own
     sets an owner's, or an admin person's                    staff.superuser_only
     the worker holds a key they lack                         staff.more_keys
-    the worker has left                                      staff.left
-    the system or the superuser                              done, for anyone who hasn't left
+    the worker has left                                      done, from a day of theirs, while its pay is open
+    the system or the superuser                              done, for anyone
 
-From any day of the job, gone by or to come, never before its first day. On the demo, where every visitor logs in as
+From any day of the job, gone by or to come, never before its first day, nor after the last of one that ended. On the
+demo, where every visitor logs in as
 Meneja, the seed's people keep their rates, and a visitor's note isn't kept. The amounts are made up: the repo is public
 (rule 10).
 """
@@ -43,6 +44,7 @@ GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
 NOV_1 = dt.date(2026, 11, 1)
 NOV_10 = dt.date(2026, 11, 10)
+NOV_12 = dt.date(2026, 11, 12)
 NOV_30 = dt.date(2026, 11, 30)
 DEC_1 = dt.date(2026, 12, 1)
 TEN_THOUSAND = Decimal("10000.00")
@@ -261,13 +263,38 @@ def test_a_worker_holding_a_key_the_manager_lacks(meneja: StaffMember, juma: Sta
 
 
 @pytest.mark.parametrize("by_the_system", [False, True])
-def test_a_worker_who_left_gets_no_new_rate(baba: StaffMember, juma: StaffMember, by_the_system: bool) -> None:
-    # A job that ended is history: what it said then stays as it was, for the system too.
+def test_a_worker_who_left_can_still_be_given_a_rate(baba: StaffMember, juma: StaffMember, by_the_system: bool) -> None:
+    # Juma worked the 10th and left on the 12th, and only then does Baba see that the 10th has no rate: the month can't
+    # be approved until it has one (pay_run.days_without_rate), so he may type it still, the last day too (WAGE-3's
+    # review).
     with shop_context(juma.shop_id):
-        mark_left(juma, left_on=NOV_10, by=None, reason="Amehamia Moshi")
+        mark_left(juma, left_on=NOV_12, by=None, reason="Amehamia Moshi")
+    by = None if by_the_system else baba
+    set_rate(juma, by=by, effective_from=NOV_10)
+    set_rate(juma, by=by, effective_from=NOV_12)
+    assert rates_of(juma) == 2
+
+
+@pytest.mark.parametrize("by_the_system", [False, True])
+def test_a_rate_never_starts_after_the_last_day(baba: StaffMember, juma: StaffMember, by_the_system: bool) -> None:
+    # The day after it is no day of his job to pay.
+    with shop_context(juma.shop_id):
+        mark_left(juma, left_on=NOV_12, by=None, reason="Amehamia Moshi")
     with pytest.raises(ValidationError) as refused:
-        set_rate(juma, by=None if by_the_system else baba)
-    assert refused.value.code == "staff.left"
+        set_rate(juma, by=None if by_the_system else baba, effective_from=NOV_12 + dt.timedelta(days=1))
+    assert [error.code for error in refused.value.error_dict["effective_from"]] == ["pay_rate.after_last_day"]
+    assert rates_of(juma) == 0
+
+
+def test_who_may_is_asked_of_one_who_left_too(meneja: StaffMember, juma: StaffMember) -> None:
+    # Juma held the owner's own key to approve the pay: he may come back with all he held, so a manager without it may
+    # set no rate of his, gone or not.
+    with shop_context(juma.shop_id):
+        grant_permission(juma, Permission.PAY_APPROVE, side=None, by=None)
+        mark_left(juma, left_on=NOV_12, by=None, reason="Amehamia Moshi")
+    with pytest.raises(ValidationError) as refused:
+        set_rate(juma, by=meneja)
+    assert refused.value.code == "staff.more_keys"
     assert rates_of(juma) == 0
 
 

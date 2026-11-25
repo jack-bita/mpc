@@ -6181,6 +6181,10 @@
                         "nullable": true,
                         "description": "The rate in force on the shop's today, or none."
                     },
+                    "closed": {
+                        "type": "boolean",
+                        "description": "Whether the worker left and the pay of their last day is approved: no rate can be typed any more."
+                    },
                     "rates": {
                         "type": "array",
                         "items": {
@@ -6189,6 +6193,7 @@
                     }
                 },
                 "required": [
+                    "closed",
                     "in_force",
                     "rates",
                     "today"
