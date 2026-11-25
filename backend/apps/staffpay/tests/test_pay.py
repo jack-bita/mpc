@@ -20,7 +20,7 @@ from decimal import Decimal, localcontext
 
 import pytest
 
-from apps.staffpay.calculations import DayToPay, PaidAs, PaidDay, Pay, PayLine, pay_day, work_out_pay
+from apps.staffpay.calculations import PAID_AS, DayToPay, PaidAs, PaidDay, Pay, PayLine, pay_day, work_out_pay
 from apps.staffpay.models import AbsenceType, DayStatus
 
 RATE = Decimal("10000.00")
@@ -139,6 +139,13 @@ def test_a_paid_day_with_no_rate_pays_nothing_and_says_so() -> None:
     for status, kind in ((DayStatus.LATE, PaidAs.FULL), (DayStatus.HALF, PaidAs.HALF)):
         no_rate = pay_day(a_day(status, fine="500.00", rate=None))
         assert no_rate == PaidDay(kind, NOTHING, NOTHING, no_rate=True)
+
+
+def test_every_status_is_paid_as_something() -> None:
+    # A status added to the days with nothing said of its pay would stop Mishahara from opening, for everyone, the first
+    # day it came up: so it fails here instead, at the next run of the tests (WAGE-2's review). Off is asked before the
+    # list (_paid_as).
+    assert set(PAID_AS) == set(DayStatus) - {DayStatus.OFF}
 
 
 @pytest.mark.parametrize("status", [DayStatus.ABSENT, DayStatus.OFF, DayStatus.NEEDS_REVIEW])

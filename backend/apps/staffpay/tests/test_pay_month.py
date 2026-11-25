@@ -23,13 +23,16 @@ import datetime as dt
 import uuid
 from collections.abc import Callable
 from decimal import Decimal
+from typing import Any, cast
 
 import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.control.models import EditEvent
+from apps.control.models import EditEvent, FlagKind
+from apps.control.services import raise_flag
+from apps.core.links import table_of
 from apps.core.permissions import RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON, ROUNDING_STEP
 from apps.core.tenancy import ShopMismatch, shop_context
@@ -588,6 +591,58 @@ def test_a_toka_that_waits_still_shares_todays_meals(shop_a: Shop, baba: StaffMe
     assert todays(line_of(answer, "Juma")).total == NOTHING
 
 
+def test_a_toka_with_no_ingia_waits_tonight(shop_a: Shop, baba: StaffMember, evening: None) -> None:
+    # Juma forgot Ingia this morning and tapped Toka at 18:45: nobody knows when he came, so today waits, and he ate, so
+    # the meals' split counts him.
+    asha, juma = paid(shop_a, "Asha"), paid(shop_a, "Juma")
+    tapped(asha, *FULL, date=TODAY)
+    tapped(juma, (ClockKind.OUT, 18, 45), date=TODAY)
+    typed(baba, TODAY, "8000")
+    answer = month(shop_a)
+    assert (todays(line_of(answer, "Juma")).waiting, todays(line_of(answer, "Juma")).total) == (1, NOTHING)
+    assert todays(line_of(answer, "Asha")).meals == Decimal("4000.00")
+
+
+def test_a_suspended_workers_taps_wait_tonight(shop_a: Shop, baba: StaffMember, evening: None) -> None:
+    # Baba suspended Juma at 11:00, and the laptop, offline, let his Toka through: the push flags the tap (X2), and
+    # whether today is paid is a person's call, never the rule's, however ordinary its taps (ATT-11). He ate, so the
+    # split counts him until someone decides.
+    asha, juma = paid(shop_a, "Asha"), paid(shop_a, "Juma")
+    for staff in (asha, juma):
+        kept_day(staff, *FULL, date=YESTERDAY)
+        tapped(staff, *FULL, date=TODAY)
+    with shop_context(shop_a):
+        toka = AttendanceEvent.objects.get(staff=juma, kind=ClockKind.OUT, trusted_time__date=TODAY)
+        line = cast(Any, table_of("pushed_document")).objects.create(
+            shop=shop_a,
+            device=toka.device,
+            device_seq=toka.device_seq,
+            client_time=toka.client_time,
+            received_at=toka.received_at,
+            created_by=juma,
+            document_id=toka.pk,
+            type="clock",
+            schema_version=2,
+            status="accepted",
+        )
+        raise_flag(kind=FlagKind.SUSPENDED_STAFF_ACTIVITY, subject=line, people=[juma], by=None)
+    typed(baba, TODAY, "8000")
+    answer = month(shop_a)
+    assert (todays(line_of(answer, "Juma")).waiting, line_of(answer, "Juma").total) == (1, Decimal("10000.00"))
+    assert todays(line_of(answer, "Asha")).meals == Decimal("4000.00")
+
+
+def test_the_taps_of_one_gone_before_today_wait(shop_a: Shop, baba: StaffMember, evening: None) -> None:
+    # Neema's last day was yesterday, and she tapped all day today: a day outside her job, for a person to decide.
+    neema = paid(shop_a, "Neema")
+    kept_day(neema, *FULL, date=YESTERDAY)
+    with shop_context(shop_a):
+        mark_left(neema, left_on=YESTERDAY, by=baba, reason="Amehama")
+    tapped(neema, *FULL, date=TODAY)
+    worker = line_of(month(shop_a), "Neema")
+    assert (todays(worker).waiting, worker.total) == (1, Decimal("10000.00"))
+
+
 def test_todays_share_rounds_to_todays_step(shop_a: Shop, baba: StaffMember, evening: None) -> None:
     # From today the shop rounds to 50: 8,000 among three is 2,666.67, so 2,650.
     rule(shop_a, ROUNDING_STEP, Decimal("50.00"), TODAY)
@@ -688,8 +743,12 @@ def test_today_is_never_kept(shop_a: Shop, asha: StaffMember, evening: None) -> 
     kept_day(asha, *FULL, date=YESTERDAY)
     tapped(asha, *FULL, date=TODAY)
     month(shop_a)
-    with shop_context(shop_a):
+    with shop_context(shop_a), CaptureQueriesContext(connection) as queries:
+        pay_month(shop_a, NOVEMBER)
         assert not AttendanceDay.objects.filter(date=TODAY).exists()
+    # And locks nothing of its own: the jobs are locked once, by the book, whose days are over, and let go as it
+    # commits, so a tap, a PIN or another page never waits for today's line.
+    assert sum("FOR NO KEY UPDATE" in query["sql"] for query in queries) == 1
 
 
 def test_tomorrow_the_book_says_the_same_of_today(
