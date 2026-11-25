@@ -9,6 +9,11 @@ Today is Tuesday 24 November 2026 at MPC, at 10:00, so the pay counts up to Mond
             Thu 19 Nov  no Toka             waits for a decision
             to pay                          24,500, and 1 day waits
 
+And on Tuesday evening, once Asha taps Toka, today counts too, as Leo, less today's share of the meals (Jack: A), judged
+by the book's own rule and never kept:
+
+            Leo, full day                   10,000 less 4,000 of the 8,000 that two ate today
+
 Which days a worker had is the book's (test_attendance_book.py), and what they add up to the sum's (test_pay.py); here,
 who is listed, on which days, at which rate, and that nothing is kept. The clock is fixed, so the days are the same
 whenever the tests run. The amounts are made up (rule 10). Fake data only: the repo is public.
@@ -26,13 +31,13 @@ from django.utils import timezone
 
 from apps.control.models import EditEvent
 from apps.core.permissions import RoleTemplate
-from apps.core.settings_registry import ROUNDING_STEP
+from apps.core.settings_registry import ATTENDANCE_ON, ROUNDING_STEP
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import change_worker, hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
 from apps.staffpay import services
-from apps.staffpay.calculations import PaidAs, PayLine
+from apps.staffpay.calculations import PaidAs, Pay, PayLine
 from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayChoice, MealMoney, PayRate
 from apps.staffpay.services import (
     PayMonth,
@@ -149,7 +154,8 @@ def test_a_day_still_running_is_not_counted(shop_a: Shop, asha: StaffMember) -> 
     # In since 07:20 today, with no Toka yet: today pays nothing, and the pay counts up to yesterday.
     kept_day(asha, *FULL, date=YESTERDAY)
     tapped(asha, (ClockKind.IN, 7, 20), date=TODAY)
-    assert line_of(month(shop_a), "Asha").total == Decimal("10000.00")
+    worker = line_of(month(shop_a), "Asha")
+    assert (worker.today, worker.total) == (None, Decimal("10000.00"))
 
 
 def test_each_day_is_paid_at_its_own_rate(shop_a: Shop, asha: StaffMember) -> None:
@@ -349,24 +355,34 @@ def test_a_month_to_come_has_nobody(shop_a: Shop, asha: StaffMember) -> None:
 
 
 def test_on_the_first_no_day_is_over(shop_a: Shop, asha: StaffMember, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Tuesday 1 December, in the morning: no day of December is over, so nothing is counted to any day.
+    # Tuesday 1 December, in the morning: no day of December is over, so nothing is counted to any day. Who is paid by
+    # the day today is listed all the same, with nothing to pay yet, and the 1st counts in the evening, as Leo.
     monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 12, 1, 10, 0)))
-    assert month(shop_a, dt.date(2026, 12, 1)).counted_to is None
+    answer = month(shop_a, dt.date(2026, 12, 1))
+    assert (answer.counted_to, [(line.display_name, line.total) for line in answer.workers]) == (
+        None,
+        [("Asha", NOTHING)],
+    )
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 12, 1, 19, 0)))
+    tapped(asha, *FULL, date=dt.date(2026, 12, 1))
+    answer = month(shop_a, dt.date(2026, 12, 1))
+    assert (answer.counted_to, line_of(answer, "Asha").total) == (None, Decimal("10000.00"))
 
 
 def test_midnight_between_two_reads_counts_no_day_early(
     shop_a: Shop, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Baba opens the page at 23:59:59 on Monday 23, and the book, a moment later, answers Monday too, as it is Tuesday
-    # by then. The page says it counts up to Sunday 22, so Monday isn't in it: no day is ever counted twice, once as a
-    # day over and once as today.
+    # by then. For this answer Monday is still today: counted up to Sunday 22, and Monday once, as Leo, never twice.
     kept_day(asha, *FULL, date=SAT)
     kept_day(asha, *FULL, date=YESTERDAY)
     reads = iter([YESTERDAY, TODAY, TODAY, TODAY])
     monkeypatch.setattr(services, "shop_today", lambda shop: next(reads))
     answer = month(shop_a)
     assert (answer.today, answer.counted_to) == (YESTERDAY, dt.date(2026, 11, 22))
-    assert line_of(answer, "Asha").total == Decimal("10000.00")
+    worker = line_of(answer, "Asha")
+    assert (worker.pay.lines, todays(worker).lines) == ((full(1),), (full(1),))
+    assert worker.total == Decimal("20000.00")
 
 
 def test_the_pay_is_never_kept(shop_a: Shop, asha: StaffMember) -> None:
@@ -383,17 +399,239 @@ def test_the_pay_is_never_kept(shop_a: Shop, asha: StaffMember) -> None:
 
 def test_the_month_is_read_in_a_few_queries(shop_a: Shop, baba: StaffMember) -> None:
     # However many workers and days: the book's dozen queries, with the meals' two, one for the rates and one for the
-    # step. Counted on the second visit, as on the first every day is new (test_attendance_month.py).
+    # step; and today's five, its jobs, taps, closed days, rules and meal money. Counted on the second visit, as on the
+    # first every day is new (test_attendance_month.py).
     for name in ("Asha", "Baraka", "Juma", "Zawadi"):
         staff = paid(shop_a, name)
         for day in (MON, TUE, WED, THU, FRI):
             kept_day(staff, *FULL, date=day)
+        tapped(staff, *FULL, date=TODAY)
     typed(baba, MON, "8000")
+    typed(baba, TODAY, "8000")
     month(shop_a)
     with shop_context(shop_a), CaptureQueriesContext(connection) as queries:
         answer = pay_month(shop_a, NOVEMBER)
     assert len(answer.workers) == 4
-    assert len(queries) <= 17
+    assert len(queries) <= 22
+
+
+# Leo: today, still running, once the worker taps Toka (Jack: A).
+
+
+@pytest.fixture
+def evening(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 19:00 on the same Tuesday: the day's last Toka is tapped, and the day itself isn't over.
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 11, 24, 19, 0)))
+
+
+def todays(worker: WorkerPay) -> Pay:
+    assert worker.today is not None
+    return worker.today
+
+
+def test_today_counts_once_toka_is_tapped(shop_a: Shop, asha: StaffMember, evening: None) -> None:
+    # Asha leaves the shop for good tonight: yesterday's 10,000, and today's, in one total Baba pays at once.
+    kept_day(asha, *FULL, date=YESTERDAY)
+    tapped(asha, *FULL, date=TODAY)
+    answer = month(shop_a)
+    worker = line_of(answer, "Asha")
+    # The lines still say the days that are over, up to yesterday; today is apart.
+    assert (answer.counted_to, worker.pay.lines) == (YESTERDAY, (full(1),))
+    assert todays(worker).lines == (full(1),)
+    assert (worker.total, answer.total) == (Decimal("20000.00"), Decimal("20000.00"))
+
+
+def test_today_is_judged_by_the_days_own_rule(shop_a: Shop, asha: StaffMember, evening: None) -> None:
+    # Late at 07:50, out at 18:45: the whole day less the first fine. A half day, out at 13:10. As tomorrow's book will
+    # say of them.
+    tapped(asha, *LATE, date=TODAY)
+    late = todays(line_of(month(shop_a), "Asha"))
+    assert (late.lines, late.fined_days, late.fines, late.total) == (
+        (full(1),),
+        1,
+        Decimal("500.00"),
+        Decimal("9500.00"),
+    )
+    juma = paid(shop_a, "Juma")
+    tapped(juma, *HALF, date=TODAY)
+    assert todays(line_of(month(shop_a), "Juma")).lines == (half(1),)
+
+
+def test_a_toka_the_rule_cant_judge_waits(shop_a: Shop, asha: StaffMember, evening: None) -> None:
+    # Out at 16:00: dharura, and nobody decides a day before it is over. So it pays nothing tonight, and the page says
+    # that today waits.
+    kept_day(asha, *FULL, date=YESTERDAY)
+    tapped(asha, (ClockKind.IN, 7, 20), (ClockKind.OUT, 16, 0), date=TODAY)
+    worker = line_of(month(shop_a), "Asha")
+    assert (todays(worker).waiting, todays(worker).total, worker.total) == (1, NOTHING, Decimal("10000.00"))
+    # Apart from the days that are over: none of those waits.
+    assert worker.pay.waiting == 0
+
+
+def test_no_toka_yet_counts_nothing_of_today(shop_a: Shop, asha: StaffMember, evening: None) -> None:
+    # Still at work at 19:00, or forgot to tap: nothing of today. And someone who didn't come has no today at all.
+    juma = paid(shop_a, "Juma")
+    tapped(asha, (ClockKind.IN, 7, 20), date=TODAY)
+    answer = month(shop_a)
+    assert (line_of(answer, "Asha").today, line_of(answer, "Juma").today) == (None, None)
+    assert juma.pk in [line.staff_id for line in answer.workers]
+
+
+def test_todays_meals_are_split_among_those_who_tapped(shop_a: Shop, baba: StaffMember, evening: None) -> None:
+    # 8,000 typed for today. Asha went home, Juma is still at work, and so is the cook: two share it, 4,000 each, so
+    # Asha's today is 6,000 (Jack: A). Zawadi didn't come. The cook, gone home too, pays none.
+    asha, juma, cook = paid(shop_a, "Asha"), paid(shop_a, "Juma"), paid(shop_a, "Mpishi", meals=False)
+    paid(shop_a, "Zawadi")
+    tapped(asha, *FULL, date=TODAY)
+    tapped(juma, (ClockKind.IN, 7, 20), date=TODAY)
+    tapped(cook, *FULL, date=TODAY)
+    # None typed yet, none taken.
+    assert todays(line_of(month(shop_a), "Asha")).total == Decimal("10000.00")
+
+    typed(baba, TODAY, "8000")
+
+    answer = month(shop_a)
+    leaving = todays(line_of(answer, "Asha"))
+    assert (leaving.meal_days, leaving.meals, leaving.total) == (1, Decimal("4000.00"), Decimal("6000.00"))
+    assert line_of(answer, "Asha").total == Decimal("6000.00")
+    assert todays(line_of(answer, "Mpishi")).total == Decimal("10000.00")
+    assert line_of(answer, "Juma").today is None
+    # Money crossed out is no money, today as on any day.
+    with shop_context(shop_a):
+        void_meal_money(MealMoney.objects.get(), reason="Kiasi kimekosewa", by=baba)
+    assert todays(line_of(month(shop_a), "Asha")).total == Decimal("10000.00")
+
+
+def test_a_toka_that_waits_still_shares_todays_meals(shop_a: Shop, baba: StaffMember, evening: None) -> None:
+    # Juma left at 16:00, so his day waits, but he ate: the split counts him, and takes nothing from him tonight.
+    asha, juma = paid(shop_a, "Asha"), paid(shop_a, "Juma")
+    tapped(asha, *FULL, date=TODAY)
+    tapped(juma, (ClockKind.IN, 7, 20), (ClockKind.OUT, 16, 0), date=TODAY)
+    typed(baba, TODAY, "8000")
+    answer = month(shop_a)
+    assert todays(line_of(answer, "Asha")).meals == Decimal("4000.00")
+    assert todays(line_of(answer, "Juma")).total == NOTHING
+
+
+def test_todays_share_rounds_to_todays_step(shop_a: Shop, baba: StaffMember, evening: None) -> None:
+    # From today the shop rounds to 50: 8,000 among three is 2,666.67, so 2,650.
+    rule(shop_a, ROUNDING_STEP, Decimal("50.00"), TODAY)
+    for name in ("Asha", "Baraka", "Juma"):
+        tapped(paid(shop_a, name), *FULL, date=TODAY)
+    typed(baba, TODAY, "8000")
+    assert todays(line_of(month(shop_a), "Asha")).meals == Decimal("2650.00")
+
+
+def test_today_is_paid_at_todays_rate(shop_a: Shop, asha: StaffMember, evening: None) -> None:
+    new_rate(asha, "12000", TODAY)
+    tapped(asha, *FULL, date=TODAY)
+    assert todays(line_of(month(shop_a), "Asha")).lines == (full(1, "12000.00"),)
+
+
+def test_a_first_rate_still_to_come_lists_nobody(shop_a: Shop, evening: None) -> None:
+    # Her first rate starts tomorrow: nobody pays her for today, so she has no line yet. A worker listed always has a
+    # rate today, as a rate never ends.
+    asha = paid(shop_a, "Asha", since=dt.date(2026, 11, 25))
+    tapped(asha, *FULL, date=TODAY)
+    assert month(shop_a).workers == []
+
+
+def test_one_who_starts_today_is_listed(shop_a: Shop, evening: None) -> None:
+    # Zawadi's first day is today, paid from today: listed, with today alone.
+    zawadi = paid(shop_a, "Zawadi", since=TODAY)
+    with shop_context(shop_a):
+        change_worker(zawadi, version=zawadi.version, reason="Ameanza leo", by=None, started_on=TODAY)
+    tapped(zawadi, *FULL, date=TODAY)
+    worker = line_of(month(shop_a), "Zawadi")
+    assert (worker.pay.lines, todays(worker).lines, worker.total) == ((), (full(1),), Decimal("10000.00"))
+
+
+def test_one_who_left_today_is_paid_for_today(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, evening: None
+) -> None:
+    # She taps Toka, and Baba marks her gone tonight: her last day is today, and it stays in her pay.
+    kept_day(asha, *FULL, date=YESTERDAY)
+    tapped(asha, *FULL, date=TODAY)
+    with shop_context(shop_a):
+        mark_left(asha, left_on=TODAY, by=baba, reason="Amehama")
+    worker = line_of(month(shop_a), "Asha")
+    assert (worker.left_on, worker.total) == (TODAY, Decimal("20000.00"))
+
+
+def test_a_person_hired_again_today_shares_todays_meals_once(shop_a: Shop, baba: StaffMember, evening: None) -> None:
+    # Juma left this morning and was hired again at noon: two jobs, tapped on both, and he ate once (Jack: A). His share
+    # is on the job he had first.
+    juma, asha = paid(shop_a, "Juma"), paid(shop_a, "Asha")
+    tapped(asha, *FULL, date=TODAY)
+    tapped(juma, *HALF, date=TODAY)
+    with shop_context(shop_a):
+        mark_left(juma, left_on=TODAY, by=baba, reason="Amehama")
+        again = hire_again(juma, display_name="Juma", started_on=TODAY, by=None)
+    new_rate(again, "10000", TODAY)
+    tapped(again, (ClockKind.IN, 12, 30), (ClockKind.OUT, 18, 45), date=TODAY)
+    typed(baba, TODAY, "8000")
+    answer = month(shop_a)
+    meals = {line.staff_id: todays(line).meals for line in answer.workers}
+    assert meals == {asha.pk: Decimal("4000.00"), juma.pk: Decimal("4000.00"), again.pk: NOTHING}
+
+
+def test_a_sunday_and_a_closed_day_have_no_today(
+    shop_a: Shop, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Sunday 22: off, whatever was tapped. And Monday 23, closed for a funeral: a tap sends it to a person, so it waits.
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 11, 22, 19, 0)))
+    kept_day(asha, *FULL, date=SAT)
+    tapped(asha, *FULL, date=dt.date(2026, 11, 22))
+    assert line_of(month(shop_a), "Asha").today is None
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 11, 23, 19, 0)))
+    with shop_context(shop_a):
+        Closure.objects.create(shop=shop_a, first_day=YESTERDAY, last_day=YESTERDAY, name="Msiba")
+    tapped(asha, *FULL, date=YESTERDAY)
+    assert (todays(line_of(month(shop_a), "Asha")).waiting, line_of(month(shop_a), "Asha").total) == (
+        1,
+        Decimal("10000.00"),
+    )
+
+
+def test_attendance_switched_off_today_counts_nothing_of_it(shop_a: Shop, asha: StaffMember, evening: None) -> None:
+    kept_day(asha, *FULL, date=YESTERDAY)
+    tapped(asha, *FULL, date=TODAY)
+    rule(shop_a, ATTENDANCE_ON, False, TODAY)
+    worker = line_of(month(shop_a), "Asha")
+    assert (worker.today, worker.total) == (None, Decimal("10000.00"))
+
+
+def test_a_past_month_has_no_today(shop_a: Shop, asha: StaffMember, evening: None) -> None:
+    kept_day(asha, *FULL, date=dt.date(2026, 10, 30))
+    tapped(asha, *FULL, date=TODAY)
+    worker = line_of(month(shop_a, OCTOBER), "Asha")
+    assert (worker.today, worker.total) == (None, Decimal("10000.00"))
+
+
+def test_today_is_never_kept(shop_a: Shop, asha: StaffMember, evening: None) -> None:
+    # Judged, and not written: today's row is the book's to keep, once the day is over.
+    kept_day(asha, *FULL, date=YESTERDAY)
+    tapped(asha, *FULL, date=TODAY)
+    month(shop_a)
+    with shop_context(shop_a):
+        assert not AttendanceDay.objects.filter(date=TODAY).exists()
+
+
+def test_tomorrow_the_book_says_the_same_of_today(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, evening: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # What Baba pays tonight is what tomorrow's page says, from the same taps and the same money, as one rule judges
+    # both: 10,000 less the first fine less 4,000 of meals.
+    juma = paid(shop_a, "Juma")
+    tapped(asha, *LATE, date=TODAY)
+    tapped(juma, *FULL, date=TODAY)
+    typed(baba, TODAY, "8000")
+    tonight = line_of(month(shop_a), "Asha")
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 11, 25, 8, 0)))
+    tomorrow = line_of(month(shop_a), "Asha")
+    assert (tonight.total, tomorrow.total) == (Decimal("5500.00"), Decimal("5500.00"))
+    assert (tonight.today is not None, tomorrow.today) == (True, None)
+    assert tomorrow.pay == todays(tonight)
 
 
 def test_one_workers_pay_is_their_line_of_the_month(shop_a: Shop, asha: StaffMember) -> None:
@@ -401,6 +639,7 @@ def test_one_workers_pay_is_their_line_of_the_month(shop_a: Shop, asha: StaffMem
     paid(shop_a, "Juma")
     for day, taps in ((MON, FULL), (TUE, LATE), (THU, NO_OUT)):
         kept_day(asha, *taps, date=day)
+    tapped(asha, *FULL, date=TODAY)
     with shop_context(shop_a):
         answer = worker_pay(shop_a, asha, NOVEMBER)
     whole = month(shop_a)

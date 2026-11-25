@@ -54,7 +54,9 @@ meal_money_days, which works them out through the book too, so it writes as the 
 The month's pay is asked for by Mishahara (pay_month) and by one worker's page (worker_pay): the book's days, each at
 its own rate, added up by the sum (work_out_pay, apps/staffpay/calculations.py). The draft is never saved (Jack,
 WAGE-2): a saved one is old as soon as a day is decided, so it is worked out each time, through the book, as the month's
-page is. WAGE-3 saves a payslip once, at the approval.
+page is. WAGE-3 saves a payslip once, at the approval. And today, still running, is added once the worker taps Toka,
+less their share of today's meals so far, so one who leaves tonight is paid for it (Jack: A): judged by the book's own
+rule (_answer_days), and never kept.
 """
 
 import calendar
@@ -1552,11 +1554,13 @@ def _works_today(shop: Shop, today: dt.date) -> bool:
 class WorkerPay:
     # One worker's pay of a month (WAGE-2), a job's, as a day is a job's: a person hired again in the month has two,
     # each with its own days and rates (PPL-11). Whose, and their last day if they left, which the page says beside
-    # their name; the sum, line by line; and what is left to pay.
+    # their name; the sum of the days that are over, line by line; today alone, once they tapped Toka, or None (Leo,
+    # Jack: A); and what is left to pay, the two together.
     staff_id: uuid.UUID
     display_name: str
     left_on: dt.date | None
     pay: Pay
+    today: Pay | None
     total: Decimal
 
 
@@ -1584,45 +1588,64 @@ class WorkerPayMonth:
 
 def pay_month(shop: Shop, month: dt.date) -> PayMonth:
     """The pay of the month of `month`, any day of it, for everyone the shop pays by the day, as Mishahara shows it
-    (WAGE-2; spec §8.1, 02 §15, 8): each worker's days that are over, each at its own rate, added up line by line; and
-    the whole of it. Worked out through the book (work_out_days), so it writes as the book does, and asked twice writes
-    nothing the second time; the pay itself is never kept. The shop must be open, as for the book."""
+    (WAGE-2; spec §8.1, 02 §15, 8): each worker's days that are over, each at its own rate, added up line by line;
+    today, for whoever has tapped Toka; and the whole of it. Worked out through the book (work_out_days), so it writes
+    as the book does, and asked twice writes nothing the second time; the pay itself is never kept. The shop must be
+    open, as for the book."""
     first, last = _month_span(month)
-    # The shop's today, read once: the pay counts up to the day before it, whatever the clock does meanwhile. The book
-    # reads its own a moment later, and at midnight answers one day more: that day isn't over for this answer, and would
-    # be counted twice once today counts too, so only the days before this today. The book also refuses a shop that
-    # isn't the one open, and a moment in place of the shop's day.
+    # The shop's today, read once: the pay counts up to the day before it, and today apart, whatever the clock does
+    # meanwhile. The book reads its own a moment later, and at midnight answers one day more, which for this answer is
+    # still today: only the days before it, or it would be paid twice. The book also refuses a shop that isn't the one
+    # open, and a moment in place of the shop's day.
     today = shop_today(shop)
     days = [day for day in work_out_days(shop, first, last) if day.date < today]
-    if today <= first:
-        # A month to come, or its first day: no day of it is over, and nothing more is read. So the calendar's last
-        # month is an answer too, never a day past the last one Python knows (ATT-5's review).
+    if today < first:
+        # A month to come: nothing of it is worked yet, and nothing more is read. So the calendar's last month is an
+        # answer too, never a day past the last one Python knows (ATT-5's review).
         return PayMonth(month=first, today=today, counted_to=None, workers=[], total=NO_PAY)
-    last = min(last, today - dt.timedelta(days=1))
-    # Each job's rate on each day, a raise splitting the month at its own day (WAGE-1), and the step half a day is
-    # rounded to on each day (A1). One read each for the whole month.
+    # Each job's rate on each day, a raise splitting the month at its own day (WAGE-1); the step half a day, and a share
+    # of the meals, is rounded to on each day (A1), and the attendance switch, for today. One read each for the month.
     rates = rates_between(shop, first, last)
-    steps = shop_settings_between([ROUNDING_STEP], shop, first, last)
+    settings_by_day = shop_settings_between([ATTENDANCE_ON, ROUNDING_STEP], shop, first, last)
+    # Today's days, when the month is still running: by the job, as each has one.
+    todays = {day.staff_id: day for day in _todays_days(shop, today, rates, settings_by_day)} if today <= last else {}
     # Who the shop pays by the day: a job with a rate on a working day of the month the book answers, the month page's
-    # rule (attendance_month). So not Baba, who has none; nor Neema, whose rate goes on after she left in October; nor
-    # one whose only days of the month are Sundays.
-    listed = {day.staff_id for day in days if day.status != DayStatus.OFF and (day.staff_id, day.date) in rates}
-    workers: dict[uuid.UUID, StaffMember] = {}
-    to_pay: dict[uuid.UUID, list[DayToPay]] = defaultdict(list)
+    # rule (attendance_month), or today. So not Baba, who has none; nor Neema, whose rate goes on after she left in
+    # October; nor one whose only days of the month are Sundays. And on the 1st, when no day is over, everyone who works
+    # today.
+    listed = {
+        day.staff_id
+        for day in [*days, *todays.values()]
+        if day.status != DayStatus.OFF and (day.staff_id, day.date) in rates
+    }
+    workers = {day.staff_id: day.staff for day in [*days, *todays.values()] if day.staff_id in listed}
     # The book answers date by date, so each worker's days come in their order, and so do the lines of their pay.
+    over: dict[uuid.UUID, list[AttendanceDay]] = defaultdict(list)
     for day in days:
-        if day.staff_id in listed:
-            workers[day.staff_id] = day.staff
-            rate = rates.get((day.staff_id, day.date))
-            to_pay[day.staff_id].append(_to_pay(day, rate, steps[day.date][ROUNDING_STEP.key]))
-    lines = [_worker_pay(staff, work_out_pay(to_pay[job])) for job, staff in workers.items()]
+        over[day.staff_id].append(day)
+
+    def paid(some: Iterable[AttendanceDay]) -> Pay:
+        # Some days of one worker, each with its own rate and step.
+        return work_out_pay(
+            _to_pay(day, rates.get((day.staff_id, day.date)), settings_by_day[day.date][ROUNDING_STEP.key])
+            for day in some
+        )
+
+    lines = []
+    for job, staff in workers.items():
+        # Today only once a Toka has ended it (first_out, ATT-4): until then it is still theirs to work, and the rule
+        # would send it to a person for want of one. A Toka the rule can't judge, at 16:00, ended it too, and waits.
+        tonight = todays.get(job)
+        ended = [] if tonight is None or tonight.first_out is None else [tonight]
+        lines.append(_worker_pay(staff, paid(over[job]), paid(ended) if ended else None))
     # By name, as the month page lists them; "asha" beside "Asha"; then the job's id, so two jobs of one name always
     # come in the same order, the one had first before the other (UUIDv7).
     lines.sort(key=lambda line: (line.display_name.casefold(), line.staff_id))
     return PayMonth(
         month=first,
         today=today,
-        counted_to=last,
+        # Up to yesterday, or the end of a month gone by; none on the 1st.
+        counted_to=min(last, today - dt.timedelta(days=1)) if first < today else None,
         workers=lines,
         total=sum((line.total for line in lines), NO_PAY),
     )
@@ -1643,14 +1666,41 @@ def worker_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
         today=whole.today,
         counted_to=whole.counted_to,
         paid_by_day=line is not None,
-        worker=_worker_pay(job, work_out_pay([])) if line is None else line,
+        worker=_worker_pay(job, work_out_pay([]), None) if line is None else line,
     )
 
 
-def _worker_pay(staff: StaffMember, pay: Pay) -> WorkerPay:
+def _worker_pay(staff: StaffMember, pay: Pay, today: Pay | None) -> WorkerPay:
     return WorkerPay(
-        staff_id=staff.pk, display_name=staff.display_name, left_on=staff.left_on, pay=pay, total=pay.total
+        staff_id=staff.pk,
+        display_name=staff.display_name,
+        left_on=staff.left_on,
+        pay=pay,
+        today=today,
+        total=pay.total if today is None else pay.total + today.total,
     )
+
+
+def _todays_days(
+    shop: Shop,
+    today: dt.date,
+    rates: dict[tuple[uuid.UUID, dt.date], PayRate],
+    settings_by_day: dict[dt.date, dict[str, Any]],
+) -> list[AttendanceDay]:
+    # Each job's day of today, still running, as the book's own rule says it from the taps there are (_answer_days),
+    # each with its share of today's meals so far (Jack: A). Never kept, and no lock taken: the book keeps today once it
+    # is over, from every tap that came by then, and splits its meals again.
+    jobs = list(StaffMember.objects.filter(shop=shop).order_by("pk"))
+    days = _answer_days(shop, jobs, today, today, ZoneInfo(shop.timezone), settings_by_day)
+    money = meal_money_by_date(shop, today, today).get(today, NO_MONEY)
+    # Who has eaten so far: whoever tapped today and shares the meals. One with no Toka yet waits, by the rule, and is
+    # counted all the same, as they came: 8,000 among Asha, going home, and Juma, still at work, is 4,000 each. One rule
+    # with the book's (_sharing): never the cook, and a person with two jobs once.
+    sharing = _sharing([(day, "") for day in days], rates)
+    share = meal_share(money, len(sharing.days) + sharing.waiting, settings_by_day[today][ROUNDING_STEP.key])
+    for day in sharing.days:
+        day.meal_share = share
+    return days
 
 
 def _to_pay(day: AttendanceDay, rate: PayRate | None, step: Decimal) -> DayToPay:
