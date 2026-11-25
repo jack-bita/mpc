@@ -31,6 +31,7 @@ from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
+from apps.staffpay import services
 from apps.staffpay.models import AttendanceDay, ClockKind, DayChoice, MealMoney
 from apps.staffpay.services import (
     MealDay,
@@ -254,10 +255,43 @@ def test_only_the_days_asked_for_are_added_up(shop_a: Shop, baba: StaffMember) -
 
 
 def test_days_to_come_hold_nothing(shop_a: Shop, asha: StaffMember) -> None:
-    # A span that reaches past today is counted up to today; one that starts after it is empty.
+    # A span that reaches past today is counted up to today; one that starts after it is empty, and answered as it was
+    # asked: "25/11 hadi 30/11", never a last day before its first (WAGE-7's review).
     assert days_of(shop_a, TODAY, NOV_30).last == TODAY
-    to_come = days_of(shop_a, TODAY + dt.timedelta(days=1), NOV_30)
-    assert (to_come.days, to_come.total) == ([], Decimal("0"))
+    tomorrow = TODAY + dt.timedelta(days=1)
+    to_come = days_of(shop_a, tomorrow, NOV_30)
+    assert (to_come.first, to_come.last, to_come.days, to_come.total) == (tomorrow, NOV_30, [], Decimal("0"))
+
+
+def test_the_calendars_first_day_is_no_mistake(shop_a: Shop) -> None:
+    # The service steps from day to day, and never past the first one Python knows (WAGE-7's review). The route takes no
+    # day before 2000; the book is asked here for no working day, as attendance is off all along.
+    with shop_context(shop_a):
+        assert services._dates_back(dt.date.min, dt.date(1, 1, 3)) == [
+            dt.date(1, 1, 3),
+            dt.date(1, 1, 2),
+            dt.date.min,
+        ]
+
+
+def test_a_rate_typed_between_the_two_reads_never_shows_nothing_each(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, juma: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Asha's rate is typed a moment after the book worked Monday out without it, and before the page reads the rates:
+    # she shares the meals by then, and her kept share is still 0. The page shows what Juma was split, never "TSh 0 kila
+    # mmoja", until it asks again (WAGE-7's review). Here the book's answer is the one from before her rate.
+    for each in (asha, juma):
+        kept_day(each, *FULL_DAY, date=MONDAY)
+    typed(baba, MONDAY, "2000")
+    with shop_context(shop_a):
+        before = services.work_out_days(shop_a, MONDAY, MONDAY)
+        AttendanceDay.objects.filter(date=MONDAY, staff=asha).update(meal_share=Decimal("0"))
+        for day in before:
+            if day.staff_id == asha.pk:
+                day.meal_share = Decimal("0")
+    monkeypatch.setattr(services, "work_out_days", lambda *_args: before)
+    monday = by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY]
+    assert (monday.sharers, monday.share) == (2, Decimal("1000"))
 
 
 def test_a_decision_moves_the_split(shop_a: Shop, baba: StaffMember, asha: StaffMember, juma: StaffMember) -> None:

@@ -127,6 +127,7 @@ def test_the_calendars_last_day_is_only_days_to_come(staff_client_a: APIClient) 
     # ATT-5's review).
     answer = days(staff_client_a, "9999-12-01", "9999-12-31")
     assert (answer["days"], answer["total"]) == ([], "0.00")
+    assert (answer["first"], answer["last"]) == ("9999-12-01", "9999-12-31")
 
 
 # Typing the day's money.

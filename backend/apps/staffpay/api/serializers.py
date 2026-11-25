@@ -408,8 +408,8 @@ class MealDaySerializer(serializers.Serializer[Any]):
 # One object, not a list, as for the month's answer above.
 @extend_schema_serializer(many=False)
 class MealMoneyDaysAnswer(serializers.Serializer[Any]):
-    # Hela ya chakula's answer (WAGE-7): the span, its last day no later than the shop's today; today, on the shop's own
-    # date, as a phone's can be wrong; the whole of the money; and its days, newest first.
+    # Hela ya chakula's answer (WAGE-7): the span, its last day no later than the shop's today unless it is all to come;
+    # today, on the shop's own date, as a phone's can be wrong; the whole of the money; and its days, newest first.
     first = serializers.DateField()
     last = serializers.DateField()
     today = serializers.DateField()

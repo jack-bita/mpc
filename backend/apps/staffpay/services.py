@@ -1410,8 +1410,9 @@ class MealDay:
 
 @dataclass(frozen=True)
 class MealMoneyDays:
-    # The page's answer: the span, up to the shop's today; today itself; the whole of its money; and its days, newest
-    # first. On the demo, the ready reason a row may be crossed out with; elsewhere none.
+    # The page's answer: the span, up to the shop's today, or as it was asked when it is all to come; today itself; the
+    # whole of its money; and its days, newest first. On the demo, the ready reason a row may be crossed out with;
+    # elsewhere none.
     first: dt.date
     last: dt.date
     today: dt.date
@@ -1430,11 +1431,12 @@ def meal_money_days(shop: Shop, first: dt.date, last: dt.date) -> MealMoneyDays:
     the whole of it. Worked out through the book (work_out_days), so it writes as the book does, and asked twice writes
     nothing the second time. The shop must be open, as for the book."""
     today = shop_today(shop)
-    last = min(last, today)
     ready = list(DEMO_MEAL_VOID_REASONS) if settings.DEMO_SEED else []
-    if last < first:
-        # Days to come alone, when nobody has eaten yet: nothing to read.
+    if today < first:
+        # Days to come alone, when nobody has eaten yet: nothing to read. Answered as they were asked for, so the page
+        # never heads them with a last day before the first.
         return MealMoneyDays(first, last, today, NO_MONEY, [], ready)
+    last = min(last, today)
     # The book first, so each day's share is as it is now: the money typed a moment ago, a tap that came late, a day
     # decided. It answers every job's day up to yesterday. The rows are read after it, so money typed between the two
     # shows with the split before it, until the page asks again (as a tap does, worker_attendance).
@@ -1452,15 +1454,19 @@ def meal_money_days(shop: Shop, first: dt.date, last: dt.date) -> MealMoneyDays:
     ):
         rows[row.date].append(row)
     days: list[MealDay] = []
-    date = last
-    while date >= first:
+    for date in _dates_back(first, last):
         day = _meal_day(date, today, book[date], rows[date], rates)
         # A day to show: one with a row, crossed out or not; one whose meals someone ate, or may have; and today, while
         # it is a working day, as that is when its money is typed.
         if day.rows or day.sharers or day.waiting or (date == today and _works_today(shop, today)):
             days.append(day)
-        date -= dt.timedelta(days=1)
     return MealMoneyDays(first, last, today, sum((day.amount for day in days), NO_MONEY), days, ready)
+
+
+def _dates_back(first: dt.date, last: dt.date) -> list[dt.date]:
+    # Each day from `last` back to `first`, both counted. Counted forward from the first, never a day taken off each
+    # time: past the first day Python knows, that step is an error.
+    return [first + dt.timedelta(days=n) for n in range((last - first).days, -1, -1)]
 
 
 def _meal_day(
@@ -1473,14 +1479,15 @@ def _meal_day(
     # One date of Hela ya chakula, from its jobs' days as the book answered them, its rows, and the rates in force.
     sharing = _sharing([(day, day.decided_status) for day in worked_out], rates)
     # The share as the book kept it, the same for everyone who shares the date's meals: never worked out a second time
-    # here, so the page and the pay can't differ (WAGE-2).
-    shares = [day.meal_share for day in sharing.days]
+    # here, so the page and the pay can't differ (WAGE-2). The most of them, as a rate typed between the book's read and
+    # this one's adds someone whose kept share is still 0, until the page asks again.
+    share = max((day.meal_share for day in sharing.days), default=NO_MEAL_SHARE)
     return MealDay(
         date=date,
         amount=sum((row.amount for row in rows if row.voided_at is None), NO_MONEY),
         over=date < today,
-        sharers=len(shares),
-        share=shares[0] if shares else NO_MEAL_SHARE,
+        sharers=len(sharing.days),
+        share=share,
         waiting=sharing.waiting,
         rows=[meal_line(row) for row in rows],
     )
