@@ -6,15 +6,21 @@
                          waits                —    until someone decides the day
                          half, fine 6,000  5,000 less 5,000: a day stops at 0, and never takes from his other days
 
-Each day is paid alone, with its own rate, fine and decision. Where the days come from, and who is listed, is
-test_pay_month.py's; here, only the sum. The amounts are made up (rule 10).
+Each day is paid alone, with its own rate, fine and decision. Then the days are added up, and grouped by what they pay,
+so every line of the pay multiplies to what it shows (02 §18, E10 and E11):
+
+    Siku kamili  23 × 9,000   207,000     Faini  3   −1,500
+    Nusu siku     2 × 4,500     9,000     an advance −20,000     to pay 194,500
+
+Where the days come from, and who is listed, is test_pay_month.py's; here, only the sum. The amounts are made up
+(rule 10).
 """
 
 from decimal import Decimal, localcontext
 
 import pytest
 
-from apps.staffpay.calculations import DayToPay, PaidAs, PaidDay, pay_day
+from apps.staffpay.calculations import DayToPay, PaidAs, PaidDay, Pay, PayLine, pay_day, work_out_pay
 from apps.staffpay.models import AbsenceType, DayStatus
 
 RATE = Decimal("10000.00")
@@ -139,3 +145,145 @@ def test_a_paid_day_with_no_rate_pays_nothing_and_says_so() -> None:
 def test_a_day_not_paid_needs_no_rate(status: DayStatus) -> None:
     # A day nobody is paid for, or one that waits, isn't told as a day with no rate: there is nothing to type yet.
     assert pay_day(a_day(status, rate=None)).no_rate is False
+
+
+def full(days: int, each: str) -> PayLine:
+    """A line of full days: so many, at so much each."""
+    return PayLine(PaidAs.FULL, days, Decimal(each), days * Decimal(each))
+
+
+def half(days: int, each: str) -> PayLine:
+    """A line of half days."""
+    return PayLine(PaidAs.HALF, days, Decimal(each), days * Decimal(each))
+
+
+def test_e10_payslip_194500() -> None:
+    # 02 §18, E10, spec §8.1's example: 9,000 a day, a first fine of 500. 20 days on time and 3 late are 23 × 9,000; 2
+    # half days × 4,500; 3 fines; an advance of 20,000.
+    days = (
+        [a_day(DayStatus.ON_TIME, rate="9000.00")] * 20
+        + [a_day(DayStatus.LATE, fine="500.00", rate="9000.00")] * 3
+        + [a_day(DayStatus.HALF, rate="9000.00")] * 2
+    )
+    assert work_out_pay(days, advances=Decimal("20000.00")) == Pay(
+        lines=(full(23, "9000.00"), half(2, "4500.00")),
+        fined_days=3,
+        fines=Decimal("1500.00"),
+        meal_days=0,
+        meals=NOTHING,
+        advances=Decimal("20000.00"),
+        waiting=0,
+        no_rate=0,
+        total=Decimal("194500.00"),
+    )
+
+
+def test_e11_pay_takes_the_meal_shares() -> None:
+    # 02 §18, E11: every day's share is 2,000. Asha came 10 days and pays 20,000 of meals, Juma 20 and pays 40,000: each
+    # for the days they came, never a part of the whole month.
+    asha = work_out_pay([a_day(DayStatus.ON_TIME, meal_share="2000.00")] * 10)
+    assert (asha.meal_days, asha.meals, asha.total) == (10, Decimal("20000.00"), Decimal("80000.00"))
+    juma = work_out_pay([a_day(DayStatus.ON_TIME, meal_share="2000.00")] * 20)
+    assert (juma.meal_days, juma.meals, juma.total) == (20, Decimal("40000.00"), Decimal("160000.00"))
+    # A half day ate as a full one did, so its share is whole; a day with no share counts as no day of meals.
+    mixed = work_out_pay([a_day(DayStatus.HALF, meal_share="2000.00"), a_day(DayStatus.ON_TIME)])
+    assert (mixed.meal_days, mixed.meals, mixed.total) == (1, Decimal("2000.00"), Decimal("13000.00"))
+
+
+def test_a_raise_splits_the_lines() -> None:
+    # Juma's raise from 15 Nov: 8 days at 10,000, then 6 at 12,000, and a half day of each. The full days first, then
+    # the half ones, each in the month's order.
+    days = (
+        [a_day(DayStatus.ON_TIME)] * 8
+        + [a_day(DayStatus.HALF)]
+        + [a_day(DayStatus.ON_TIME, rate="12000.00")] * 6
+        + [a_day(DayStatus.HALF, rate="12000.00")]
+    )
+    pay = work_out_pay(days)
+    assert pay.lines == (full(8, "10000.00"), full(6, "12000.00"), half(1, "5000.00"), half(1, "6000.00"))
+    assert pay.total == Decimal("163000.00")
+
+
+def test_days_that_pay_the_same_are_one_line() -> None:
+    # A rate typed wrong for three days and mended, or lowered and raised again: the days of one amount are one line,
+    # wherever they fall in the month. Office duty is a full day among the others.
+    days = [
+        a_day(DayStatus.ON_TIME),
+        a_day(DayStatus.ON_TIME, rate="12000.00"),
+        a_day(DayStatus.LATE),
+        a_day(DayStatus.ABSENT, decided=DayStatus.ABSENT, absence=AbsenceType.OFFICE_DUTY, decided_fine="0.00"),
+    ]
+    assert work_out_pay(days).lines == (full(3, "10000.00"), full(1, "12000.00"))
+
+
+def test_every_line_multiplies_to_what_it_shows() -> None:
+    # Two half days at 9,001: 2 × 4,501 is 9,002, where the month rounded at its end would show 9,001 (lesson 3).
+    pay = work_out_pay([a_day(DayStatus.HALF, rate="9001.00")] * 2)
+    assert pay.lines == (half(2, "4501.00"),)
+    assert pay.total == Decimal("9002.00")
+
+
+def test_a_full_day_and_a_half_of_one_amount_are_two_lines() -> None:
+    # Half of 20,000 is 10,000, and so is a full day before the raise: a full day and a half day are never one line.
+    pay = work_out_pay([a_day(DayStatus.ON_TIME), a_day(DayStatus.HALF, rate="20000.00")])
+    assert pay.lines == (full(1, "10000.00"), half(1, "10000.00"))
+
+
+def test_the_fines_are_what_was_taken() -> None:
+    # Three fines: 500; 6,000 on a half day of 5,000, which takes 5,000; and a late day whose fine is 0, as a shop's is
+    # until its owner types one, which is no day fined.
+    days = [
+        a_day(DayStatus.LATE, fine="500.00"),
+        a_day(DayStatus.HALF, fine="6000.00"),
+        a_day(DayStatus.LATE, fine="0.00"),
+    ]
+    pay = work_out_pay(days)
+    assert (pay.fined_days, pay.fines) == (2, Decimal("5500.00"))
+    assert pay.total == Decimal("19500.00")
+
+
+def test_days_that_wait_or_have_no_rate_are_counted_and_not_paid() -> None:
+    days = [
+        a_day(DayStatus.ON_TIME),
+        a_day(DayStatus.NEEDS_REVIEW),
+        a_day(DayStatus.NEEDS_REVIEW, rate=None),
+        a_day(DayStatus.LATE, fine="500.00", rate=None),
+        a_day(DayStatus.ABSENT, rate=None),
+        a_day(DayStatus.OFF, rate=None),
+    ]
+    pay = work_out_pay(days)
+    assert (pay.waiting, pay.no_rate) == (2, 1)
+    assert pay.lines == (full(1, "10000.00"),)
+    assert (pay.fined_days, pay.total) == (0, RATE)
+
+
+def test_the_total_may_be_below_0() -> None:
+    # One half day, and a month of meals bigger than it: the worker owes, and the page shows the minus. Never cut to 0
+    # here, as a fine is: the meals were eaten.
+    days = [a_day(DayStatus.HALF, rate="1000.00", meal_share="2000.00")]
+    assert work_out_pay(days).total == Decimal("-1500.00")
+    assert work_out_pay([], advances=Decimal("20000.00")).total == Decimal("-20000.00")
+
+
+def test_no_days_pay_nothing() -> None:
+    assert work_out_pay([]) == Pay((), 0, NOTHING, 0, NOTHING, NOTHING, 0, 0, NOTHING)
+
+
+def test_every_amount_has_two_places() -> None:
+    # As every amount is stored and sent (numeric(14,2)): the same text, whatever the days.
+    for days in ([], [a_day(DayStatus.HALF, fine="500.00", meal_share="1143.00")]):
+        pay = work_out_pay(days)
+        amounts = [pay.fines, pay.meals, pay.advances, pay.total, *(line.amount for line in pay.lines)]
+        assert all(amount.as_tuple().exponent == -2 for amount in amounts)
+
+
+def test_the_sum_is_exact_whatever_the_thread_rounds_to() -> None:
+    # With 4 digits, 31 days of 12,345 would come out as 382,700, not 382,695.
+    with localcontext(prec=4):
+        assert work_out_pay([a_day(DayStatus.ON_TIME, rate="12345.00")] * 31).total == Decimal("382695.00")
+
+
+def test_an_advance_below_0_is_refused() -> None:
+    # An advance is money the worker already took: below 0 it would pay them a second time, so it is a bug in our code.
+    with pytest.raises(ValueError, match="below 0"):
+        work_out_pay([], advances=Decimal("-1.00"))

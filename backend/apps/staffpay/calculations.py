@@ -33,11 +33,16 @@ What a day pays (WAGE-2, 02 §15, 8), each day alone, with its own rate, fine an
 
     on time → 10,000          half a day → 5,000                  waits for a decision → nothing yet
     late    → 10,000 less 500 half, fine 6,000 → 5,000 less 5,000  office duty → 10,000, absent → nothing
+
+A worker's pay (WAGE-2, spec §8.1): the days added up, grouped by what they pay, so a raise makes two lines:
+
+    14 full × 10,000   6 full × 12,000   2 half × 5,000   less the fines, the meals, the advances
 """
 
 import datetime as dt
 import enum
-from collections.abc import Sequence
+from collections import Counter
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, localcontext
 
@@ -463,3 +468,82 @@ def pay_day(day: DayToPay) -> PaidDay:
     # other days (Jack: A).
     fine = day.fine if day.decided_fine is None else day.decided_fine
     return PaidDay(paid_as, amount, min(fine, amount))
+
+
+@dataclass(frozen=True)
+class PayLine:
+    # One line of a worker's pay: so many days, full or half, at so much each. "Siku kamili  23 × 9,000   207,000".
+    paid_as: PaidAs
+    days: int
+    each: Decimal
+    amount: Decimal
+
+
+@dataclass(frozen=True)
+class Pay:
+    # A worker's pay over some days (02 §15, 8): the lines, the full days first, then the half ones, each in the days'
+    # order; the fines taken, and on how many days; the meals, and how many days ate; the advances; how many days wait
+    # for a decision, and how many paid days have no rate, neither of them paid; and what is left to pay, which may be
+    # below 0, as the meals and the advances can be more than the days.
+    lines: tuple[PayLine, ...]
+    fined_days: int
+    fines: Decimal
+    meal_days: int
+    meals: Decimal
+    advances: Decimal
+    waiting: int
+    no_rate: int
+    total: Decimal
+
+
+def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY) -> Pay:
+    """A worker's pay over `days`, in their order (WAGE-2; spec §8.1, 02 §15, 8): each paid alone (pay_day), then added
+    up and grouped by what they pay. `advances`: money given before payday, which comes off it; nothing gives any until
+    WAGE-3. The sum reads nothing itself, so any days are paid by it: a month's, a leaver's, or today alone."""
+    if advances < 0:
+        # Money the worker already took: below 0 it would pay them a second time, so a bug in our code.
+        raise ValueError(f"Advances of {advances}: an advance is never below 0.")
+    # How many days pay each amount, full days and half ones apart: half of 20,000 is as much as a full day at 10,000,
+    # and the page says which is which. In the order each first comes, so the rate before a raise stays above the one
+    # after it. A day that pays nothing is counted too, and no line below reads it.
+    counts: Counter[tuple[PaidAs, Decimal]] = Counter()
+    fines: list[Decimal] = []
+    meals: list[Decimal] = []
+    waiting = no_rate = 0
+    for day in days:
+        paid = pay_day(day)
+        if paid.paid_as is PaidAs.WAITS:
+            waiting += 1
+        elif paid.no_rate:
+            no_rate += 1
+        else:
+            counts[(paid.paid_as, paid.amount)] += 1
+        # Only a fine that took something: a late day whose fine is 0, as every shop starts with (ATT-2), was late, and
+        # costs nothing, so it is no day on the fines' line.
+        if paid.fine:
+            fines.append(paid.fine)
+        # The share as the book kept it (WAGE-7), never split again here: Hela ya chakula and the pay say the same.
+        if day.meal_share:
+            meals.append(day.meal_share)
+    # Only adding and whole multiples from here: every amount is whole cents already, so nothing is rounded again. With
+    # more digits than any column holds, whatever other code set for this thread, as the shared numbers do.
+    with localcontext(prec=40):
+        lines = tuple(
+            PayLine(kind, number, each, number * each)
+            for kind in (PaidAs.FULL, PaidAs.HALF)
+            for (paid_as, each), number in counts.items()
+            if paid_as is kind
+        )
+        fined, eaten = sum(fines, NO_PAY), sum(meals, NO_PAY)
+        total = sum((line.amount for line in lines), NO_PAY) - fined - eaten - advances
+    return Pay(
+        lines=lines,
+        fined_days=len(fines),
+        fines=fined,
+        meal_days=len(meals),
+        meals=eaten,
+        advances=advances,
+        waiting=waiting,
+        no_rate=no_rate,
+        total=total,
+    )
