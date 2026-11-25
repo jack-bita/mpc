@@ -13,6 +13,8 @@ byte of it. So these never travel:
     a pay rate, a payslip          a worker's pay never sits on a shared device (03 §6.1, WAGE-1): no table sends one,
                                    so the names catch it
     the meal money, a meal share   part of a worker's pay (WAGE-7): no table sends one, so the names catch it
+    an advance                     what a worker took comes off their pay (WAGE-8): no table sends one, so the names
+                                   catch it
 
 Three checks. The bootstrap's answer and a pull's page, as sent, hold none of a real person's secrets, and no name in
 them looks secret. Every field the registry sends, and every field a pull's page adds around a record, is checked by its
@@ -54,10 +56,11 @@ KEY_COOKIE = "device_key"
 # A word that marks a secret, as a whole word of a name, plural too: `pin_hash`, `password`, `unit_cost`, `phones`,
 # never `monkey` or `costume`. The same idea as SECRET_COLUMN (backend/tests/test_edit_history.py), with a seller's
 # secrets added: what a sale cost the shop (cost, buying, profit, margin: `cost.view`'s, 02 §5), a phone and an email;
-# a worker's pay (rate, wage, salary, payslip: 03 §6.1, WAGE-1; meal: WAGE-7), never `rated` or `separate`; and `key`
-# kept apart, below.
+# a worker's pay (rate, wage, salary, payslip: 03 §6.1, WAGE-1; meal: WAGE-7; advance: WAGE-8), never `rated` or
+# `separate`; and `key` kept apart, below.
 SECRET_WORD = re.compile(
-    r"(^|_)(hash|password|secret|token|pepper|cost|buying|profit|margin|phone|email|rate|wage|salary|payslip|meal)"
+    r"(^|_)(hash|password|secret|token|pepper|cost|buying|profit|margin|phone|email|rate|wage|salary|payslip|meal"
+    r"|advance)"
     r"(e?s)?(_|$)"
 )
 # `key` alone is a rule's name in the list in core ("attendance.late_fine"), which a setting's row must carry. Inside a
@@ -253,6 +256,7 @@ class _Planted(serializers.Serializer[Any]):
     profit_margin = serializers.CharField()  # by the words of what a sale cost the shop
     daily_rate = serializers.CharField()  # by the words of a worker's pay
     meal_share = serializers.CharField()  # by what their meals cost them
+    advances = serializers.CharField()  # by what they were given before payday
     # By what a link shows of its row, alone and in a many-link.
     owner = serializers.SlugRelatedField[Any](source="user", slug_field="password", read_only=True)
     batches = serializers.SlugRelatedField[Any](many=True, slug_field="unit_cost", read_only=True)
@@ -281,6 +285,8 @@ def test_secret_check_finds_what_it_must() -> None:
         "daily_rate: reads daily_rate",
         "meal_share: its name",
         "meal_share: reads meal_share",
+        "advances: its name",
+        "advances: reads advances",
         "owner: shows password",
         "batches: shows unit_cost",
         "wrapped.api_key: its name",
