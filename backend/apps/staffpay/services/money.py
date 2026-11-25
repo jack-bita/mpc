@@ -337,9 +337,12 @@ def _meal_day(
     # One date of Hela ya chakula, from its jobs' days as the book answered them, its rows, and the rates in force.
     sharing = who_shares([(day, day.decided_status) for day in worked_out], rates)
     # The share as the book kept it, the same for everyone who shares the date's meals: never worked out a second time
-    # here, so the page and the pay can't differ (WAGE-2). The most of them, as a rate typed between the book's read and
-    # this one's adds someone whose kept share is still 0, until the page asks again.
-    share = max((day.meal_share for day in sharing.days), default=NO_MEAL_SHARE)
+    # here, so the page and the pay can't differ (WAGE-2). Of those still to pay, where there are any: one who left and
+    # was paid keeps the share they paid, though the date was split again among more since (WAGE-3). The most of them,
+    # as a rate typed between the book's read and this one's adds someone whose kept share is still 0, until the page
+    # asks again.
+    to_pay = [day for day in sharing.days if day.payslip_id is None]
+    share = max((day.meal_share for day in to_pay or sharing.days), default=NO_MEAL_SHARE)
     return MealDay(
         date=date,
         amount=sum((row.amount for row in rows if row.voided_at is None), NO_MONEY),

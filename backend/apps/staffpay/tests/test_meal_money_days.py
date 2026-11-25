@@ -31,7 +31,7 @@ from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
-from apps.staffpay.models import AttendanceDay, ClockKind, DayChoice, MealMoney
+from apps.staffpay.models import AttendanceDay, ClockKind, DayChoice, MealMoney, Payslip
 from apps.staffpay.services import (
     MealDay,
     MealMoneyDays,
@@ -359,3 +359,32 @@ def test_only_the_demo_offers_a_ready_reason(settings: Settings, shop_a: Shop) -
     assert days_of(shop_a).ready_void_reasons == []
     settings.DEMO_SEED = True
     assert days_of(shop_a).ready_void_reasons == ["wrong_amount"]
+
+
+def test_the_share_shown_is_the_one_still_to_pay(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Asha and Juma came on Monday, 1,500 each of 3,000, and Salim's day waits. Juma left and was paid, his 1,500 taken
+    # (WAGE-3). Then Salim's day is decided: three ate, so each still to pay pays 1,000, which the page says, never the
+    # 1,500 Juma paid. Once everyone is paid, what they paid is shown.
+    salim = paid(shop_a, "Salim")
+    for each in (asha, juma):
+        kept_day(each, *FULL_DAY, date=MONDAY)
+    waits = kept_day(salim, (ClockKind.IN, 7, 20), date=MONDAY)
+    typed(baba, MONDAY, "3000")
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].share == Decimal("1500")
+
+    def pay(staff: StaffMember) -> None:
+        with shop_context(shop_a):
+            slip = Payslip(shop=shop_a, staff=staff, month=NOV_1, total=Decimal("8500.00"), created_by=baba)
+            slip.save()
+            AttendanceDay.objects.filter(staff=staff, date=MONDAY).update(payslip=slip)
+
+    pay(juma)
+    with shop_context(shop_a):
+        decide_day(waits, choice=DayChoice.ON_TIME, reason="Alisahau Toka", replaces=None, by=baba)
+    monday = by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY]
+    assert (monday.sharers, monday.share) == (3, Decimal("1000"))
+    pay(asha)
+    pay(salim)
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].share == Decimal("1500")

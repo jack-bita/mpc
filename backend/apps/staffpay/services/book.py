@@ -18,6 +18,13 @@ for, as a tap can come late from a laptop that was offline, a manager can void a
 day can be moved (PPL-10). ATT-5 asks for a month to show, WAGE-2 for a month to pay, ATT-7 each night. No line in the
 change log: no laptop keeps a copy of the days.
 
+Until a payslip pays a day (WAGE-3): from then on the book answers it as it was kept, whatever came since, and never
+writes it (A3), which the table refuses too. Its worker still counts among those who ate that day, so the others' share
+of the meals is split as if nothing had been paid, and the paid one's stays as they paid it:
+
+    Juma left on the 14th and was paid, 1,000 of the day's 8,000 taken. Then Asha's day is decided: she came too.
+    Juma  14 Nov  on_time  1,000, paid          the others, now 8 beside him:  889 each
+
 It also owns what the other services ask of a day the same way: whether a job ran on it, who shares its meals, where a
 tap falls, whether a tap is in doubt, and a month's first and last day.
 """
@@ -90,7 +97,8 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
     """Work out and keep each job's day from `first` to `last`, both counted, and answer them, date by date. Only the
     days that count: while attendance is switched on, from each job's first day to its last, and before the shop's
     today; and a day outside a job's days that it tapped on, for a person to decide (ATT-11). A day that comes out as
-    it was kept is not written again. The shop must be open: the visit's own, or a system job's."""
+    it was kept is not written again, and one a payslip paid is answered as it was kept, whatever it would come out as
+    (WAGE-3). The shop must be open: the visit's own, or a system job's."""
     # A shop must be open, and be this one, as for get_setting and closed_days: through the guard, another shop's taps
     # would be hidden, and its workers' days kept as absent without a word. So fail closed (ADR-0022).
     opened = current_shop()
@@ -131,6 +139,8 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
             (row.staff_id, row.date): row
             for row in AttendanceDay.objects.filter(shop=shop, date__range=(first, last)).select_related("staff")
         }
+        # The days a payslip paid, as they were kept, in place of what their taps and rules would say now (A3).
+        answered = _with_paid_days(answered, kept)
         # Who pays for each date's meals, once every job's day of it is worked out (WAGE-7).
         steps = {day: values[ROUNDING_STEP.key] for day, values in settings_by_day.items()}
         _share_meals(shop, first, last, answered, kept, steps)
@@ -262,6 +272,23 @@ def _worked_out(
     )
 
 
+def _with_paid_days(
+    answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], AttendanceDay]
+) -> list[AttendanceDay]:
+    # The days the book worked out, with each day a payslip paid as it was kept instead (WAGE-3, A3): Juma's 12
+    # November, paid as a full day, stays one when a tap of it comes late from an old laptop, or is crossed out. And a
+    # paid day the book would no longer answer at all, as his first day was moved later past it since, or he was marked
+    # as gone from before it: it was paid, so every page that shows the month shows it, as the payslip does.
+    paid = {key: row for key, row in kept.items() if row.payslip_id is not None}
+    if not paid:
+        # Every month still open, which is nearly every run.
+        return answered
+    days = [day for day in answered if (day.staff_id, day.date) not in paid]
+    # In the order the book answers: date by date, and on each by the job's id, as the jobs were read. Python and
+    # PostgreSQL order ids alike, byte by byte.
+    return sorted([*days, *paid.values()], key=lambda day: (day.date, day.staff_id))
+
+
 def _share_meals(
     shop: Shop,
     first: dt.date,
@@ -290,10 +317,12 @@ def _share_meals(
         by_date[day.date].append((day, old.decided_status if old is not None else ""))
     for date, days in by_date.items():
         sharing = who_shares(days, rates)
-        # The same for everyone who came, a half day too, rounded by the date's own step (A1).
+        # The same for everyone who came, a half day too, rounded by the date's own step (A1). One a payslip paid counts
+        # among them, as they ate, and keeps the share they paid (WAGE-3): the shop bears the few shillings between.
         share = meal_share(money[date], len(sharing.days), steps[date])
         for day in sharing.days:
-            day.meal_share = share
+            if day.payslip_id is None:
+                day.meal_share = share
 
 
 @dataclass(frozen=True)
