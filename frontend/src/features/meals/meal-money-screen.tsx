@@ -63,6 +63,7 @@ import { shopToday } from "@/offline/rules";
 import { ChooseDaysSheet } from "./choose-days";
 import {
   FIRST_PARAM,
+  isClosed,
   isForgotten,
   isTyped,
   LAST_PARAM,
@@ -240,10 +241,19 @@ function TheDays({
   totalLabel: string;
 }) {
   const t = useTranslations("mealMoney");
+  // Every day of them paid already (WAGE-3): said once above them. The button that types some stays, as it types today's;
+  // a closed day picked in its sheet is refused beside its box.
+  const closed = isClosed(answer, answer.last) ? <p>{t("closed")}</p> : null;
   if (answer.days.length === 0)
-    return <p>{t(chosen ? "noneChosen" : "none")}</p>;
+    return (
+      <>
+        {closed}
+        <p>{t(chosen ? "noneChosen" : "none")}</p>
+      </>
+    );
   return (
     <>
+      {closed}
       <p className="flex flex-wrap justify-between gap-x-4 text-lg font-semibold">
         {/* The space between is for a screen reader: side by side with none, it may run the two into one word. */}
         <span>{totalLabel}</span>{" "}

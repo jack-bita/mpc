@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.69 · 25 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.71 · 25 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,10 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.71** (25 Nov 2026, WAGE-3's review): §12, an approval closes the months before it too; a month's whole is what it pays, with those approved alone in it; one who left may still be given the rate of a day of theirs until their pay is approved. Marked **(v1.71)**.
+
+**Changes in v1.70** (25 Nov 2026, WAGE-3): §12, the approval. `PayRun` is one row per shop and month, made at the approval, with no status of its own (§14); a `Payslip` is a job's, its lines kept in a new record, `PayslipLine`, and one who left has theirs before the month's run, with none; an attendance day a payslip paid names it, and is frozen. A total below 0 pays nothing, and is the next month's debt (§15; Jack: A). What an approved month refuses (§12, A3), and whom an approval waits for (Jack: A). §16 T2 and §19 name the three (01 v1.12, 04 v1.205). Marked **(v1.70)**.
 
 **Changes in v1.69** (25 Nov 2026, WAGE-8's review): §12, the month's draft pay is worked out from the advances too; §20, item 7, in full is no longer marked a default (04 v1.203). Marked **(v1.69)**.
 
@@ -259,7 +263,7 @@ Shop
 │   └── Job, Exchange, ProductionRun, Transfer, BagOpening   (R2)
 ├── Product ─ SellingUnit ─ Price;  ProductSide;  Batch;  ProductCost
 ├── Contact ─ BalanceEntry* ─ Allocation;  ContactBalance
-├── StaffMember ─ RoleAssignment;  AttendanceEvent*;  PayRate;  Advance*;  Payslip
+├── StaffMember ─ RoleAssignment;  AttendanceEvent*;  PayRate;  Advance*;  Payslip* ─ PayslipLine*
 └── Device ─ DeviceOutage;  Setting, Flag, AuditEvent, EditEvent, Attachment, ImportJob
 
 * = ledger (append-only)
@@ -587,8 +591,8 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - **A decided day's fine** **(v1.53)**: a day sent to review carries none, so a day decided late or half reads it again, from its first trusted Ingia and the rules it used (T4), never today's: after `on_time_until` the first fine, from `second_fine_from` on the second, later arrivals too (*Claude's default*); *late* is not offered with no trusted Ingia, or one on time. A half day keeps a late morning arrival's fine, as the rule's morning half does; an afternoon arrival, or none known, has none. A full day and an absence take none. The fine is kept with the decision. **(v1.54)** A day whose time is in doubt (a tap whose time the server can't trust, or one a later tap's time disagrees with) takes no fine, as no arrival is known: *late* is not offered, and a half day takes none (Jack, ATT-6's review).
 - `review_reason` **(v1.51)**: why a day needs review, one reason, the first that holds: the book's own, as each asks whether the day is paid at all (a tap outside the job's days, a tap on a closed day, a tap made while suspended or gone, a later tap that disagrees), then the rule's, in the order it reads a day (a time not trusted, no Ingia, came late, no Toka, left early). Empty on every other day, and on a day to decide kept before ATT-5 until it is worked out again. The month page shows it beside the day: *Juma · Alhamisi 12/11 · hakuna Toka* (ATT-5).
 - `meal_share` **(v1.29)**: the worker's part of the day's meal money (§15, 14), worked out with the day, so the pay up to any day is a sum of days already worked out. It follows the day's status: a day that needs review has none until a manager decides it.
-- Locked once its pay run is approved.
-- **Which days** **(v1.44)**: one per job and date, worked out again from its taps and its date's rules each time it is asked for, until its pay run is approved; kept only once the day is over (today is not), while `attendance.enabled` is on, and from the job's first day to its last. A person hired again the same day they left has two jobs, so two days, each read from its own taps. A day that no longer counts, its job's first day moved later, keeps its row and is no longer read (ATT-10), unless the job tapped on it: then it needs review (ATT-11) **(v1.48)**. Every job has its days, the owner's too, absent every working day as he never clocks in: the month page and the pay show only workers with a daily pay rate (Jack, ATT-10's review) **(v1.45)**.
+- Locked once a payslip paid it: the day names its `payslip`, and the database refuses any change of it; the book answers it as it was kept, and splits the date's meals among the others with it counted **(v1.70)**.
+- **Which days** **(v1.44)**: one per job and date, worked out again from its taps and its date's rules each time it is asked for, until a payslip pays it **(v1.70)**; kept only once the day is over (today is not), while `attendance.enabled` is on, and from the job's first day to its last. A person hired again the same day they left has two jobs, so two days, each read from its own taps. A day that no longer counts, its job's first day moved later, keeps its row and is no longer read (ATT-10), unless the job tapped on it: then it needs review (ATT-11) **(v1.48)**. Every job has its days, the owner's too, absent every working day as he never clocks in: the month page and the pay show only workers with a daily pay rate (Jack, ATT-10's review) **(v1.45)**.
 - **A tap in doubt** **(v1.46)**: a day needs review, whatever the rule says, when one of its taps was made while its worker was suspended or gone (the push's `suspended_staff_activity` flag, X2), when a later tap's time disagrees with it (a record before with a later time, as the time trusted says: either clock can be the wrong one), unless its time is the server's, which can't be **(v1.47)**, or when it falls before the job's first day or after its last, as a first day moved later leaves it (Jack, ATT-11). Its minutes and its rules are kept for whoever decides it, and it takes no fine. A day outside the job with no tap is still not read.
 
 **The day's rules** **(v1.32)** — the owner's (OWN-7, 16 Nov 2026), each a dated setting of the whole shop (§4). Each time is a minute on the shop's clock, as the counter shows it: a clock-in at 07:35:40 shows 07:35. "By" and "from" take their own minute; "before" and "after" don't.
@@ -611,27 +615,31 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 **PayRate** → StaffMember — `daily_rate`, `shares_meals` (yes; the cook's no) **(v1.29)**, `effective_from`, `note` **(v1.49)**. Dated, so a worker who becomes the cook mid-month pays a share up to that day and none after.
 - **(v1.49)** The rate is money, above 0, in whole shillings, and at most ten million, a slip of the zeros past it **(v1.67)**. Who set it is the row's `created_by` (§1). Append-only, as every dated rule is (T2): a wrong rate is mended by a new row for the same day.
 - In force on a date: the latest row with `effective_from` on or before it; on one date, the row written last wins, as for a setting (§4). A job with no row on or before a date has no rate that day. A rate reads no job's first or last day: it goes on after a last day, as a tap after it goes to review and the owner may decide that day is paid (ATT-11, ATT-6), which needs its rate. So the attendance month page (ATT-5) lists a worker with a rate on some day of the month, and the pay (WAGE-2) pays, only the days the book of days answers **(v1.50)**.
-- From any day of the job, gone by or still to come, never before its first day: a worker hired on 10 Nov whose rate is typed on the 19th is paid from the 10th. A day in an approved pay run takes no new rate (WAGE-3).
+- From any day of the job, gone by or still to come, never before its first day, nor after the last of one that ended, who may still be given the rate of a day they worked until their pay is approved **(v1.71)**: a worker hired on 10 Nov whose rate is typed on the 19th is paid from the 10th. A day in an approved month, or of a job approved alone, takes no new rate: a rate starts after the last such day (WAGE-3) **(v1.70)**.
 - Never on a shared device: a worker's pay stays on the server (03 §6.1).
 
 **MealMoney** **(v1.29)** → Shop — the money spent on the workers' meals on one day: the cook makes them at the shop, and the workers pay for their own (spec §8.1).
 - `date`, `amount` (positive), `note`; who typed it is the row's `created_by` (§1). The whole shop's, not a side's: the workers of both sides eat together.
 - Typed each day by whoever holds `meals.record`, a key the owner gives to whoever he chooses (Jack, 15 Nov 2026). A day may have several: the day's meal money is the sum of its rows not voided.
-- Append-only, as money is (T2): a wrong amount is voided (who, when, why) and typed again; nothing else on it ever changes. Locked, like its days, once their pay run is approved.
+- Append-only, as money is (T2): a wrong amount is voided (who, when, why) and typed again; nothing else on it ever changes. Locked once its month is approved: none typed, none crossed out **(v1.70)**.
 - **(v1.63)** Typed on an office page, with the internet, on a phone or on the shop's laptop after a PIN; never offline. For today or an earlier working day: never a day to come, a Sunday or a day attendance was off. The amount is above 0, in whole shillings, and at most ten million, a slip of the zeros past it **(v1.64)**; a row always says who typed it **(v1.64)**. Anyone with the key crosses out a wrong one *(default)*. Never on a laptop's own copy (03 §6.1).
 
-**PayRun** → Shop — one month. Its draft is no row: the month's pay is worked out each time it is asked for, from the book's days, the rates, the meals and the advances **(v1.69)**, and never kept, as a kept draft is old as soon as a day is decided (Jack, WAGE-2) **(v1.66)**. The row is made at the approval, which freezes payslips, attendance days, advances and meal money **(v1.29)**. `status`: `approved` → `paid` **(v1.66)**.
+**PayRun** → Shop — one month. Its draft is no row: the month's pay is worked out each time it is asked for, from the book's days, the rates, the meals and the advances **(v1.69)**, and never kept, as a kept draft is old as soon as a day is decided (Jack, WAGE-2) **(v1.66)**. The row is made at the approval, which freezes payslips, attendance days, advances and meal money **(v1.29)**. It holds the shop, its `month` and who approved it (its `created_by`), and no status: a run is approved by being a row, and paid once each of its payslips is (WAGE-9) **(v1.70)**.
+- **Approving** **(v1.70)**: `pay.approve` on the whole shop, with the two keys of pay (§5), as whoever approves must read what they approve. Once the month is over, by the shop's own today; once the month before holds no pay still open, or a debt would be lost; with no day of it waiting for a decision (Jack: A) and no paid day with no rate; and only the totals the person saw: if one moved since, the new ones are shown first. Active laptops that have sent nothing since the month ended are named, and stop nothing (Jack: A). Never undone (A3).
+- **What it freezes** **(v1.70)**: every day, clock event, decision, rate, advance and meal money of the month, for every job, and of every month before it, as months are approved in order and nobody is paid for one again **(v1.71)**; a clock event a laptop sends late is still kept, and moves no day already paid. A mistake is an adjustment in a later month (A3, WAGE-9).
 - **The day still running** **(v1.66)**: the pay counts the days that are over; today is added, apart and never kept, once the worker taps Toka, judged by the same rule (one with a tap of no trusted time waits at once, whatever else is tapped **(v1.67)**), and less today's share of the meals: today's money ÷ those who have tapped today and share them (Jack: A). So one who leaves tonight is paid for today; the book's own split, once the day is over, may differ by a little.
 
-**Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, meal shares **(v1.29)**, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own.
-- **Leaving mid-month** **(v1.29)**: a worker who leaves gets their payslip up to `left_on`, approved and paid on its own, before the month's run: the owner reads it and pays, with nothing to count by hand (Jack, 15 Nov 2026). The month's run then holds it as paid.
+**Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, meal shares **(v1.29)**, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own. One per job and month, with its `total`; its run is empty for one approved alone **(v1.70)**.
+- **PayslipLine** **(v1.70)**: the lines, in order, each with its amount, plus or minus, so they add up to the total: full days and half days, each `days` × `each`; fines and meals, with how many days; each advance, with its date; and a debt carried from an earlier month, with that month. Append-only, as the payslip and the run are (T2).
+- **A total below 0** **(v1.70)**: the payslip pays 0 (Jack: A), and the next payslip of the same job starts with the debt, a line of its own. The debt is the job's: one hired again starts clean, and a leaver's stays on their last payslip. A month's whole counts each total below 0 as 0, so it is what the month pays, with those approved alone in it; what is still to hand over is WAGE-9's *Bado kulipa* **(v1.71)**.
+- **Leaving mid-month** **(v1.29)**: a worker who leaves gets their payslip up to `left_on`, approved and paid on its own, before the month's run: the owner reads it and pays, with nothing to count by hand (Jack, 15 Nov 2026). The month's run then holds it as it was approved. Alone only once they have left and tapped Toka, or never tapped that day; today is kept with their other days, its share of the meals as they were paid it, though the date may be split again among more; their own days, rates and advances are locked from then on, the shop's meal money isn't **(v1.70)**.
 
 **Advance** **(v1.68)** → StaffMember — money given to a worker before payday, whether called mid-month money or asked of the owner (Jack, WAGE-1). Juma asks for 20,000 on 10 Nov: it comes off Juma's November pay.
 - `staff` (the job), `date`, `amount` (positive), `note`; who typed it is the row's `created_by` (§1). Typed on the day it is given, so the pay so far is right every day.
 - Typed by whoever holds `money.advance`, the owner and the managers (Jack: A), on an office page, with the internet; never offline, and never on a laptop's own copy (03 §6.1). Nobody types or crosses out their own, by the person, not the job (Jack: A).
 - Of today or an earlier day, Sundays too, within the job's first and last day; only for a worker with a daily pay rate, as the owner taking money is a `withdrawal` (§10). Whole shillings, at most ten million, a slip of the zeros past it.
 - Comes off the month of its own day, in full; today's too. One bigger than the pay leaves a total below 0: the money was given, so the system says so.
-- Append-only, as money is (T2): a wrong one is voided (who, when, why) and typed again; nothing else on it ever changes. Locked, like its days, once their pay run is approved (WAGE-3).
+- Append-only, as money is (T2): a wrong one is voided (who, when, why) and typed again; nothing else on it ever changes. Locked, like its days, once its month is approved, or the job alone (WAGE-3) **(v1.70)**.
 - Once the drawer exists (CASH-2), money given from it is a `MoneyMovement` `staff_advance`, which takes the place of the one typed by hand, never both (WAGE-6).
 
 ## 13. Control — module `control`
@@ -692,7 +700,7 @@ stateDiagram-v2
 - **DrawerSession:** `open` → `counted` → `confirmed` → `approved`; the owner can reopen with a reason.
 - **Transfer** [R2]: `sent` → `received` | `cancelled` (before received).
 - **Job** [R2]: `waiting` → `in_progress` → `ready` → `collected`; `cancelled` before ready (the customer's goods go back).
-- **PayRun** [R1b]: `approved` → `paid`; before that, a draft worked out when it is asked for, no row **(v1.66)**.
+- **PayRun** [R1b]: a draft worked out when it is asked for, no row → approved, a row made once; paid once every payslip of it is, worked out and never kept **(v1.70)**.
 - **Flag:** `open` → `explained` → `resolved` | `dismissed`; it may also close straight from `open` **(v1.8)**. A `device_gap` resolves itself when its missing records arrive (§13) **(v1.22)**.
 - **StaffMember:** `active` ⇄ `suspended` → `left`. **Product, Contact:** `active` ⇄ `archived`. **PaymentAccount:** `active` ⇄ `archived` **(v1.5)**. **Device:** `active` ⇄ `blocked` **(v1.11)**. **PairingRequest:** `waiting` → `confirmed` | `expired` **(v1.11)**.
 
@@ -705,7 +713,7 @@ stateDiagram-v2
 5. **Balance** = the sum of entries. **Open debt** = amount − allocations. **Age** = days since `occurred_at`.
 6. **Expected cash** = opening + cash payments − cash change given + money in − money out.
 7. **Mobile money expected** (account, day) = the sum of payments into it.
-8. **Pay** (spec §8.1) = (on-time + late + office-duty days) × rate + half days × rate ÷ 2 − each day's fine **(v1.42)** − meal shares **(v1.29)** − advances ± adjustments. Each day alone, at the rate in force that day, then added up: half a day's pay is rounded once, with the shared function, to the shop's rounding step that day; a fine takes no more than its day pays, so a day stops at 0 (Jack: A); a day that waits for a decision, or has no rate, is not paid and is counted; an off day pays nothing, whatever was decided on it. The total may be below 0 **(v1.66)**.
+8. **Pay** (spec §8.1) = (on-time + late + office-duty days) × rate + half days × rate ÷ 2 − each day's fine **(v1.42)** − meal shares **(v1.29)** − advances − a debt carried from an earlier month **(v1.70)** ± adjustments. Each day alone, at the rate in force that day, then added up: half a day's pay is rounded once, with the shared function, to the shop's rounding step that day; a fine takes no more than its day pays, so a day stops at 0 (Jack: A); a day that waits for a decision, or has no rate, is not paid and is counted; an off day pays nothing, whatever was decided on it. The total may be below 0 **(v1.66)**: then 0 is paid, and the rest is the next month's debt (Jack: A) **(v1.70)**.
 9. **Line profit** = line total − base qty × unit cost (unknown if the cost is unknown). A period's profit also shows "unknown on N lines worth TZS X".
 10. **Open-bag difference** = loose kg sold between two openings − bag kg.
 11. **Loss %** (production, jobs) = (input kg − output kg) ÷ input kg.
@@ -719,7 +727,7 @@ These become database constraints and automated tests.
 
 **Tenancy and history**
 - **T1** Every record (except `User`, `Unit`, the `Shop` itself **(v1.3)** and a `PairingRequest` **(v1.11)**) has a shop, and only points at records of the same shop.
-- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)**, the offline periods devices report **(v1.22)**, meal money **(v1.29)** and advances **(v1.68)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements, meal money **(v1.29)**, advances **(v1.68)** and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
+- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)**, the offline periods devices report **(v1.22)**, meal money **(v1.29)**, advances **(v1.68)**, pay runs, payslips and their lines **(v1.70)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements, meal money **(v1.29)**, advances **(v1.68)** and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
 - **T3** Nothing is deleted: cancel, void, suspend, archive — always with who, when and why.
 - **T4** Copied values (price, floor, factor, cost, rate, rules, formula version) never change once the record is confirmed.
 
@@ -752,7 +760,7 @@ These become database constraints and automated tests.
 **Attendance and pay**
 - **A1** A day uses the rules in force on that date.
 - **A2** Manual fixes never hide the original clock events.
-- **A3** An approved pay run is frozen; later fixes are adjustments in the next run.
+- **A3** An approved pay run is frozen; later fixes are adjustments in the next run. The database refuses a change of a day a payslip paid **(v1.70)**.
 - **A4** Workers see only their own attendance, payslips and cash-ups.
 
 **Access and devices**
@@ -809,7 +817,7 @@ Opening count 20 bags +1,000 · sell 3 bags −150 · sell 12.5 kg −12.5 · de
 | sales | Sale, SaleLine, PaymentAllocation, Return, PrintLog | | Bill, phone orders, handover per line | online orders, proforma |
 | money | Payment, DrawerSession, MoneyMovement | salary payments | side transfers, supplier credit payments | statement matching |
 | services | | | Formula, FormulaVersion, Job, Exchange | machines |
-| staffpay | | AttendanceEvent, AttendanceDay, PayRate, MealMoney **(v1.29)**, Advance **(v1.68)**, PayRun, Payslip | | |
+| staffpay | | AttendanceEvent, AttendanceDay, PayRate, MealMoney **(v1.29)**, Advance **(v1.68)**, PayRun, Payslip, PayslipLine **(v1.70)** | | |
 | control | Flag, AuditEvent, EditEvent **(v1.9)**, Attachment, ImportJob | | Notification | message log |
 
 ## 20. Parking lot
@@ -856,6 +864,7 @@ One word per idea, the same in code, docs and UI. The Swahili is a draft — Jac
 | Attendance | Mahudhurio | Clocking in and out |
 | `clock` `in` · `out` | Ingia kazini · Toka kazini | One tap at a shop laptop as a worker arrives or leaves; *Toka* alone is logging out, *Ingia* logging in **(v1.24)** |
 | PayRun | Mishahara | One month's pay for everyone |
+| Approving a month | Idhinisha | Its numbers are final; not the same as paying (*Lipa*) **(v1.70)** |
 | Job | Kazi ya mashine | A grinding or mixing order |
 | Flag | Tofauti | A difference someone must explain |
 | Document | Kumbukumbu | A record a device saves at the counter and sends to the server: a sale, a clock-in; English screens say *record* **(v1.21)** |
@@ -892,6 +901,7 @@ erDiagram
     USER ||--o{ STAFF_MEMBER : "works as"
     STAFF_MEMBER ||--o{ ROLE_ASSIGNMENT : holds
     STAFF_MEMBER ||--o{ ATTENDANCE_EVENT : clocks
-    PAY_RUN ||--|{ PAYSLIP : has
+    PAY_RUN |o--|{ PAYSLIP : has
+    PAYSLIP ||--|{ PAYSLIP_LINE : lists
     STAFF_MEMBER ||--o{ PAYSLIP : gets
 ```

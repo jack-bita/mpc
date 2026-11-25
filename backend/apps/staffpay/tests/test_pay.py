@@ -12,6 +12,8 @@ so every line of the pay multiplies to what it shows (02 §18, E10 and E11):
     Siku kamili  23 × 9,000   207,000     Faini  3   −1,500
     Nusu siku     2 × 4,500     9,000     an advance −20,000     to pay 194,500
 
+A total below 0 hands over nothing, and the rest comes off the next pay, a line of its own (WAGE-3, Jack: A).
+
 Where the days come from, and who is listed, is test_pay_month.py's; here, only the sum. The amounts are made up
 (rule 10).
 """
@@ -28,6 +30,8 @@ from apps.staffpay.calculations import (
     Pay,
     PayLine,
     add_up,
+    cash_to_pay,
+    debt_left,
     pay_day,
     work_out_pay,
 )
@@ -189,6 +193,7 @@ def test_e10_payslip_194500() -> None:
         meal_days=0,
         meals=NOTHING,
         advances=Decimal("20000.00"),
+        carried=NOTHING,
         waiting=0,
         no_rate=0,
         total=Decimal("194500.00"),
@@ -283,14 +288,15 @@ def test_the_total_may_be_below_0() -> None:
 
 
 def test_no_days_pay_nothing() -> None:
-    assert work_out_pay([]) == Pay((), 0, NOTHING, 0, NOTHING, NOTHING, 0, 0, NOTHING)
+    assert work_out_pay([]) == Pay((), 0, NOTHING, 0, NOTHING, NOTHING, NOTHING, 0, 0, NOTHING)
 
 
 def test_every_amount_has_two_places() -> None:
     # As every amount is stored and sent (numeric(14,2)): the same text, whatever the days.
     for days in ([], [a_day(DayStatus.HALF, fine="500.00", meal_share="1143.00")]):
         pay = work_out_pay(days)
-        amounts = [pay.fines, pay.meals, pay.advances, pay.total, *(line.amount for line in pay.lines)]
+        amounts = [pay.fines, pay.meals, pay.advances, pay.carried, pay.total, *(line.amount for line in pay.lines)]
+        amounts += [cash_to_pay(pay.total), debt_left(pay.total)]
         assert all(amount.as_tuple().exponent == -2 for amount in amounts)
 
 
@@ -312,3 +318,60 @@ def test_an_advance_below_0_is_refused() -> None:
     # An advance is money the worker already took: below 0 it would pay them a second time, so it is a bug in our code.
     with pytest.raises(ValueError, match="below 0"):
         work_out_pay([], advances=Decimal("-1.00"))
+
+
+# A debt (WAGE-3): a pay below 0 hands over nothing, and the next one takes the rest (Jack: A).
+
+
+def test_a_pay_below_0_hands_over_nothing_and_is_owed() -> None:
+    # Juma earned 132,000 in November and was given 150,000 before payday: he gets nothing, and owes 18,000.
+    november = work_out_pay([a_day(DayStatus.ON_TIME, rate="12000.00")] * 11, advances=Decimal("150000.00"))
+    assert november.total == Decimal("-18000.00")
+    assert (cash_to_pay(november.total), debt_left(november.total)) == (NOTHING, Decimal("18000.00"))
+
+
+def test_a_pay_of_0_or_more_is_handed_over_whole_and_owes_nothing() -> None:
+    for total in ("0.00", "0.01", "132000.00"):
+        assert (cash_to_pay(Decimal(total)), debt_left(Decimal(total))) == (Decimal(total), NOTHING)
+        # Never "-0.00", which a page would show with a minus.
+        assert (str(cash_to_pay(Decimal(total))), str(debt_left(Decimal(total)))) == (total, "0.00")
+
+
+def test_a_debt_comes_off_the_next_pay() -> None:
+    # December: 20 days at 12,000, less November's 18,000. And a debt alone, in a month with no day, stays owed whole.
+    december = work_out_pay([a_day(DayStatus.ON_TIME, rate="12000.00")] * 20, carried=Decimal("18000.00"))
+    assert (december.carried, december.total) == (Decimal("18000.00"), Decimal("222000.00"))
+    assert debt_left(december.total) == NOTHING
+    assert work_out_pay([], carried=Decimal("18000.00")).total == Decimal("-18000.00")
+
+
+def test_a_debt_bigger_than_the_next_pay_is_carried_again() -> None:
+    # 18,000 owed and one day of 10,000: 0 is handed over, and 8,000 goes on to the month after, never 18,000 again.
+    second = work_out_pay([a_day(DayStatus.ON_TIME)], carried=Decimal("18000.00"))
+    assert (cash_to_pay(second.total), debt_left(second.total)) == (NOTHING, Decimal("8000.00"))
+    third = work_out_pay([a_day(DayStatus.ON_TIME)], carried=debt_left(second.total))
+    assert (cash_to_pay(third.total), debt_left(third.total)) == (Decimal("2000.00"), NOTHING)
+
+
+def test_a_debt_and_an_advance_are_two_parts_of_one_pay() -> None:
+    # E10 with a debt of 14,500 from the month before: 194,500 less 14,500, each apart on the pay.
+    days = (
+        [a_day(DayStatus.ON_TIME, rate="9000.00")] * 20
+        + [a_day(DayStatus.LATE, fine="500.00", rate="9000.00")] * 3
+        + [a_day(DayStatus.HALF, rate="9000.00")] * 2
+    )
+    pay = work_out_pay(days, advances=Decimal("20000.00"), carried=Decimal("14500.00"))
+    assert (pay.advances, pay.carried, pay.total) == (Decimal("20000.00"), Decimal("14500.00"), Decimal("180000.00"))
+
+
+def test_a_debt_is_exact_whatever_the_thread_rounds_to() -> None:
+    # With 4 digits, a debt of 123,457 would be carried as 123,500.
+    with localcontext(prec=4):
+        assert debt_left(Decimal("-123457.00")) == Decimal("123457.00")
+        assert work_out_pay([], carried=Decimal("123457.00")).total == Decimal("-123457.00")
+
+
+def test_a_debt_below_0_is_refused() -> None:
+    # A debt is money the worker owes: below 0 it would pay them for owing, so it is a bug in our code.
+    with pytest.raises(ValueError, match="below 0"):
+        work_out_pay([], carried=Decimal("-1.00"))

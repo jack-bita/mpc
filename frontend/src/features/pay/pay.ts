@@ -4,22 +4,36 @@
 // GET /api/v1/staffpay/pay/?month=2026-11 answers everyone's pay of one month, and …/pay/{id}/ one worker's, each line by
 // line: the days that are over, and today apart, once the worker tapped Toka (Leo, Jack: A). The server works it all out
 // each time it is asked, from the book of days, the rates, the meals and the money given before payday (WAGE-8), and saves
-// none of it (Jack); the page only shows it, and never adds up or multiplies anything itself. Both behind the two keys of pay, settings.manage and staff.manage
-// on the whole shop (maySeePay, features/workers/pay-rates.ts), which the server asks on every read.
+// none of it (Jack), until the month is approved (WAGE-3): from then on it answers the payslips it kept, and who approved
+// them. The page only shows it, and never adds up or multiplies anything itself. Both behind the two keys of pay,
+// settings.manage and staff.manage on the whole shop (maySeePay, features/workers/pay-rates.ts), which the server asks on
+// every read. Approving asks pay.approve beside them (mayApprovePay).
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
+import { ADVANCES } from "@/features/advances/advances";
 import {
+  ATTENDANCE_MONTHS,
   MONTH_PARAM,
   STALE_AFTER,
 } from "@/features/attendance/attendance-month";
-import { askAgainEvery, STAFF_PARAM } from "@/features/attendance/worker-month";
+import {
+  askAgainEvery,
+  STAFF_PARAM,
+  WORKER_MONTHS,
+} from "@/features/attendance/worker-month";
+import { MEAL_MONEY } from "@/features/meals/meal-money";
+import type { WhoIsHere } from "@/features/people/who-is-here";
+import { maySeePay } from "@/features/workers/pay-rates";
 
 export type PayMonth = components["schemas"]["PayMonthAnswer"];
 export type WorkerPay = components["schemas"]["WorkerPay"];
 export type WorkerPayMonth = components["schemas"]["WorkerPayMonthAnswer"];
+export type Approval = components["schemas"]["Approval"];
+export type OpenDay = components["schemas"]["OpenDay"];
+export type ToApprove = components["schemas"]["ToApprove"];
 
 // The address's name for the worker, the same as on their attendance: /pay/worker/?staff=…&month=2026-11.
 export { STAFF_PARAM };
@@ -42,6 +56,21 @@ export function workerPayPage(staff: string, month: string): string {
 /** The pay's place in the store of server answers: every month of everyone's, and of each worker's, under it, so a save
  * that moves the pay asks them all again. */
 export const PAY = ["staffpay", "pay"] as const;
+
+/** The approval's own key, one of the owner's (02 §5). */
+export const APPROVES_PAY = "pay.approve";
+
+/** Whether the person may approve the pay: pay.approve on the whole shop, and the two keys of pay, as nobody approves what
+ * they may not read. */
+export function mayApprovePay(me: WhoIsHere): boolean {
+  return maySeePay(me) && me.permissions.whole_shop.includes(APPROVES_PAY);
+}
+
+/** The answers an approval changes, by their places in the store: the pay, and each page that offers no change of an
+ * approved month any more. */
+export function whatAnApprovalLocks(): readonly (readonly string[])[] {
+  return [PAY, ATTENDANCE_MONTHS, WORKER_MONTHS, MEAL_MONEY, ADVANCES];
+}
 
 /** Everyone's pay of one month, from the store of server answers; nothing is asked until the page knows which. */
 export function usePayMonth(month: string | null) {

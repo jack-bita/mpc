@@ -46,7 +46,18 @@ from apps.people.services import Outage, add_staff, confirm_pairing, record_outa
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side
-from apps.staffpay.models import Advance, AttendanceEvent, ClockKind, MealMoney, NoPhoto, TimeCheck
+from apps.staffpay.models import (
+    Advance,
+    AttendanceEvent,
+    ClockKind,
+    MealMoney,
+    NoPhoto,
+    PayRun,
+    Payslip,
+    PayslipLine,
+    PayslipLineKind,
+    TimeCheck,
+)
 from apps.staffpay.services import set_pay_rate, work_out_days
 from apps.sync.models import PushedDocument, PushedStatus
 
@@ -65,14 +76,16 @@ def sweep_shops(
     sweep_flags: tuple[Shop, Shop],
     sweep_meal_money: tuple[Shop, Shop],
     sweep_advances: tuple[Shop, Shop],
+    sweep_payslips: tuple[Shop, Shop],
 ) -> tuple[Shop, Shop]:
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
     # sides, a paired device each, which the office device list shows (AUTH-5), with an offline period the health page
     # shows (SYNC-14), dated rules, which the bootstrap sends (SYNC-2), days closed, which the closures route lists
     # (ATT-8), a photo with its file, which the photo routes are asked about (CTRL-3), a worker's pay rate, which the
     # pay rates route lists (WAGE-1), a worker's days in the book, which the month page lists (ATT-5), a flag with its
-    # note, which the flags' page lists (CTRL-4), a day's meal money, which Hela ya chakula lists (WAGE-7), and money
-    # given before payday, which Advansi lists (WAGE-8).
+    # note, which the flags' page lists (CTRL-4), a day's meal money, which Hela ya chakula lists (WAGE-7), money given
+    # before payday, which Advansi lists (WAGE-8), and an approved month and a payslip, which the pay's routes show
+    # (WAGE-3).
     return sweep_sides
 
 
@@ -248,6 +261,36 @@ def sweep_advances(
             Advance.objects.create(note=note, **facts)
             crossed = {"voided_at": timezone.now(), "voided_by": staff, "void_reason": why}
             Advance.objects.create(**facts, **crossed)
+    return sweep_attendance
+
+
+@pytest.fixture
+def sweep_payslips(
+    sweep_attendance: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember
+) -> tuple[Shop, Shop]:
+    # Each shop's worker paid by the day (sweep_attendance) with a payslip of yesterday's month, of a total only that
+    # shop holds (WAGE-3): the pay's routes show it as it was kept. With no run, as one approved alone, so the month
+    # stays open and the rest of it is worked out beside it, as every month's draft is. And the approval of a month long
+    # gone, so both tables hold a row of each shop. Written past the services, whose maker would need the keys.
+    for shop, staff, name, total in (
+        (sweep_attendance[0], staff_a, "Mhudhuriaji Mfano", "18391"),
+        (sweep_attendance[1], staff_b, "Mhudhuriaji Jirani", "93181"),
+    ):
+        with shop_context(shop):
+            month = (shop_today(shop) - timedelta(days=1)).replace(day=1)
+            worker = StaffMember.objects.get(display_name=name)
+            slip = Payslip.objects.create(shop=shop, staff=worker, month=month, total=Decimal(total), created_by=staff)
+            PayslipLine.objects.create(
+                shop=shop,
+                payslip=slip,
+                position=1,
+                kind=PayslipLineKind.FULL,
+                days=1,
+                each=Decimal(total),
+                amount=Decimal(total),
+                created_by=staff,
+            )
+            PayRun.objects.create(shop=shop, month=month.replace(year=month.year - 2), created_by=staff)
     return sweep_attendance
 
 

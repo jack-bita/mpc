@@ -1,5 +1,5 @@
 """apps/staffpay/tests/test_pay_month.py — the month's pay of everyone, and one worker's, as Mishahara and the worker's
-page show it (WAGE-2; spec §8.1, 02 §12): pay_month and worker_pay (apps/staffpay/services.py).
+page show it (WAGE-2; spec §8.1, 02 §12): pay_month and worker_pay (apps/staffpay/services/pay.py).
 
 Today is Tuesday 24 November 2026 at MPC, at 10:00, so the pay counts up to Monday 23:
 
@@ -43,7 +43,6 @@ from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import change_worker, hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
-from apps.staffpay import services
 from apps.staffpay.calculations import PaidAs, Pay, PayLine
 from apps.staffpay.models import Advance, AttendanceDay, AttendanceEvent, ClockKind, DayChoice, MealMoney, PayRate
 from apps.staffpay.selectors import advances_between
@@ -61,6 +60,7 @@ from apps.staffpay.services import (
     void_tap,
     worker_pay,
 )
+from apps.staffpay.services import pay as pay_services
 from apps.staffpay.tests.days import JAN_1, absent_day, doubted_tap, job, kept_day, rule, switch_on, tapped
 
 pytestmark = pytest.mark.django_db
@@ -443,7 +443,7 @@ def test_midnight_between_two_reads_counts_no_day_early(
     kept_day(asha, *FULL, date=SAT)
     kept_day(asha, *FULL, date=YESTERDAY)
     reads = iter([YESTERDAY, TODAY, TODAY, TODAY])
-    monkeypatch.setattr(services, "shop_today", lambda shop: next(reads))
+    monkeypatch.setattr(pay_services, "shop_today", lambda shop: next(reads))
     answer = month(shop_a)
     assert (answer.today, answer.counted_to) == (YESTERDAY, dt.date(2026, 11, 22))
     worker = line_of(answer, "Asha")
@@ -543,14 +543,15 @@ def test_an_advance_is_taken_once_with_leo(
 
 
 def test_an_advance_bigger_than_the_pay_leaves_a_minus(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
-    # The money was given, so the pay says so: 10,000 earned, 25,000 taken. And the whole takes it off too.
+    # The money was given, so the pay says so: 10,000 earned, 25,000 taken. The whole counts her as 0 (WAGE-3, Jack: A):
+    # it is what the month pays, and Juma is owed his 10,000 whatever Asha owes.
     juma = paid(shop_a, "Juma")
     for staff in (asha, juma):
         kept_day(staff, *FULL, date=MON)
     give(asha, baba, MON, "25000")
     answer = month(shop_a)
     assert line_of(answer, "Asha").total == Decimal("-15000.00")
-    assert answer.total == Decimal("-5000.00")
+    assert (line_of(answer, "Juma").total, answer.total) == (Decimal("10000.00"), Decimal("10000.00"))
 
 
 def test_an_advance_comes_off_its_own_month(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:

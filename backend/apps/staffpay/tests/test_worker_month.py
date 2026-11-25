@@ -7,13 +7,13 @@
        Jt Jn Jtn Al Ij Jm Jp     Toka   18:45 jioni  · Laptop ya Dawa · Hakuna picha: demo
                 ✓  Ch …
 
-worker_attendance (apps/staffpay/services.py) asks the book for the month (work_out_days), as the month page does, and
-answers one job's days and counts, and every tap of the job in the month, today's too, each with its time on the shop's
-clock, its laptop, its photo or why it has none, and whether it is in doubt; and each day's decision and what it may
-be decided as, with each choice's fine (ATT-6). What a day was is the book's and the
-rule's (test_attendance_book.py, test_attendance_day.py); here, only what a worker's month makes of them. October 2026
-starts on a Thursday; its Sundays are the 4th, 11th, 18th and 25th. Times are Arusha's, three hours ahead of UTC. The
-fine is a made-up 500 (rule 10). Fake data only: the repo is public.
+worker_attendance (apps/staffpay/services/attendance.py) asks the book for the month (work_out_days), as the month page
+does, and answers one job's days and counts, and every tap of the job in the month, today's too, each with its time on
+the shop's clock, its laptop, its photo or why it has none, and whether it is in doubt; and each day's decision and what
+it may be decided as, with each choice's fine (ATT-6). What a day was is the book's and the rule's
+(test_attendance_book.py, test_attendance_day.py); here, only what a worker's month makes of them. October 2026 starts
+on a Thursday; its Sundays are the 4th, 11th, 18th and 25th. Times are Arusha's, three hours ahead of UTC. The fine is a
+made-up 500 (rule 10). Fake data only: the repo is public.
 """
 
 import datetime as dt

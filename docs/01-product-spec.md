@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.11 · 25 Nov 2026 · Portion 1 of the planning pack
+**Version:** 1.12 · 25 Nov 2026 · Portion 1 of the planning pack
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Open questions are collected in §14. Key decisions are recorded as ADRs in `docs/adr/`.
 
 **Changes in v1.1** (18 Oct 2026): applies the build plan's Appendix A (`04-build-plan.md`). Attendance (R1b) is built and switched on first, then the Drugs side (R1), then the Foods side (R2); every part lives in the one website and is switched on in settings (§7.8, §10, §11, §14 — 04 BP7, ADR-0033). §6 now states the side decision (02 D1, ADR-0001).
@@ -24,6 +24,8 @@
 **Changes in v1.9** (19 Nov 2026, ATT-11's review): §8.1, a tap the server timed itself, sent at once, is never in doubt for a later tap that disagrees with it, as no laptop's clock can make the server's time wrong (02 v1.47, 04 v1.144). Marked **(v1.9)**.
 
 **Changes in v1.10** (25 Nov 2026, from Jack, WAGE-2): §8.1, a fine never takes a day's pay below 0; half a day's pay is rounded once, by itself; and one who leaves is paid for the day they leave as soon as they clock out, with that day's meals (02 v1.66, 04 v1.197). Marked **(v1.10)**.
+
+**Changes in v1.12** (25 Nov 2026, from Jack, WAGE-3): §7.8 and §8.1, a month's pay is approved once, and then never changes: a payslip per worker, kept; a day that waits refuses it; one who leaves is approved alone, the same evening; a worker who owes is paid 0, and the debt comes off the next month. And each worker signs for their pay, as on paper at MPC today, on the screen with a finger (02 v1.70, 04 v1.205). Marked **(v1.12)**.
 
 **Changes in v1.11** (25 Nov 2026, from Jack, WAGE-8): money given to a worker before payday, an advance, is typed on the day it is given by whoever may give one, never their own, and comes off that month's pay (§7.8, §8.1; 02 v1.68, 04 v1.201). Marked **(v1.11)**.
 
@@ -204,6 +206,8 @@ Release tags: **R1** Drugs side live · **R1b** attendance and pay · **R2** Foo
 - Monthly pay calculated per worker, with advances and meals deducted **(v1.2)**
 - The day's meal money, typed each day, by whoever the owner gives the key to **(v1.2)**
 - Money given before payday (an advance), typed on the day it is given, by the owner or a manager, never their own **(v1.11)**
+- A month's pay approved once it is over, with one tap, by the owner or whoever he gives the key to: a payslip per worker is kept, and nothing of that month can change any more **(v1.12)**
+- Each worker signs for their pay on the screen, with a finger, as they sign on paper today, so a payment marked by one person alone proves nothing; the month's sheet is printed with each name, amount and signature, for NSSF and the owner's file **(v1.12)**
 - Each worker can see their own payslip
 - Rates, the fine and the cut-off times are settings with start dates
 - Offline clock-in is protected against changes to the device clock
@@ -242,7 +246,9 @@ In this order: a price list with in-stock status (browse by animal and problem) 
 - **Meals** **(v1.2)**: the cook makes the workers' meals at the shop, and each worker pays for their own. Each day, the day's meal money is typed in and split equally among the workers who came that day, half days included; the cook pays no share. So a worker who came 10 days pays 10 days of meals, not a share of the whole month.
 - **Pay** = (full days × daily rate) + (half days × daily rate ÷ 2) − each day's fine **(v1.6)** − meal shares − advances. Paid monthly. The daily rate is set per worker. Sundays are not paid. A fine takes no more than its day pays, so a day never goes below 0 **(v1.10)**. Half a day's pay is rounded once, by itself, to the shop's rounding step **(v1.10)**.
 - **Advances** **(v1.11)**: money given to a worker before payday is typed on the day it is given, and comes off the pay of that month, in full. One bigger than the pay so far is kept all the same, as the money was given. Nobody types or crosses out their own.
-- **Leaving mid-month** **(v1.2)**: a worker who leaves is paid up to their last day. The system already holds that pay, worked out day by day, so the owner reads it and pays. The day they leave counts as soon as they clock out, less their share of that day's meals, split among those who have come by then **(v1.10)**.
+- **Approving the month** **(v1.12)**: once a month is over, the owner reads *Mishahara* and approves it, once, for everyone. Each worker's payslip is kept as it was read, and no day, clock event, pay rate, meal money or advance of that month can be added, decided or crossed out any more; a mistake found later is put right in the next month's pay. A day that still waits for a decision refuses the approval, and is named. A shop laptop that has sent nothing since the month ended is named too, and stops nothing. Months are approved in order.
+- **A total below 0** **(v1.12)**: one who took more before payday than they earned is paid 0, and the debt comes off the next month they are paid in. The whole of a month counts them as 0, so it is what the month pays.
+- **Leaving mid-month** **(v1.2)**: a worker who leaves is paid up to their last day. The system already holds that pay, worked out day by day, so the owner reads it and pays. The day they leave counts as soon as they clock out, less their share of that day's meals, split among those who have come by then **(v1.10)**. They are approved alone, that evening, and the month's approval holds that payslip **(v1.12)**.
 
 Examples (these become automated tests):
 

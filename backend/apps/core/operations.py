@@ -1,19 +1,22 @@
-"""apps/core/operations.py — migration operations that make PostgreSQL refuse edits to ledgers (ADR-0021).
+"""apps/core/operations.py — migration operations that make PostgreSQL refuse edits to ledgers (ADR-0021), and to a row
+that may change no more (A3).
 
 A ledger keeps history (T2). The ledgers are listed in 03 §5.6: stock movements, balance entries,
-allocations, payments, money movements, meal money, advances, attendance events, audit events, a flag's notes
-and the people it names, the change log, and the dated rules (prices, product costs, settings, pay rates). Their
-rows are written once and never changed or deleted; a mistake is fixed with a new row. The services only ever
-insert, but a bug, a bulk update() or SQL typed by hand would go straight past them. So each ledger's
-migration puts a trigger on its table: a rule stored in PostgreSQL that runs before every change, however
-it is sent, and refuses it.
+allocations, payments, money movements, meal money, advances, pay runs, payslips and their lines,
+attendance events, audit events, a flag's notes and the people it names, the change log, and the dated
+rules (prices, product costs, settings, pay rates). Their rows are written once and never changed or
+deleted; a mistake is fixed with a new row. The services only ever insert, but a bug, a bulk update() or
+SQL typed by hand would go straight past them. So each ledger's migration puts a trigger on its table: a
+rule stored in PostgreSQL that runs before every change, however it is sent, and refuses it.
 The database is the last line of defence (03 §5.6).
 
-Three rules, one operation each. AppendOnlyTrigger refuses every UPDATE and DELETE. VoidStampTrigger is
+Four rules, one operation each. AppendOnlyTrigger refuses every UPDATE and DELETE. VoidStampTrigger is
 for payments, money movements, meal money, advances and attendance events: it allows one change, filling the void
 stamp once, and then refuses everything, as the other does. NoDeleteTrigger is not for a ledger: it refuses
 only a DELETE, on an office table whose rows are changed but never deleted, and that no other row links
-to, so PROTECT can't guard it either (rule 7): a closure (ATT-8).
+to, so PROTECT can't guard it either (rule 7): a closure (ATT-8). FrozenTrigger is not for a ledger either: it
+lets a row change freely until one of its columns is filled, and then never again: an attendance day, once a
+payslip paid it (A3, WAGE-3).
 
 Later migrations meet the trigger too. Django fills a column that becomes NOT NULL with an UPDATE, and
 a RunPython fix updates rows: on a ledger with rows, both are refused. A migration that truly needs
@@ -284,3 +287,81 @@ class NoDeleteTrigger(AppendOnlyTrigger):
 
     def describe(self) -> str:
         return f"No-delete trigger on {self.model_name}"
+
+
+# The frozen rule (WAGE-3), for a table whose rows change freely until one column is filled, and then never again. An
+# attendance day is worked out again each time it is asked for (ATT-10), until a payslip pays it: from then on it says
+# what was paid, whatever tap comes late, and the month says the same a year later (A3). Like the plain rule, the
+# function has nothing to check: the trigger calls it only for a row already frozen. TG_ARGV[0] is the argument the
+# trigger hands it, the column's name, for the message to say why.
+FROZEN_FUNCTION = """
+CREATE OR REPLACE FUNCTION core_frozen_row() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION '% on % refused: the row is frozen, as its % is filled (A3)', TG_OP, TG_TABLE_NAME, TG_ARGV[0]
+        USING ERRCODE = 'restrict_violation';
+END;
+$$;
+"""
+
+# Puts the rule on one table, for one column.
+# - WHEN reads OLD, the row as it is in the table, so filling the column is itself allowed, once: before it, OLD's is
+#   empty. Emptying it again, or pointing it elsewhere, is refused like any other change, as OLD's is filled.
+# - A row not frozen costs nothing: the WHEN is asked before the function is called at all.
+# - A column the table doesn't have is refused by PostgreSQL as the trigger is made, so a slip of the name never leaves
+#   a table unguarded without a word.
+# - UPDATE OR DELETE: a frozen row neither changes nor goes. TRUNCATE passes, as for the plain rule.
+# A name of its own, `frozen`, as the table keeps its `no_delete` and `record_edits` triggers beside it. PostgreSQL runs
+# a table's BEFORE triggers in the order of their names, so this one speaks first.
+CREATE_FROZEN_TRIGGER = """
+CREATE TRIGGER frozen
+    BEFORE UPDATE OR DELETE ON {table}
+    FOR EACH ROW WHEN (OLD.{column} IS NOT NULL)
+    EXECUTE FUNCTION core_frozen_row({name});
+"""
+
+# Takes the trigger off one table, when its migration is undone. The function stays, as the others do.
+DROP_FROZEN_TRIGGER = "DROP TRIGGER frozen ON {table};"
+
+
+class FrozenTrigger(AppendOnlyTrigger):
+    # The step a table's migration lists after the column is there: FrozenTrigger("attendanceday", "payslip"), the model
+    # and the field, as Django writes them in migrations. The parent's plumbing (the table's real name, a step that adds
+    # no column), with its own rule and its own undo, as the trigger has a name of its own.
+
+    def __init__(self, model_name: str, field_name: str) -> None:
+        super().__init__(model_name)
+        self.field_name = field_name
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # Write the rule, then put it on the table. The column's real name ("payslip" → payslip_id) from the migration's
+        # own picture of the model, which refuses a field it doesn't have. params=None: the message holds % signs.
+        table = self._table(app_label, schema_editor, to_state)
+        column = to_state.apps.get_model(app_label, self.model_name)._meta.get_field(self.field_name).column
+        schema_editor.execute(FROZEN_FUNCTION, params=None)
+        schema_editor.execute(
+            # The name twice: in double quotes as PostgreSQL's name for the column, and as text for the message. A
+            # column's name comes from our own models, never from outside.
+            CREATE_FROZEN_TRIGGER.format(table=table, column=schema_editor.quote_name(column), name=f"'{column}'"),
+            params=None,
+        )
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # Take the trigger off, from the picture in which the table is known, as the parent does.
+        table = self._table(app_label, schema_editor, from_state)
+        schema_editor.execute(DROP_FROZEN_TRIGGER.format(table=table), params=None)
+
+    def describe(self) -> str:
+        return f"Frozen trigger on {self.model_name}, once {self.field_name} is filled"

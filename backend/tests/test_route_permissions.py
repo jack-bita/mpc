@@ -65,9 +65,11 @@ from apps.staffpay.api.views import (
     AttendanceWorkerViewSet,
     MealMoneyViewSet,
     PayRateViewSet,
+    PayRunViewSet,
+    PayslipViewSet,
     PayViewSet,
 )
-from apps.staffpay.models import Advance, AttendanceEvent, MealMoney, PayRate
+from apps.staffpay.models import Advance, AttendanceEvent, MealMoney, PayRate, PayRun, Payslip
 from apps.staffpay.tests.days import job, kept_day, switch_on
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
@@ -91,6 +93,8 @@ ADVANCE = "/api/v1/staffpay/advances/{}/"
 ADVANCE_VOID = "/api/v1/staffpay/advances/{}/void/"
 PAY = "/api/v1/staffpay/pay/"
 PAY_WORKER = "/api/v1/staffpay/pay/{}/"
+PAY_RUNS = "/api/v1/staffpay/pay-runs/"
+PAYSLIPS = "/api/v1/staffpay/payslips/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -1298,6 +1302,65 @@ def test_a_key_on_one_side_sees_no_pay(shop_a: Shop, sides: dict[str, Side], sta
         grant_permission(staff_a, Permission.SETTINGS_MANAGE, side=None, by=None)
     for address in (PAY, PAY_WORKER.format(staff_a.pk)):
         assert hamisi.get(address, {"month": "2026-10"}).status_code == 403
+
+
+# The keys an approval asks, all three on the whole shop (WAGE-3): its own, and the two of pay.
+APPROVING = (Permission.PAY_APPROVE, Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("missing", APPROVING)
+def test_approving_needs_all_three_keys(
+    shop_a: Shop,
+    sides: dict[str, Side],
+    staff_a: StaffMember,
+    staff_a2: StaffMember,
+    give_role: GiveRole,
+    missing: Permission,
+) -> None:
+    # A Manager holds none of the three; handed two, he still approves nothing, a month or one worker alone, whichever
+    # is missing: nor is he handed back an approval somebody else made, by sending its id as a new one's
+    # (CreateOnceMixin).
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    month = date(2026, 10, 1)
+    with shop_context(shop_a):
+        run = PayRun(shop=shop_a, month=month, created_by=staff_a)
+        run.save()
+        slip = Payslip(shop=shop_a, staff=staff_a, month=month, total=Decimal("12345.00"), created_by=staff_a)
+        slip.save()
+        for key in APPROVING:
+            if key != missing:
+                grant_permission(staff_a2, key, side=None, by=None)
+    sent = {"month": "2026-10", "seen": []}
+    alone = {"staff": str(staff_a.pk), "month": "2026-10", "seen": "12345.00"}
+
+    def asked() -> list[Any]:
+        client = client_for(staff_a2)
+        return [
+            client.post(PAY_RUNS, sent | {"id": str(uuid.uuid7())}, format="json"),
+            client.post(PAY_RUNS, sent | {"id": str(run.pk)}, format="json"),
+            client.post(PAYSLIPS, alone | {"id": str(uuid.uuid7())}, format="json"),
+            client.post(PAYSLIPS, alone | {"id": str(slip.pk)}, format="json"),
+        ]
+
+    for refused in asked():
+        assert (refused.status_code, refused.json()["code"]) == (403, "permission_denied")
+        assert "12345" not in refused.content.decode()
+    # On one side, the missing key is no key: a worker's pay is the whole shop's.
+    with shop_context(shop_a):
+        grant_permission(staff_a2, missing, side=sides["D"], by=None)
+    assert {refused.status_code for refused in asked()} == {403}
+    # With all three, what was approved is handed back, and a new one is refused by the service, not by the key.
+    with shop_context(shop_a):
+        grant_permission(staff_a2, missing, side=None, by=None)
+    assert [answer.status_code for answer in asked()] == [400, 201, 400, 201]
+
+
+def test_approval_routes_name_their_permissions() -> None:
+    # Only a create, behind the approval's own key; the two of pay are asked for every action (the test above). Written
+    # out in full, as above.
+    for view in (PayRunViewSet, PayslipViewSet):
+        assert view.action_permissions == {"create": Permission.PAY_APPROVE}
 
 
 def test_pay_route_names_its_permissions() -> None:

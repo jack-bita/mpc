@@ -10,10 +10,10 @@
 //
 // The tap stays on the day, struck through, with who, when and why, and counts for nothing (A2, T2). It is never
 // brought back: a mistake is mended by adding a tap (add-tap.tsx). Who may, and on which taps, is the server's
-// (void_tap, apps/staffpay/services.py): the page offers the button only where it would be taken, and the server checks
-// again. On the demo, the reason is the ready one to tap (the answer's ready_void_reasons), as a typed one would show
-// to every visitor after them (as ATT-6's ready reasons, Jack: A); elsewhere it is typed. The server's refusals show
-// beside the reason, or above the buttons: one's own tap, no network, the server's problem.
+// (void_tap, apps/staffpay/services/attendance.py): the page offers the button only where it would be taken, and the
+// server checks again. On the demo, the reason is the ready one to tap (the answer's ready_void_reasons), as a typed one
+// would show to every visitor after them (as ATT-6's ready reasons, Jack: A); elsewhere it is typed. The server's
+// refusals show beside the reason, or above the buttons: one's own tap, no network, the server's problem.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";

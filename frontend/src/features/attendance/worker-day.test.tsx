@@ -101,6 +101,7 @@ function november(
     days,
     taps: dayTaps,
     yours: false,
+    closed: false,
     ready_reasons: [],
     ready_add_reasons: [],
     ready_void_reasons: [],
@@ -541,6 +542,12 @@ describe("a day under the calendar", () => {
       { started_on: "2026-11-13" },
     ],
     ["one's own month", "2026-11-12", "Alhamisi 12/11/2026", { yours: true }],
+    [
+      "a month whose pay is approved",
+      "2026-11-12",
+      "Alhamisi 12/11/2026",
+      { closed: true },
+    ],
     [
       "a day after the job's last",
       "2026-11-12",
@@ -1103,6 +1110,87 @@ describe("deciding a day (ATT-6)", () => {
     expect(
       within(thursday).getByText("Huwezi kuamua siku zako mwenyewe."),
     ).toBeTruthy();
+  });
+
+  it("offers nothing on a month whose pay is approved, its taps included, and says why (WAGE-3)", async () => {
+    // A decided day, and one on time: no Badilisha uamuzi, Batilisha or Ongeza, and the day's own facts stay.
+    openThursday([waiting({ choices: [], decision: DECIDED })], {
+      closed: true,
+      taps: [tap({ date: "2026-11-12", kind: "in", time: "07:20" })],
+    });
+    const thursday = await theDay("Alhamisi 12/11/2026");
+    expect(
+      within(thursday).getByText("Ingia 07:20 asubuhi · Laptop ya Dawa"),
+    ).toBeTruthy();
+    expect(within(thursday).queryByRole("button")).toBeNull();
+    expect(
+      within(thursday).getByText(
+        "Malipo ya mwezi huu yamefungwa, kwa hiyo siku hii haibadiliki tena.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says it is approved, not that it is theirs, on the viewer's own approved month", async () => {
+    openThursday([waiting({ choices: [] })], { closed: true, yours: true });
+    const thursday = await theDay("Alhamisi 12/11/2026");
+    expect(within(thursday).getByText(/yamefungwa/)).toBeTruthy();
+    expect(within(thursday).queryByText(/siku zako mwenyewe/)).toBeNull();
+  });
+
+  it("says it of today too, of one who left tonight and was approved, with no button", async () => {
+    // Today isn't in the book's answer until it is over: its taps alone.
+    openThursday([], {
+      closed: true,
+      today: "2026-11-12",
+      left_on: "2026-11-12",
+      taps: [tap({ date: "2026-11-12", kind: "in", time: "07:20" })],
+    });
+    const today = await theDay("Alhamisi 12/11/2026 · leo");
+    expect(within(today).getByText(/yamefungwa/)).toBeTruthy();
+    expect(within(today).queryByRole("button")).toBeNull();
+  });
+
+  it("says nothing of it on a day the shop was shut, when nothing waits for anyone", async () => {
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november([day({ date: "2026-11-15", status: "off" })], [], {
+        closed: true,
+      }),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-15" />,
+    );
+    const sunday = await theDay("Jumapili 15/11/2026");
+    expect(within(sunday).queryByText(/yamefungwa/)).toBeNull();
+  });
+
+  it("says it under a tap the book doesn't count, and nothing on a day with none (WAGE-3's review)", async () => {
+    // Juma left and was paid; a laptop then sent his Ingia of the day after: kept to be read, and nothing to decide.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [],
+        [tap({ date: "2026-11-18", kind: "in", time: "07:20" })],
+        { closed: true, left_on: "2026-11-17" },
+      ),
+    });
+    const { unmount } = render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-18" />,
+    );
+    const late = await theDay("Jumatano 18/11/2026");
+    expect(
+      within(late).getByText("Siku hii haihesabiwi, lakini ina Ingia au Toka."),
+    ).toBeTruthy();
+    expect(within(late).getByText(/yamefungwa/)).toBeTruthy();
+    expect(within(late).queryByRole("button")).toBeNull();
+    unmount();
+
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-19" />,
+    );
+    // A day with nothing of his at all opens nothing, so nothing is said of it.
+    await screen.findByRole("table");
+    expect(screen.queryByRole("region", { name: /19\/11\/2026/ })).toBeNull();
   });
 
   it("offers nothing on a day the shop was shut", async () => {

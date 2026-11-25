@@ -77,7 +77,8 @@ def test_the_days_as_the_page_reads_them(shop_a: Shop, staff_client_a: APIClient
     with shop_context(shop_a):
         assert answer.pop("today") == shop_today(shop_a).isoformat()
     (monday,) = answer.pop("days")
-    assert answer == {"first": DAY, "last": DAY, "total": "5000.00", "ready_void_reasons": []}
+    # No month is approved yet, so none of its days is closed (WAGE-3).
+    assert answer == {"first": DAY, "last": DAY, "total": "5000.00", "ready_void_reasons": [], "closed_to": None}
     first, second = monday.pop("rows")
     assert monday == {"date": DAY, "amount": "5000.00", "over": True, "sharers": 1, "share": "5000.00", "waiting": 0}
     assert first == flour

@@ -11,16 +11,17 @@ are made up: the repo is public (rule 10).
 import datetime as dt
 import uuid
 from decimal import Decimal
+from typing import cast
 
 import pytest
 from rest_framework.test import APIClient
 
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, User
-from apps.people.services import add_staff
+from apps.people.services import add_staff, mark_left
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_today
-from apps.staffpay.models import PayRate
+from apps.staffpay.models import PayRate, Payslip
 from apps.staffpay.services import set_pay_rate
 
 pytestmark = pytest.mark.django_db
@@ -104,6 +105,26 @@ def test_a_rate_still_to_come_is_not_in_force(staff_client_a: APIClient, juma: S
 def test_a_worker_with_no_rate(staff_client_a: APIClient, juma: StaffMember) -> None:
     answer = staff_client_a.get(PAY_RATES, {"staff": str(juma.pk)}).json()
     assert (answer["in_force"], answer["rates"]) == (None, [])
+
+
+def test_the_answer_says_when_no_rate_can_be_typed(
+    staff_client_a: APIClient, staff_a: StaffMember, juma: StaffMember, shop_a: Shop, today: dt.date
+) -> None:
+    # Juma works here, then left with his pay still open, then is approved alone: only then is the button a lie, as the
+    # server would refuse every day of his (WAGE-3's review).
+    def closed() -> bool:
+        answer = staff_client_a.get(PAY_RATES, {"staff": str(juma.pk)}).json()
+        return cast(bool, answer["closed"])
+
+    assert closed() is False
+    with shop_context(shop_a):
+        mark_left(juma, left_on=today, by=None, reason="Amehamia Moshi")
+    assert closed() is False
+    with shop_context(shop_a):
+        Payslip.objects.create(
+            shop=shop_a, staff=juma, month=today.replace(day=1), total=Decimal("0.00"), created_by=staff_a
+        )
+    assert closed() is True
 
 
 def test_another_shops_worker_shows_no_rate(staff_client_a: APIClient, shop_b: Shop, today: dt.date) -> None:

@@ -30,6 +30,27 @@ export const OWNER: components["schemas"]["WhoIsHere"] = {
   },
 };
 
+/** The owner who may approve the pay too: the approval's own key, on the whole shop (WAGE-3). */
+export const APPROVER: components["schemas"]["WhoIsHere"] = {
+  ...OWNER,
+  permissions: { ...OWNER.permissions, whole_shop: [...KEYS, "pay.approve"] },
+};
+
+export type ToApprove = components["schemas"]["ToApprove"];
+
+/** What an approval waits for and warns of: nothing, unless told otherwise. */
+export function nothingStops(fields: Partial<ToApprove> = {}): ToApprove {
+  return {
+    earlier: null,
+    waiting: [],
+    no_rate: [],
+    still_clocked_in: false,
+    quiet_laptops: [],
+    came_unpaid: [],
+    ...fields,
+  };
+}
+
 /** The sum of some days: Juma's November as Jack drew it, 14 × 10,000 and 2 × 5,000, less 2,000 of fines and 16,000 of
  * meals, unless told otherwise. */
 export function pay(fields: Partial<Pay> = {}): Pay {
@@ -43,6 +64,7 @@ export function pay(fields: Partial<Pay> = {}): Pay {
     meal_days: 16,
     meals: "16000.00",
     advances: "0.00",
+    carried: "0.00",
     waiting: 0,
     no_rate: 0,
     total: "132000.00",
@@ -58,6 +80,7 @@ export const NO_PAY: Pay = {
   meal_days: 0,
   meals: "0.00",
   advances: "0.00",
+  carried: "0.00",
   waiting: 0,
   no_rate: 0,
   total: "0.00",
@@ -75,6 +98,8 @@ export function workerPay(fields: Partial<WorkerPay> = {}): WorkerPay {
     pay: pay(),
     today: null,
     total: "132000.00",
+    carried_from: null,
+    approval: null,
     ...fields,
   };
 }
@@ -91,6 +116,8 @@ export function payMonth(
     no_day_yet: false,
     total: "0.00",
     workers,
+    approval: null,
+    to_approve: null,
     ...fields,
   };
 }
@@ -107,6 +134,7 @@ export function workerPayMonth(
     paid_by_day: true,
     no_day_yet: false,
     worker,
+    to_approve: null,
     ...fields,
   };
 }

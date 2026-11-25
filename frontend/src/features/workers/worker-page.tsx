@@ -195,6 +195,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
               month={payOf}
               thisMonth={thisMonth}
               onChoose={(month) => setChosen({ id, month })}
+              timezone={who.data.shop.timezone}
               read={monthPay}
             />
           ) : null}

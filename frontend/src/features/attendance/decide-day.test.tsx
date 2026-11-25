@@ -82,6 +82,7 @@ function month(fields: Partial<WorkerAttendance> = {}): WorkerAttendance {
     days: [THURSDAYS],
     taps: [],
     yours: false,
+    closed: false,
     ready_reasons: [],
     ready_add_reasons: [],
     ready_void_reasons: [],

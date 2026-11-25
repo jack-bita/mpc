@@ -1,8 +1,8 @@
 """apps/staffpay/tests/days.py — real days for the tests of deciding a day (ATT-6): no test of its own.
 
-Deciding a day asks the book of days for it first (decide_day, apps/staffpay/services.py), and the book works a day out
-again from its taps, so a day written past the book, as the book's own rule tests write theirs, would come back absent.
-These helpers make a day the way the shop does: taps on the shop's laptop, then the book (work_out_days).
+Deciding a day asks the book of days for it first (decide_day, apps/staffpay/services/attendance.py), and the book works
+a day out again from its taps, so a day written past the book, as the book's own rule tests write theirs, would come
+back absent. These helpers make a day the way the shop does: taps on the shop's laptop, then the book (work_out_days).
 
     switch_on(shop)       attendance on from 1 January, the demo's made-up fines 500 and 1,500 (rule 10)
     job(shop, "Juma")     a job since 1 January, so every day decided here is one of its days

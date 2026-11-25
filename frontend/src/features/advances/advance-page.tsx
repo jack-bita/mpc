@@ -98,7 +98,7 @@ function TheAdvance({
   // Whether the last close was a crossing out, when the button is gone: the keyboard then goes to the amount itself. Read
   // as the sheet goes, after the draw that took it away, so a ref, not the state (worker-pay.tsx).
   const afterVoid = useRef(false);
-  const { advance, own } = answer;
+  const { advance, own, closed } = answer;
   const amount = formatMoney(new Decimal(advance.amount));
   const ready = answer.ready_void_reasons.find(
     (code) => code === advance.voided?.reason,
@@ -157,6 +157,9 @@ function TheAdvance({
                 })}
               </p>
             </>
+          ) : closed ? (
+            // The pay it came off is approved, the month's or theirs alone (WAGE-3): final, so there is no button.
+            <p>{t("page.closed")}</p>
           ) : own ? (
             // Never one's own (Jack: A), and why there is no button: someone else crosses it out.
             <p>{t("page.own")}</p>

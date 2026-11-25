@@ -1,5 +1,5 @@
 """apps/staffpay/tests/test_meal_money_days.py — the meal money of any days, as Hela ya chakula shows it (WAGE-7;
-02 §12): meal_money_days (apps/staffpay/services.py).
+02 §12): meal_money_days (apps/staffpay/services/money.py).
 
 Today is Tuesday 24 November 2026 at MPC, at 10:00:
 
@@ -31,8 +31,7 @@ from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
-from apps.staffpay import services
-from apps.staffpay.models import AttendanceDay, ClockKind, DayChoice, MealMoney
+from apps.staffpay.models import AttendanceDay, ClockKind, DayChoice, MealMoney, PayRun, Payslip
 from apps.staffpay.services import (
     MealDay,
     MealMoneyDays,
@@ -41,7 +40,9 @@ from apps.staffpay.services import (
     record_meal_money,
     set_pay_rate,
     void_meal_money,
+    work_out_days,
 )
+from apps.staffpay.services import money as money_services
 from apps.staffpay.tests.days import JAN_1, job, kept_day, rule, switch_on
 
 pytestmark = pytest.mark.django_db
@@ -268,7 +269,7 @@ def test_the_calendars_first_day_is_no_mistake(shop_a: Shop) -> None:
     # The service steps from day to day, and never past the first one Python knows (WAGE-7's review). The route takes no
     # day before 2000; the book is asked here for no working day, as attendance is off all along.
     with shop_context(shop_a):
-        assert services._dates_back(dt.date.min, dt.date(1, 1, 3)) == [
+        assert money_services._dates_back(dt.date.min, dt.date(1, 1, 3)) == [
             dt.date(1, 1, 3),
             dt.date(1, 1, 2),
             dt.date.min,
@@ -285,12 +286,12 @@ def test_a_rate_typed_between_the_two_reads_never_shows_nothing_each(
         kept_day(each, *FULL_DAY, date=MONDAY)
     typed(baba, MONDAY, "2000")
     with shop_context(shop_a):
-        before = services.work_out_days(shop_a, MONDAY, MONDAY)
+        before = work_out_days(shop_a, MONDAY, MONDAY)
         AttendanceDay.objects.filter(date=MONDAY, staff=asha).update(meal_share=Decimal("0"))
         for day in before:
             if day.staff_id == asha.pk:
                 day.meal_share = Decimal("0")
-    monkeypatch.setattr(services, "work_out_days", lambda *_args: before)
+    monkeypatch.setattr(money_services, "work_out_days", lambda *_args: before)
     monday = by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY]
     assert (monday.sharers, monday.share) == (2, Decimal("1000"))
 
@@ -358,3 +359,64 @@ def test_only_the_demo_offers_a_ready_reason(settings: Settings, shop_a: Shop) -
     assert days_of(shop_a).ready_void_reasons == []
     settings.DEMO_SEED = True
     assert days_of(shop_a).ready_void_reasons == ["wrong_amount"]
+
+
+def test_the_share_shown_is_the_one_still_to_pay(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Asha and Juma came on Monday, 1,500 each of 3,000, and Salim's day waits. Juma left and was paid, his 1,500 taken
+    # (WAGE-3). Then Salim's day is decided: three ate, so each still to pay pays 1,000, which the page says, never the
+    # 1,500 Juma paid; nor once the month's approval pays them too (WAGE-3's review): 1,500 each is 4,500 of 3,000.
+    salim = paid(shop_a, "Salim")
+    for each in (asha, juma):
+        kept_day(each, *FULL_DAY, date=MONDAY)
+    waits = kept_day(salim, (ClockKind.IN, 7, 20), date=MONDAY)
+    typed(baba, MONDAY, "3000")
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].share == Decimal("1500")
+
+    def pay(staff: StaffMember, run: PayRun | None = None) -> None:
+        with shop_context(shop_a):
+            slip = Payslip(
+                shop=shop_a, staff=staff, month=NOV_1, pay_run=run, total=Decimal("8500.00"), created_by=baba
+            )
+            slip.save()
+            AttendanceDay.objects.filter(staff=staff, date=MONDAY).update(payslip=slip)
+
+    pay(juma)
+    with shop_context(shop_a):
+        decide_day(waits, choice=DayChoice.ON_TIME, reason="Alisahau Toka", replaces=None, by=baba)
+    monday = by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY]
+    assert (monday.sharers, monday.share) == (3, Decimal("1000"))
+    with shop_context(shop_a):
+        run = PayRun(shop=shop_a, month=NOV_1, created_by=baba)
+        run.save()
+    pay(asha, run)
+    pay(salim, run)
+    monday = by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY]
+    assert (monday.sharers, monday.share) == (3, Decimal("1000"))
+
+
+def test_a_date_only_leavers_shared_shows_what_they_paid(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Asha alone ate on Monday, left, and was approved alone: her share is the date's.
+    kept_day(asha, *FULL_DAY, date=MONDAY)
+    typed(baba, MONDAY, "3000")
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].share == Decimal("3000")
+    with shop_context(shop_a):
+        slip = Payslip(shop=shop_a, staff=asha, month=NOV_1, total=Decimal("7000.00"), created_by=baba)
+        slip.save()
+        AttendanceDay.objects.filter(staff=asha, date=MONDAY).update(payslip=slip)
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].share == Decimal("3000")
+
+
+def test_nobody_waits_on_a_day_of_an_approved_pay(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Juma left, paid alone; then a laptop sends his Ingia of Monday, with no Toka (WAGE-3's review). Nobody can decide
+    # it any more, so the page doesn't say one waits. Salim's, whose pay is open, waits.
+    juma, salim = paid(shop_a, "Juma"), paid(shop_a, "Salim")
+    kept_day(asha, *FULL_DAY, date=MONDAY)
+    for each in (juma, salim):
+        kept_day(each, (ClockKind.IN, 7, 20), date=MONDAY)
+    typed(baba, MONDAY, "3000")
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].waiting == 2
+    with shop_context(shop_a):
+        Payslip(shop=shop_a, staff=juma, month=NOV_1, total=Decimal("0.00"), created_by=baba).save()
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].waiting == 1

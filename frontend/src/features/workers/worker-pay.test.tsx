@@ -204,15 +204,33 @@ describe("Malipo kwa siku", () => {
     expect(within(card).queryByRole("button")).toBeNull();
   });
 
-  it("offers no button for a worker who left", async () => {
-    // Their pay up to their last day is worked out with the rates they had: the history stays, as it was.
+  it("still offers it for a worker who left, until their pay is approved (WAGE-3's review)", async () => {
+    // A day he worked with no rate holds the month's approval: Baba can still type it.
+    const gone = worker({
+      started_on: "2026-11-10",
+      status: "left",
+      left_on: "2026-11-18",
+    });
+    const rate = payRate({ staff: gone.id, effective_from: "2026-11-17" });
+    theServerHas(gone, payRates([rate], rate));
+
+    render(<WorkerScreen id={gone.id} />);
+    const card = await theCard();
+
+    expect(
+      await within(card).findByRole("button", { name: "Badilisha malipo" }),
+    ).toBeTruthy();
+  });
+
+  it("offers no button once the pay of a worker who left is approved", async () => {
+    // The server would refuse every day of theirs: the history stays, as it was.
     const gone = worker({
       started_on: "2026-11-10",
       status: "left",
       left_on: "2026-11-18",
     });
     const rate = payRate({ staff: gone.id });
-    theServerHas(gone, payRates([rate], rate));
+    theServerHas(gone, payRates([rate], rate, { closed: true }));
 
     render(<WorkerScreen id={gone.id} />);
     const card = await theCard();

@@ -15,8 +15,9 @@
 // is checked by hand too.
 //
 // Juma and Zawadi are the visitor's own workers, so the demo lets them change (demo.people_fixed guards only the seed's
-// people, their roles included, PPL-7). The tests share one database (the-shop.ts), made fresh for each run, and no
-// other test reads or adds workers, so one Juma and one Zawadi per run never meet a nickname already taken.
+// people, their roles included, PPL-7). The tests share one database (the-shop.ts), made fresh for each run, and the one
+// other test that adds a worker, payslip.spec.ts, calls her Neema and marks her left (WAGE-3), so one Juma and one Zawadi
+// per run never meet a nickname already taken, and the list's first is still the one just added.
 import type { Page } from "@playwright/test";
 
 import sw from "../messages/sw.json";

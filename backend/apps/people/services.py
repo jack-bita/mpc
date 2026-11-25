@@ -351,7 +351,9 @@ def _locked(staff: StaffMember) -> StaffMember:
     return StaffMember.objects.select_for_update(no_key=True).get(pk=staff.pk)
 
 
-def _locked_for_a_change(staff: StaffMember, by: StaffMember | None) -> tuple[StaffMember, StaffMember | None]:
+def _locked_for_a_change(
+    staff: StaffMember, by: StaffMember | None, *, left_too: bool = False
+) -> tuple[StaffMember, StaffMember | None]:
     # A person's job changed by someone at the shop, its status, their details (PPL-10) or their photo (PPL-9): both
     # jobs locked, then who may asked (PPL-4, AUTH-8). The order is the point. Asked before the lock, the answer could
     # be out of date by the time the change is written: Neema and Hamisi suspend each other in the same second, each
@@ -360,29 +362,34 @@ def _locked_for_a_change(staff: StaffMember, by: StaffMember | None) -> tuple[St
     # so the first wins. _locked_pair takes both rows in id order, so two such changes never wait for each other in a
     # circle. `by` None: the system, or the superuser, who may change anyone, the owner included; only the person's own
     # row is locked, as before. Returns both rows as read under the locks, so the change writes the person as they are
-    # now, and names the one acting as they are.
+    # now, and names the one acting as they are. `left_too`: a job that ended may be changed too
+    # (lock_worker_for_a_change).
     if by is None:
         return _locked(staff), None
     _check_people_fixed_on_demo(staff)
     staff, by = _locked_pair(staff, by)
     # The person's own row (User), read afresh, not locked: who may hangs on the jobs, locked above, and on whether the
     # person can open the admin, which no shop's screen changes.
-    _check_may_act_as(staff, User.objects.get(pk=staff.user_id), by=by, what="staff")
+    _check_may_act_as(staff, User.objects.get(pk=staff.user_id), by=by, what="staff", left_too=left_too)
     return staff, by
 
 
-def lock_worker_for_a_change(staff: StaffMember, by: StaffMember | None) -> tuple[StaffMember, StaffMember | None]:
+def lock_worker_for_a_change(
+    staff: StaffMember, by: StaffMember | None, *, left_too: bool = False
+) -> tuple[StaffMember, StaffMember | None]:
     """The PIN's rule (02 §5), for a change another app makes to a worker, as setting their pay rate (WAGE-1): the
     same lock and the same check as a suspension or a fix of their details, never a copy of them. Checks that both
     jobs are of the shop open (T1), locks both, then asks who may on them as they are now; returns both as read under
     the locks. `by` None: the system or the superuser, who may change anyone. Call it inside the transaction that writes
     the change, so the locks hold until it commits. Refuses with the codes of a change to a worker (`staff.own`,
     `staff.superuser_only`, `staff.more_keys`, `staff.left`; on the demo, `demo.people_fixed`), and 403 without
-    `staff.manage` on the whole shop."""
+    `staff.manage` on the whole shop. `left_too`: for what a job that ended may still lack, the daily pay of a day it
+    worked (set_pay_rate, WAGE-3's review): one who left isn't refused, and every other part of the rule is asked, as
+    they may come back with all they held."""
     # Another app's door to the lock above: the people app owns who may change a worker, so a second copy of the rule
     # elsewhere could drift from it. The shop check is the one each of this file's own services makes first.
     _check_shop(staff.shop_id, by)
-    return _locked_for_a_change(staff, by)
+    return _locked_for_a_change(staff, by, left_too=left_too)
 
 
 def _check_people_fixed_on_demo(staff: StaffMember) -> None:
@@ -975,7 +982,7 @@ def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) 
         raise ValidationError("This person has no phone or email to log in with.", code="password.no_login_name")
 
 
-def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, what: str) -> None:
+def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, what: str, left_too: bool = False) -> None:
     # Whoever sets a person's password or PIN can log in as them; whoever suspends them, brings them back or marks them
     # left decides whether they work at all; whoever fixes their phone sets their login name (PPL-10). So this is the
     # giver rule (02 §5), for a whole person: Baba may hand a manager staff.manage to deal with a forgotten password, or
@@ -986,7 +993,7 @@ def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, what: 
     # The English words are for the logs: neutral, as they serve all three; the screens translate the code (ADR-0032).
     # The key, on the whole shop, read afresh: a giver suspended a moment ago holds nothing (PermissionDenied, 403).
     require(by, Permission.STAFF_MANAGE, None)
-    if staff.status == StaffStatus.LEFT:
+    if staff.status == StaffStatus.LEFT and not left_too:
         raise ValidationError("This person has left.", code="staff.left")
     if staff.pk == by.pk:
         # A thief holding a logged-in phone could set a new one for its owner, with no current one, and keep the login

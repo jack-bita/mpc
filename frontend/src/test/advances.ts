@@ -71,6 +71,7 @@ export function advancesMonth(
     total: "0.00",
     rows,
     workers: [ASHA, JUMA],
+    closed: false,
     ...fields,
   };
 }
@@ -98,5 +99,11 @@ export function advancePageOf(
   line: AdvanceLine,
   fields: Partial<AdvancePage> = {},
 ): AdvancePage {
-  return { advance: line, own: false, ready_void_reasons: [], ...fields };
+  return {
+    advance: line,
+    own: false,
+    closed: false,
+    ready_void_reasons: [],
+    ...fields,
+  };
 }

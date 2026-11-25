@@ -50,12 +50,23 @@ taken off that month's pay (WAGE-2), so the pay so far is right every day:
 
     who    date     amount     note          typed by   crossed out
     Juma   10 Nov  20,000.00   Ada ya shule  Meneja
+
+And a month's pay once it is approved (WAGE-3), kept for good, in three ledgers more: the month (PayRun), a payslip per
+job (Payslip), and its lines (PayslipLine), whose amounts add up to its total. One who left has theirs before the
+month's approval, with no run:
+
+    run         month     approved by      payslip  run       total       lines
+    Novemba     1 Nov     Baba             Juma     Novemba   132,000.00  14 full × 10,000 · 2 half × 5,000 · fines …
+                                           Neema    —          62,000.00  6 full × 10,000 · 1 half × 5,000 · meals …
+
+Each day a payslip paid names it (AttendanceDay.payslip), and the database refuses any change of such a day (A3).
 """
 
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from django.db import models
+from django.db.models import F, Q
 from django.db.models.functions import Floor
 
 from apps.control.facts import FlagFacts, FlaggedTap
@@ -106,7 +117,7 @@ class DayStatus(models.TextChoices):
 class ReviewReason(models.TextChoices):
     # Why a day needs a person's decision (ATT-5): the one line the month page shows beside it, "Juma · Alhamisi 12/11 ·
     # hakuna Toka", so the owner knows what to look at before he opens the day. One reason a day: the first that holds,
-    # in this order. The book's own first (apps/staffpay/services.py), as each asks whether the day is paid at all,
+    # in this order. The book's own first (apps/staffpay/services/book.py), as each asks whether the day is paid at all,
     # whatever its times say; then the rule's (apps/staffpay/calculations.py), in the order the rule reads a day.
     OUTSIDE_JOB = "outside_job", "Outside the job's days"  # a tap before the first day or after the last (ATT-11)
     CLOSED_DAY = "closed_day", "The shop was closed"  # a tap on a day the shop closed, a funeral (ATT-10)
@@ -344,7 +355,7 @@ class AttendanceDay(ShopScoped):
     # they were. ShopScoped (CORE-2) gives `id`, `shop`, `created_at`, `created_by` and the guard on reads;
     # `created_by` is always empty, as only the book writes a day, and the book is the system, not a person.
     #
-    # Not a ledger: a day is worked out again freely until its pay run is approved (WAGE-3), as what it is worked out
+    # Not a ledger: a day is worked out again freely until a payslip pays it (WAGE-3), as what it is worked out
     # from can still change after it is kept: a tap comes late, from a laptop that was offline; a manager voids a tap
     # (ATT-13); a job's first or last day is moved (PPL-10). Never a rule: a rule never starts on a day gone by
     # (setting.date_past, SHOP-3), and the book keeps only days gone by. So its row changes, and the edit history's
@@ -352,17 +363,17 @@ class AttendanceDay(ShopScoped):
     # the day her Toka arrived from a laptop that had been offline. The trigger writes nothing when a day comes out the
     # same.
     # A manager's decision (ATT-6) sits in columns of its own, beside what the book worked out, and the book never
-    # writes them (it writes only WORKED_OUT, apps/staffpay/services.py), so what the system said stays visible (A2):
-    # "Siku kamili, uamuzi wa Baba · Mfumo ulisema: inahitaji uamuzi". Not Editable all the same: a version of the
+    # writes them (it writes only WORKED_OUT, apps/staffpay/services/book.py), so what the system said stays visible
+    # (A2): "Siku kamili, uamuzi wa Baba · Mfumo ulisema: inahitaji uamuzi". Not Editable all the same: a version of the
     # whole row would move each time the book worked the day out again, and refuse a manager's decision for a change
     # he never saw. Two managers deciding at once are kept apart by the decision each saw (decide_day).
-    # Never deleted (rule 7): nothing links to a day yet, so PROTECT can't keep it, and a trigger in the same migration
+    # Never deleted (rule 7): nothing links to a day, so PROTECT can't keep it, and a trigger in the same migration
     # refuses a DELETE instead. A day that no longer counts, as its job's first day was moved later (PPL-10), keeps its
     # row, and the book no longer answers it.
     # Not on the laptops: no laptop works out a day (03 §6.6), and a worker's pay never sits on a shared device
     # (03 §6.1), so the book writes no line in the change log.
-    #
-    # A later card adds the lock of an approved pay run, with its migration (WAGE-3).
+    # Once a payslip paid it, it changes no more (A3): the frozen trigger of `payslip`'s own migration refuses every
+    # UPDATE of such a row, the book's, a decision's and SQL typed by hand alike (FrozenTrigger, WAGE-3).
 
     # Whose day it is: a job, not a person, as an event's `staff` is. A person who left and is hired again the same day
     # has two jobs, so two days on that date, each read from its own taps (PPL-11). PROTECT: nothing is deleted.
@@ -394,7 +405,7 @@ class AttendanceDay(ShopScoped):
     # to any day are a sum of days already worked out, and one who leaves on the 15th is paid at once. One of the book's
     # answers (WORKED_OUT): it moves when money is typed or crossed out, when any worker's day of the date is decided or
     # its taps fixed, and when a pay rate is typed, as the date is then split again. 0 on every day with nothing to
-    # share, and on all but one of a person's days of one date (_sharing, apps/staffpay/services.py). Money, so
+    # share, and on all but one of a person's days of one date (who_shares, apps/staffpay/services/book.py). Money, so
     # numeric(14,2) (rule 3).
     meal_share = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
 
@@ -417,6 +428,15 @@ class AttendanceDay(ShopScoped):
     decided_at = models.DateTimeField(null=True, blank=True)
     # Why, in their own words: "Alisahau kubonyeza Toka". Every decision says why (rule 7's who, when and why).
     decision_reason = models.TextField(blank=True)
+
+    # The payslip that paid this day (WAGE-3), or empty while it may still change: filled once, at the approval, and
+    # from then on the row is frozen. A link, not a yes or no: it says which payslip the day is on, for a worker's own
+    # page (WAGE-4) and a printed one (WAGE-5). A payslip of the same job and month, which the approval holds (T1).
+    # PROTECT, no index: a payslip is never deleted, and its days are found by the job and the month, which the
+    # one-day-per-job rule below already is an index of.
+    payslip = models.ForeignKey(
+        "staffpay.Payslip", on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
 
     class Meta(ShopScoped.Meta):
         # Built on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2). No error codes on
@@ -535,8 +555,8 @@ class PayRate(AppendOnly):
     # typed wrong is mended by a new row for the same day: of two rows on one day the one written last counts, as for a
     # setting (02 §4), and the slip stays in the history. Who set it is the row's `created_by` (ShopScoped).
     # Never on a laptop: a worker's pay never sits on a shared device (03 §6.1), so the service writes no line in the
-    # change log, and no sync answer carries one. Written only by set_pay_rate (apps/staffpay/services.py), which asks
-    # who may; read for a span by rates_between (apps/staffpay/selectors.py).
+    # change log, and no sync answer carries one. Written only by set_pay_rate (apps/staffpay/services/money.py), which
+    # asks who may; read for a span by rates_between (apps/staffpay/selectors.py).
 
     # Whose rate: a job, not a person, as a day's `staff` is: a person who left and was hired again has a new job, and
     # its rates start afresh (PPL-11). PROTECT: nothing is deleted. No index of its own: the lookup below leads with
@@ -605,7 +625,7 @@ class MealMoney(AppendOnly):
     # (ADR-0021), all but the void stamp, filled once: a wrong amount is voided, with who, when and why, and the right
     # one typed. Never on a laptop: what a worker pays for meals is part of their pay, and pay never sits on a shared
     # device (03 §6.1), so the services write no line in the change log, and no sync answer carries one. Written only by
-    # record_meal_money and void_meal_money (apps/staffpay/services.py), which ask who may.
+    # record_meal_money and void_meal_money (apps/staffpay/services/money.py), which ask who may.
 
     # The day of the meals, on the shop's own calendar: a business date, not a moment (02 §1). Today's or an earlier
     # working day's, which the service checks: a forgotten day is typed later.
@@ -685,7 +705,7 @@ MOST_ADVANCE = Decimal("10000000.00")
 class Advance(AppendOnly):
     # Money given to a worker before payday (WAGE-8, 02 §12), whether they call it mid-month money or asked the owner
     # for it (Jack, WAGE-1). Juma's 20,000 of 10 Nov comes off Juma's November pay (pay_month,
-    # apps/staffpay/services.py). Typed on the day it is given, by whoever holds money.advance, the owner and the
+    # apps/staffpay/services/pay.py). Typed on the day it is given, by whoever holds money.advance, the owner and the
     # managers (Jack: A); never their own (Jack: A), as nobody gives themself the shop's money, or erases what they
     # took, on their own word. Who typed it is the row's `created_by` (ShopScoped). Money, so a ledger (rule 2, T2):
     # written once, never changed or deleted. AppendOnly (CORE-3) refuses a second save() and any delete() in Python,
@@ -693,7 +713,7 @@ class Advance(AppendOnly):
     # filled once: a wrong one is voided, with who, when and why, and the right one typed. Never on a laptop: what a
     # worker owes is part of their pay, and pay never sits on a shared device (03 §6.1), so the services write no line
     # in the change log, and no sync answer carries one. Written only by record_advance and void_advance
-    # (apps/staffpay/services.py), which ask who may.
+    # (apps/staffpay/services/money.py), which ask who may.
 
     # Whose: a job, not a person, as a day's and a rate's are: a person hired again (PPL-11) has a new job, and the old
     # job's advance stays on the old job's pay. PROTECT: nothing is deleted. No index of its own: every read starts from
@@ -778,3 +798,163 @@ class Advance(AppendOnly):
 
     def __str__(self) -> str:
         return f"{self.date:%Y-%m-%d} {self.amount}"
+
+
+class PayRun(AppendOnly):
+    # A month's pay, approved (WAGE-3, 02 §12): one row per shop and month, made once, when the month is over, by
+    # whoever holds pay.approve. Until then the month's pay is a draft, worked out each time it is asked for and kept
+    # nowhere (Jack, WAGE-2). The row itself says the month is approved, who did it (its `created_by`) and when (its
+    # `created_at`); it has no status, as whether everyone is paid is read from the payslips (WAGE-9), never kept beside
+    # them, where the two could disagree. A ledger (rule 2, T2): written once, never changed or deleted, and never
+    # undone (A3), as a worker may already have been paid from it; a mistake is an adjustment in a later month (WAGE-9).
+    # Written only by approve_month (apps/staffpay/services/approval.py), in one transaction with its payslips, their
+    # lines and the days they paid. Never on a laptop, as pay never sits on a shared device (03 §6.1): no line in the
+    # change log.
+
+    # The month, as its first day on the shop's own calendar: 2026-11-01 is November.
+    month = models.DateField()
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). No error
+        # codes on these rules: approve_month refuses first, in its own words, so a broken rule here is a bug in our
+        # code, a server error and a log line, never a person's mistake (ADR-0032).
+        constraints = [
+            # One approval per month: two people approving at once end with one run, and the second is refused. Leads
+            # with `shop`, so it is also the index whether a month is approved is asked by.
+            models.UniqueConstraint(fields=["shop", "month"], name="staffpay_payrun_one_per_month"),
+            # A month has one name: kept as any other day of it, the same month could be approved twice.
+            models.CheckConstraint(condition=Q(month__day=1), name="staffpay_payrun_month_by_its_first_day"),
+            # Closing a month is somebody's word, never nobody's: not even the system approves pay.
+            models.CheckConstraint(condition=Q(created_by__isnull=False), name="staffpay_payrun_approved_by_someone"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.month:%Y-%m}"
+
+
+class Payslip(AppendOnly):
+    # What one job was paid for one month, as it was approved (WAGE-3, 02 §12): a copy (T4), never worked out again, so
+    # November says the same a year later, whatever happens to a rate, a day or a fine since. Its lines are below
+    # (PayslipLine), and its total is their sum. Who approved it and when are the row's `created_by` and `created_at`.
+    # A ledger, as its run is, and written with it (approve_month); or alone, for one who left, the evening they go
+    # (approve_leaver), and then with no run: the month's approval, weeks later, leaves it as it is.
+
+    # Whose: a job, not a person, as a day's and a rate's are: one hired again in the month has two payslips (PPL-11).
+    # No index of its own: the one-per-job rule below leads with `shop`, then the month.
+    staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
+    # The month, as its first day. On the payslip too, not only on its run, as one approved alone has no run.
+    month = models.DateField()
+    # The month's approval that made it, or empty for one approved alone. The same shop's and month's, which the service
+    # holds (T1).
+    pay_run = models.ForeignKey(
+        PayRun, on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
+    # What it came to, the sum of its lines. Below 0 when the worker owes: then nothing is handed over, and the next
+    # payslip of the job takes the rest (cash_to_pay and debt_left, apps/staffpay/calculations.py; Jack: A). Money, so
+    # numeric(14,2) and a Decimal, never a float (rule 3, 03 §9).
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta(AppendOnly.Meta):
+        # No error codes, as on PayRun.
+        constraints = [
+            # One payslip per job and month, however it was approved, alone or with the month: nobody is paid a month
+            # twice. Leads with `shop`, then the month, so it is also the index a month's payslips are read by.
+            models.UniqueConstraint(fields=["shop", "month", "staff"], name="staffpay_payslip_one_per_job_and_month"),
+            models.CheckConstraint(condition=Q(month__day=1), name="staffpay_payslip_month_by_its_first_day"),
+            models.CheckConstraint(condition=Q(created_by__isnull=False), name="staffpay_payslip_approved_by_someone"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.month:%Y-%m} {self.total}"
+
+
+class PayslipLineKind(models.TextChoices):
+    # What a line of a payslip is (WAGE-3), in the order the payslip lists them. A correction (WAGE-9) will be one more.
+    FULL = "full", "Full days"
+    HALF = "half", "Half days"
+    FINES = "fines", "Fines"
+    MEALS = "meals", "Meals"
+    ADVANCE = "advance", "Money given before payday"
+    CARRIED = "carried", "A debt from an earlier month"
+
+
+class PayslipLine(AppendOnly):
+    # One line of a payslip (WAGE-3, 02 §12), as it was approved:
+    #
+    #     1  full      14 days × 10,000             140,000
+    #     2  half       2 days ×  5,000              10,000
+    #     3  fines      2 days                       −2,000
+    #     4  meals     16 days                      −16,000
+    #     5  advance   of 10 Nov                    −20,000
+    #     6  carried   of October                   −18,000
+    #
+    # Each amount is added or taken off as it stands, so the lines add up to the total exactly, with nothing to know.
+    # One line per advance, each with its day: a worker who says they were given two, not three, can be shown which
+    # (WAGE-5 prints them). The rate of a line is its `each` (T4). A ledger, as its payslip is, and written with it.
+
+    payslip = models.ForeignKey(Payslip, on_delete=models.PROTECT, related_name="+", db_index=False)
+    # The line's place on the payslip, from 1.
+    position = models.PositiveSmallIntegerField()
+    kind = models.CharField(max_length=10, choices=PayslipLineKind)
+    # How many days, on the lines that count them; and what each paid, on the two that multiply.
+    days = models.PositiveSmallIntegerField(null=True, blank=True)
+    each = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    # The day an advance was given; the month a debt is from, as its first day.
+    date = models.DateField(null=True, blank=True)
+    # What the line adds (above 0) or takes off (below 0). Money, so numeric(14,2) (rule 3).
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta(AppendOnly.Meta):
+        # No error codes, as on PayRun.
+        constraints = [
+            # One line per place, so the lines have one order; also the index a payslip's lines are read by.
+            models.UniqueConstraint(
+                fields=["shop", "payslip", "position"], name="staffpay_payslipline_one_per_position"
+            ),
+            # A line holds what its kind has, and nothing else, and adds or takes off as its kind does. Each part said
+            # to be there, as a comparison with an empty value passes a rule. Days that pay: how many, at what, and the
+            # two multiply to the amount; a half day of a small rate may round to 0 (round_money), so 0 passes. Fines
+            # and meals: how many days, and money off. An advance and a debt: a date, and money off.
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        kind__in=[PayslipLineKind.FULL, PayslipLineKind.HALF],
+                        days__isnull=False,
+                        days__gte=1,
+                        each__isnull=False,
+                        each__gte=0,
+                        date__isnull=True,
+                        amount=models.ExpressionWrapper(
+                            F("days") * F("each"), output_field=models.DecimalField(max_digits=14, decimal_places=2)
+                        ),
+                    )
+                    | Q(
+                        kind__in=[PayslipLineKind.FINES, PayslipLineKind.MEALS],
+                        days__isnull=False,
+                        days__gte=1,
+                        each__isnull=True,
+                        date__isnull=True,
+                        amount__lt=0,
+                    )
+                    | Q(
+                        kind=PayslipLineKind.ADVANCE,
+                        days__isnull=True,
+                        each__isnull=True,
+                        date__isnull=False,
+                        amount__lt=0,
+                    )
+                    | Q(
+                        kind=PayslipLineKind.CARRIED,
+                        days__isnull=True,
+                        each__isnull=True,
+                        date__isnull=False,
+                        date__day=1,
+                        amount__lt=0,
+                    )
+                ),
+                name="staffpay_payslipline_fits_its_kind",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.position}. {self.kind} {self.amount}"

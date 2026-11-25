@@ -11,7 +11,7 @@
 //
 // It starts on the day it is opened for: today on the list, the day itself on a day's page. Several a day add up, so it
 // never asks what is there already. Who may, and what a day takes, are the server's (record_meal_money,
-// apps/staffpay/services.py); what the sheet can see itself is said at once, beside its box, in the server's own
+// apps/staffpay/services/money.py); what the sheet can see itself is said at once, beside its box, in the server's own
 // sentences: an empty day, one to come, a Sunday, an amount that isn't whole shillings above 0. On the demo a note isn't
 // kept (demo.no_note), said beside its box.
 //

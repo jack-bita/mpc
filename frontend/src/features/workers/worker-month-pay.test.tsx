@@ -125,6 +125,29 @@ describe("Malipo ya mwezi", () => {
     expect(monthsAsked(JUMA.id)).toEqual(["2026-11"]);
   });
 
+  it("says who approved it, and when, in place of how far it is counted (WAGE-3)", async () => {
+    // At 22:30 on the 30th in UTC, 01:30 on 1 December in Arusha. Approving is the worker's own pay page's.
+    theServerHas(JUMA, {
+      "2026-11": {
+        ...NOVEMBER,
+        worker: {
+          ...NOVEMBER.worker,
+          approval: { by: "Baba", at: "2026-11-30T22:30:00Z" },
+        },
+      },
+    });
+    render(<WorkerScreen id={JUMA.id} />);
+    const card = await theCard();
+    expect((await lines(card)).at(-1)).toBe("Jumla ya mwezi | TSh 132,000");
+    expect(
+      within(card).getByText("Imeidhinishwa na Baba · 01/12/2026 01:30 usiku"),
+    ).toBeTruthy();
+    expect(within(card).queryByText(/Hadi jana/)).toBeNull();
+    expect(
+      within(card).queryByRole("button", { name: /Idhinisha/ }),
+    ).toBeNull();
+  });
+
   it("takes off what they were given before payday (WAGE-8)", async () => {
     theServerHas(JUMA, {
       "2026-11": workerPayMonth(

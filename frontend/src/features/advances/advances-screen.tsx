@@ -91,8 +91,11 @@ export function AdvancesScreen() {
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
       {/* On who is here, never on the list's wait (frontend rules): ‹ to a month not read yet takes away neither the button
-          nor the line of what was written (the review). Today on its sheet is the server's: a phone's date can be wrong. */}
-      {may ? <RecordAdvance month={answer.data} /> : null}
+          nor the line of what was written (the review). Today on its sheet is the server's: a phone's date can be wrong. Not
+          on a month whose pay is approved, which takes none (WAGE-3). */}
+      {may && answer.data?.closed !== true ? (
+        <RecordAdvance month={answer.data} />
+      ) : null}
       {/* Only for someone who may see it, so no ‹ › only asks to be refused again (the month page's review). */}
       {may && month !== null && thisMonth !== null ? (
         <MonthSwitch month={month} thisMonth={thisMonth} onChoose={choose} />
@@ -110,9 +113,18 @@ export function AdvancesScreen() {
 /** The whole of what was given, then a line each. */
 function TheMonth({ answer }: { answer: AdvancesMonth }) {
   const t = useTranslations("advances");
-  if (answer.rows.length === 0) return <p>{t("none")}</p>;
+  // The month's pay is approved (WAGE-3), so no button above types one in it: said here, why.
+  const closed = answer.closed ? <p>{t("closed")}</p> : null;
+  if (answer.rows.length === 0)
+    return (
+      <>
+        {closed}
+        <p>{t("none")}</p>
+      </>
+    );
   return (
     <>
+      {closed}
       <p className="flex flex-wrap justify-between gap-x-4 text-lg font-semibold">
         {/* The space between is for a screen reader: side by side with none, it may run the two into one word. */}
         <span>{t("total")}</span>{" "}

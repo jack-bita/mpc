@@ -45,7 +45,9 @@
 //   Hakuna picha: imeongezwa ofisini
 //   [ Ongeza Ingia au Toka ]
 //
-// No button on the viewer's own month, as nobody fixes their own taps; the server refuses them all the same.
+// No button on the viewer's own month, as nobody fixes their own taps; nor on a month whose pay is closed, approved with
+// everyone's or the worker's alone, or before one that was, which the day says instead (WAGE-3): *Malipo ya mwezi huu
+// yamefungwa, kwa hiyo siku hii haibadiliki tena.* The server refuses them all the same.
 //
 // Everything comes from the server's one answer for the month (worker-month.ts): the page never works out what a day
 // was, nor moves a time by the phone's zone. The photo is opened from its own route, which asks attendance.manage
@@ -142,6 +144,9 @@ export function TheDay({
         </ul>
       ) : null}
       <Missing kept={kept} taps={counted} isToday={isToday} />
+      {/* Why nothing here can be changed (WAGE-3): said on any day of it but one the shop was shut, when nothing waits for
+          anyone. Today too: one who left tonight may be approved already. */}
+      {answer.closed && kept?.status !== "off" ? <p>{t("closed")}</p> : null}
       {mayAddOn(day, answer, kept) ? (
         <Button
           kind="second"
@@ -163,8 +168,8 @@ export function TheDay({
 /** Whether a tap may be added on `day`, as the server takes one (add_tap): one of the job's days, from its first to its
  * last, up to today, and never a Sunday, when the shop is shut and a tap counts nothing; and a day the book keeps, or
  * today, which it keeps once it is over: so never a day attendance was off, which the book keeps nothing for, as a tap
- * there would count nothing (ATT-13's review). Never on the viewer's own month. The server checks again, and refuses
- * with its own words. */
+ * there would count nothing (ATT-13's review). Never on the viewer's own month, nor on one whose pay is approved
+ * (WAGE-3). The server checks again, and refuses with its own words. */
 function mayAddOn(
   day: string,
   answer: WorkerAttendance,
@@ -172,6 +177,7 @@ function mayAddOn(
 ): boolean {
   return (
     !answer.yours &&
+    !answer.closed &&
     day <= answer.today &&
     answer.started_on <= day &&
     (answer.left_on === null || day <= answer.left_on) &&
@@ -224,7 +230,9 @@ function Kept({
       ) : null}
       {/* The viewer's own month: they may see it, never decide it (Jack: A). Said on a working day, as nothing on a
           shut day waits for anyone. */}
-      {answer.yours && day.status !== "off" ? <p>{t("yours")}</p> : null}
+      {answer.yours && !answer.closed && day.status !== "off" ? (
+        <p>{t("yours")}</p>
+      ) : null}
       {/* Opened afresh each time, with the decision on the screen picked and an empty reason: mounted only while open,
           so a sheet closed with Ghairi forgets what was typed. */}
       {deciding ? (
@@ -462,7 +470,7 @@ function Tap({
         </p>
       ) : null}
       {/* While it counts, and never on the viewer's own month (as nobody decides their own day, ATT-6). */}
-      {tap.voided === null && !answer.yours ? (
+      {tap.voided === null && !answer.yours && !answer.closed ? (
         <Button
           kind="second"
           size="normal"

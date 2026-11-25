@@ -35,6 +35,11 @@ And two advances of those days (WAGE-8), typed by Meneja, who holds their key, m
 Asha's and Baraka's, which Advansi lists and their pay takes off, and one of which a visitor can cross out, with the
 ready reason, as for the meal money (record_advance, void_advance).
 
+And Meneja holds pay.approve (WAGE-3), the owner's own key to Idhinisha: a visitor adds a worker with a daily pay, marks
+them left once a day of theirs is over, and approves their pay alone, on their own page; or, once a month of the weeks
+is over, approves it for everyone. The seed approves nothing itself, as a closed month takes no change and a visitor
+should find each of them open; what a visitor approves stays closed until the next reset.
+
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
 the tests log in as these people, with the logins written again in frontend/e2e/pair-and-pin-login.spec.ts. Change
@@ -164,13 +169,13 @@ class DemoPerson:
 PEOPLE = (
     # The manager on every side: device.manage among the role's keys lets them confirm a new laptop on either side
     # (confirm_pairing). A password and no PIN: the manager works from their own phone, as at a real shop.
-    # And three of an owner's own keys (see the top of this file): the shop's rules, the one key a visitor needs to try
+    # And four of an owner's own keys (see the top of this file): the shop's rules, the one key a visitor needs to try
     # Mipangilio ya duka, which also changes the sides, kept as the seed made them on the demo
     # (_check_sides_fixed_on_demo, apps/shops/services.py); and its workers, to try Wafanyakazi (PPL-4), whose
     # services keep the seed's people as made on the demo (demo.people_fixed, apps/people/services.py), as a visitor
     # who suspended Asha, or took Meneja's role away, would stop every visitor after them (OPS-3's note). And the meal
-    # money's, the owner's own too, to try Hela ya chakula (WAGE-7). Not the Owner's whole role, whose keys reach
-    # further than a visitor needs.
+    # money's, the owner's own too, to try Hela ya chakula (WAGE-7); and the approval's, to try Idhinisha (WAGE-3). Not
+    # the Owner's whole role, whose keys reach further than a visitor needs.
     DemoPerson(
         "Meneja Mfano",
         "Meneja",
@@ -178,7 +183,12 @@ PEOPLE = (
         side=None,
         email=MANAGER_EMAIL,
         password=MANAGER_PASSWORD,
-        keys=(Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE, Permission.MEALS_RECORD),
+        keys=(
+            Permission.SETTINGS_MANAGE,
+            Permission.STAFF_MANAGE,
+            Permission.MEALS_RECORD,
+            Permission.PAY_APPROVE,
+        ),
         # Made-up amounts, as everything here is (rule 10): a manager paid a little more than a seller.
         daily_rate="15000",
         # He clocks in too, on the shop's laptop with his password (OPS-13): he has a daily rate, so the month page

@@ -1,6 +1,6 @@
 // meal-money-day.test.tsx — one day's own page (WAGE-7): its total and how it is split, each row with who typed it and
 // when, the crossed-out ones struck through with who, when and why; Batilisha under a row that counts; and Andika hela ya
-// chakula, which starts on the day itself.
+// chakula, which starts on the day itself. On a day whose pay is approved, neither button, and why (WAGE-3).
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -400,6 +400,60 @@ describe("one day's meal money", () => {
       ).toEqual([]);
     },
   );
+
+  it("offers no Batilisha and nothing to write on a day whose pay is approved, and says why", async () => {
+    // Monday is the last day of it: that day is closed too.
+    theDayIs({ ...MONDAYS, closed_to: MONDAY });
+
+    render(<MealMoneyDayScreen date={MONDAY} />);
+
+    expect(
+      await screen.findByText(
+        "Malipo ya siku hii yamefungwa, kwa hiyo hela yake ya chakula haibadiliki tena.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Batilisha/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Andika hela ya chakula" }),
+    ).toBeNull();
+    // Its rows stay to be read, the crossed-out one as it was.
+    expect(await rows()).toEqual([
+      "TSh 5,000 · Unga na maharage | Asha · 23/11/2026 08:10 asubuhi",
+      "TSh 30,000 · Nyama | Asha · 23/11/2026 11:20 asubuhi | Imebatilishwa na Baba, 23/11/2026 | Sababu: Sifuri moja zaidi",
+      "TSh 3,000 · Nyama | Asha · 23/11/2026 11:30 asubuhi",
+    ]);
+  });
+
+  it("keeps both buttons the day after the last one approved", async () => {
+    theDayIs({ ...MONDAYS, closed_to: "2026-11-22" });
+
+    render(<MealMoneyDayScreen date={MONDAY} />);
+
+    await rows();
+    expect(screen.getAllByRole("button", { name: /Batilisha/ })).toHaveLength(
+      2,
+    );
+    expect(
+      screen.getByRole("button", { name: "Andika hela ya chakula" }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/yamefungwa/)).toBeNull();
+  });
+
+  it("says why on a closed day nobody wrote any for, in place of the button", async () => {
+    theDayIs(
+      mealDays(
+        [mealDay({ amount: "0.00", sharers: 6, share: "0.00", rows: [] })],
+        { first: MONDAY, last: MONDAY, closed_to: "2026-11-30" },
+      ),
+    );
+
+    render(<MealMoneyDayScreen date={MONDAY} />);
+
+    expect(await screen.findByText(/yamefungwa/)).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Andika hela ya chakula" }),
+    ).toBeNull();
+  });
 
   it("shows only the server's refusal to someone without the key", async () => {
     answer("GET", ME, { status: 200, body: whoIsHere([]) });

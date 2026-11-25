@@ -788,12 +788,14 @@
     "waiting": "{count, plural, one {1 anasubiri uamuzi} other {# wanasubiri uamuzi}}",
     "none": "Hakuna siku ya kuonyesha katika mwezi huu.",
     "noneChosen": "Hakuna siku ya kuonyesha katika siku hizi.",
+    "closed": "Malipo ya siku hizi yamefungwa, kwa hiyo hela ya chakula ya siku hizo haibadiliki tena.",
     "daysChosenLabel": "Siku ulizochagua",
     "span": "{first} hadi {last}",
     "wholeMonth": "Mwezi mzima",
     "dayPage": {
       "noDay": "Hakuna siku iliyochaguliwa.",
       "none": "Hakuna hela ya chakula siku hii.",
+      "closed": "Malipo ya siku hii yamefungwa, kwa hiyo hela yake ya chakula haibadiliki tena.",
       "total": "Jumla {amount}",
       "rowsLabel": "Hela iliyoandikwa siku hii",
       "rowWithNote": "{amount} · {note}",
@@ -833,6 +835,7 @@
     "line": "{weekday} {date} · {name}",
     "voided": "Imebatilishwa",
     "none": "Hakuna advansi katika mwezi huu.",
+    "closed": "Malipo ya mwezi huu yamefungwa, kwa hiyo advansi zake hazibadiliki tena.",
     "record": {
       "title": "Andika advansi",
       "worker": "Mfanyakazi",
@@ -851,7 +854,8 @@
       "typedBy": "Imeandikwa na {by} · {date} {time}",
       "voidedBy": "Imebatilishwa na {by}, {date}",
       "reason": "Sababu: {reason}",
-      "own": "Hii ni advansi yako. Mtu mwingine ndiye anayeweza kuibatilisha."
+      "own": "Hii ni advansi yako. Mtu mwingine ndiye anayeweza kuibatilisha.",
+      "closed": "Malipo yake ya mwezi huo yamefungwa, kwa hiyo advansi hii haibatilishwi."
     },
     "void": {
       "title": "Batilisha {amount}",
@@ -887,6 +891,7 @@
     "meals": "Chakula",
     "mealDays": "siku {count}",
     "advances": "Advansi",
+    "carried": "Deni la {month}",
     "less": "− {amount}",
     "todayLine": {
       "full": "Leo: siku kamili",
@@ -896,9 +901,32 @@
     },
     "totalToday": "Jumla ya kumlipa leo",
     "totalMonth": "Jumla ya mwezi",
+    "owes": "Analipwa 0. Anadaiwa {amount}, zitakatwa kwenye malipo yake yajayo.",
+    "owesLeft": "Analipwa 0. Anadaiwa {amount}.",
+    "owed": "Alilipwa 0. Alibaki anadaiwa {amount}.",
     "notPaidByDay": "Hana malipo kwa siku katika mwezi huu.",
     "worker": "Malipo ya mfanyakazi",
-    "cardTitle": "Malipo ya mwezi"
+    "cardTitle": "Malipo ya mwezi",
+    "approval": {
+      "approvedBy": "Imeidhinishwa na {by} · {date} {time}",
+      "approvedOn": "Imeidhinishwa {date}",
+      "monthButton": "Idhinisha {month}",
+      "monthTitle": "Idhinisha {month}",
+      "monthAbout": "{count, plural, one {Mtu 1} other {Watu #}} · Jumla {total}",
+      "monthFinal": "Baada ya kuidhinisha, {month} haibadiliki tena.",
+      "action": "Idhinisha",
+      "earlier": "Idhinisha kwanza:",
+      "stillClockedIn": "Bado hajabonyeza Toka leo. Akibonyeza, utaweza kuidhinisha.",
+      "waiting": "{count, plural, one {Amua siku hii kwanza:} other {Amua siku hizi kwanza:}}",
+      "noRate": "{count, plural, one {Siku hii haina malipo kwa siku:} other {Siku hizi hazina malipo kwa siku:}}",
+      "day": "{name} · {weekday} {date}",
+      "laptopQuiet": "{name} haijatuma tangu {date}",
+      "laptopNever": "{name} haijawahi kutuma",
+      "cameUnpaid": "{name} alikuja kazini, lakini hana malipo kwa siku",
+      "leaverTitle": "Idhinisha malipo ya {name}",
+      "leaverAbout": "{month} · Jumla {total}",
+      "leaverFinal": "Baada ya kuidhinisha, malipo yake ya {month} hayabadiliki tena."
+    }
   },
   "attendanceWorker": {
     "title": "Mahudhurio ya mfanyakazi",
@@ -1024,6 +1052,7 @@
     "systemSaid": "Mfumo ulisema: {said}",
     "systemSaidWhy": "Mfumo ulisema: {said} · {why}",
     "yours": "Huwezi kuamua siku zako mwenyewe.",
+    "closed": "Malipo ya mwezi huu yamefungwa, kwa hiyo siku hii haibadiliki tena.",
     "sheetTitle": "Amua siku ya {name}",
     "sheetAbout": "{weekday} {date}",
     "sheetAboutIn": "{weekday} {date} · Ingia {time}",
@@ -1484,7 +1513,8 @@
     "pay_rate": {
       "amount_invalid": "Andika kiasi cha shilingi nzima, zaidi ya sifuri.",
       "amount_too_big": "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
-      "before_first_day": "Malipo hayawezi kuanza kabla ya siku ya kwanza ya kazi ya mfanyakazi huyu."
+      "before_first_day": "Malipo hayawezi kuanza kabla ya siku ya kwanza ya kazi ya mfanyakazi huyu.",
+      "after_last_day": "Malipo hayawezi kuanza baada ya siku ya mwisho ya kazi ya mfanyakazi huyu."
     },
     "day": {
       "own": "Huwezi kuamua siku yako mwenyewe.",
@@ -1515,6 +1545,26 @@
       "not_paid_by_day": "Mfanyakazi huyu halipwi kwa siku.",
       "own": "Huwezi kuandika wala kubatilisha advansi yako mwenyewe.",
       "reason_missing": "Andika sababu."
+    },
+    "pay": {
+      "day_approved": "Malipo ya siku hii yameshafungwa, hayabadiliki tena."
+    },
+    "pay_run": {
+      "already_approved": "Malipo ya mwezi huu yameshaidhinishwa.",
+      "later_month_approved": "Mwezi wa baadaye umeshaidhinishwa, kwa hiyo mwezi huu umefungwa.",
+      "month_not_over": "Mwezi huu haujaisha. Utaidhinishwa ukiisha.",
+      "nobody": "Hakuna mfanyakazi wa kulipwa katika mwezi huu.",
+      "earlier_month_open": "Kuna mwezi wa nyuma ambao haujaidhinishwa. Uidhinishe huo kwanza.",
+      "days_waiting": "Kuna siku zinazosubiri uamuzi. Ziamue kwanza.",
+      "days_without_rate": "Kuna siku zisizo na malipo kwa siku. Weka malipo kwa siku kwanza.",
+      "totals_moved": "Hesabu zimebadilika tangu ulipozisoma. Zisome tena, kisha idhinisha."
+    },
+    "payslip": {
+      "not_left": "Mfanyakazi huyu bado yupo kazini. Malipo yake yataidhinishwa na ya wengine mwezi ukiisha.",
+      "already_approved": "Malipo ya mfanyakazi huyu yameshaidhinishwa.",
+      "nothing": "Mfanyakazi huyu hana malipo katika mwezi huu.",
+      "own": "Huwezi kuidhinisha malipo yako mwenyewe peke yake.",
+      "still_clocked_in": "Mfanyakazi huyu bado hajabonyeza Toka leo."
     },
     "flag": {
       "note_required": "Andika maelezo.",

@@ -14,9 +14,13 @@ fail however they are sent: Django's save(), a bulk update(), or SQL typed by ha
 them as plain SQL or as bulk update() and delete() calls: the paths no Python check sees, so only the
 database can stop them.
 
+Then the rule of a row that changes freely until one of its columns is filled, and then never again
+(FrozenTrigger, WAGE-3): an attendance day, once a payslip paid it (A3).
+
 The tables are test-only (backend/tests/probe/): Entry refuses every change, VoidableEntry allows the
-void stamp once. The shop and the staff member come from backend/conftest.py and are typed as plain
-models: `core` may not name `Shop` or `StaffMember`, not even for types (ADR-0035).
+void stamp once, and Note takes the frozen rule here, inside each test. The shop and the staff member
+come from backend/conftest.py and are typed as plain models: `core` may not name `Shop` or
+`StaffMember`, not even for types (ADR-0035).
 """
 
 import hashlib
@@ -26,15 +30,16 @@ from decimal import Decimal
 
 import pytest
 from django.apps import apps
+from django.core.exceptions import FieldDoesNotExist
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.state import ProjectState
 from django.db.models import Model
 from django.utils import timezone
 
 from apps.core import operations
-from apps.core.operations import AppendOnlyTrigger, VoidStampTrigger
+from apps.core.operations import AppendOnlyTrigger, FrozenTrigger, VoidStampTrigger
 from apps.core.tenancy import shop_context
-from tests.probe.models import Entry, VoidableEntry
+from tests.probe.models import Entry, Note, VoidableEntry
 
 pytestmark = pytest.mark.django_db
 
@@ -178,6 +183,72 @@ def test_void_cannot_change_other_columns(column: str, shop_a: Model, shop_b: Mo
     assert voidable.voided_at is None
 
 
+# The frozen rule's column in these tests: Note's `created_by`, which any table of a shop has, empty or filled.
+FROZEN = FrozenTrigger("note", "created_by")
+
+
+def put_on(operation: AppendOnlyTrigger) -> None:
+    # The rule put on the probe's table the way a migration does. A change to a table sits inside the test's transaction
+    # in PostgreSQL, so the rollback at the test's end takes it off again.
+    state = ProjectState.from_apps(apps)
+    with connection.schema_editor() as editor:
+        operation.database_forwards("probe", editor, state, state)
+
+
+def test_a_row_is_frozen_once_its_column_is_filled(shop_a: Model, staff_a: Model, staff_a2: Model) -> None:
+    put_on(FROZEN)
+    note = Note(shop_id=shop_a.pk, text="15 Nov")
+    note.save()
+    with shop_context(shop_a):
+        rows = Note.objects.filter(pk=note.pk)
+        # Not frozen yet: it changes freely, as often as it is asked, and the column itself is filled once.
+        rows.update(text="16 Nov")
+        rows.update(text="17 Nov", created_by=staff_a)
+        # Frozen: nothing of it changes, the column that froze it neither, emptied or pointed elsewhere; and it stays.
+        for change in ({"text": "18 Nov"}, {"created_by": None}, {"created_by": staff_a2}, {"text": "17 Nov"}):
+            with pytest.raises(IntegrityError, match="frozen, as its created_by_id is filled"), transaction.atomic():
+                rows.update(**change)
+        with pytest.raises(IntegrityError, match="DELETE on probe_note refused"), transaction.atomic():
+            rows.delete()
+    note.refresh_from_db()
+    assert (note.text, note.created_by_id) == ("17 Nov", staff_a.pk)
+
+
+def test_one_frozen_row_freezes_no_other(shop_a: Model, staff_a: Model) -> None:
+    # Juma's day paid, Asha's still open: hers is worked out again as before.
+    put_on(FROZEN)
+    with shop_context(shop_a):
+        Note(shop_id=shop_a.pk, text="Juma", created_by_id=staff_a.pk).save()
+        Note(shop_id=shop_a.pk, text="Asha").save()
+        Note.objects.filter(created_by__isnull=True).update(text="Asha, tena")
+        assert set(Note.objects.values_list("text", flat=True)) == {"Juma", "Asha, tena"}
+
+
+def test_the_frozen_rule_is_removed_when_migrated_back(shop_a: Model, staff_a: Model) -> None:
+    put_on(FROZEN)
+    note = Note(shop_id=shop_a.pk, text="15 Nov", created_by_id=staff_a.pk)
+    note.save()
+    state = ProjectState.from_apps(apps)
+    with connection.schema_editor() as editor:
+        FROZEN.database_backwards("probe", editor, state, state)
+    with shop_context(shop_a):
+        Note.objects.filter(pk=note.pk).update(text="16 Nov")
+    note.refresh_from_db()
+    assert note.text == "16 Nov"
+
+
+def test_a_rule_for_a_column_there_is_not_is_refused() -> None:
+    # A slip of the field's name in a migration stops the migration, never leaves a table unguarded without a word.
+    with pytest.raises(FieldDoesNotExist):
+        put_on(FrozenTrigger("note", "payslp"))
+
+
+def test_the_frozen_step_says_what_it_does() -> None:
+    # What `migrate` prints for the step, and what Django writes again when it squashes migrations.
+    assert FROZEN.describe() == "Frozen trigger on note, once created_by is filled"
+    assert FROZEN.deconstruct() == ("FrozenTrigger", ("note", "created_by"), {})
+
+
 # The fingerprint (SHA-256) of each SQL string the trigger operations run. Change one letter of a
 # string and its fingerprint changes completely, so the test below notices any edit.
 PINNED_SQL = {
@@ -190,6 +261,10 @@ PINNED_SQL = {
     "NO_DELETE_FUNCTION": "73bbabae636007491a8c3699743ebaddd07ac7bb42b42b51cbe1da856da63920",
     "CREATE_NO_DELETE_TRIGGER": "731674a8b287461b7dcb60dc91f7489729de7f04325d7fcc810ee57b9a6bd25a",
     "DROP_NO_DELETE_TRIGGER": "7d427992556072253e007b53965a7a83587b73e1ee3f171af2fbb1148bb36399",
+    # The frozen rule (WAGE-3), pinned from its first commit too.
+    "FROZEN_FUNCTION": "742e5771e5b86f3f6eb8f6500b37b85e7c115f03c480cae31e8f36899e96d33d",
+    "CREATE_FROZEN_TRIGGER": "c1d08fa02bbd31c8568b3508c842c62bbf94fd20358a21856b00b512fbeb9028",
+    "DROP_FROZEN_TRIGGER": "31865397cb41ee79d7b6f50c8229b33fa0cf63c5f3b95c2696db09df79fa1699",
 }
 
 

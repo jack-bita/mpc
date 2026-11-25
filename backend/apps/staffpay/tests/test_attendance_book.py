@@ -6,12 +6,13 @@ rule from that day's taps and that day's rules, and kept (ATT-10; 02 §12).
     Asha   Sun 22 Nov  off           0.00    —      —
 
 First the rules the database keeps on a day (AttendanceDay, apps/staffpay/models.py): one per job and date, a day that
-fits its status, and never a delete. Then the book (work_out_days, apps/staffpay/services.py): which taps a day reads,
-on which date, with which rules, and how a day worked out again is kept. Then the taps in doubt (ATT-11), each sending
-its day to review. Then why a day needs a decision (ATT-5): each day to decide keeps its one reason. Last, each day's
-share of its date's meal money (WAGE-7). What a day was, from its taps, is the rule's, in test_attendance_day.py; who
-shares the meals, and how much each, the sum's, in test_meal_share.py. Times are Arusha's, three hours ahead of UTC.
-The fines are the demo's made-up 500 and 1,500 (rule 10). Fake data only: the repo is public.
+fits its status, and never a delete. Then the book (work_out_days, apps/staffpay/services/book.py): which taps a day
+reads, on which date, with which rules, and how a day worked out again is kept. Then the taps in doubt (ATT-11), each
+sending its day to review. Then why a day needs a decision (ATT-5): each day to decide keeps its one reason. Then each
+day's share of its date's meal money (WAGE-7). Last, a day a payslip paid, which stays as it was (WAGE-3). What a day
+was, from its taps, is the rule's, in test_attendance_day.py; who shares the meals, and how much each, the sum's, in
+test_meal_share.py. Times are Arusha's, three hours ahead of UTC. The fines are the demo's made-up 500 and 1,500 (rule
+10). Fake data only: the repo is public.
 """
 
 import datetime as dt
@@ -46,6 +47,7 @@ from apps.staffpay.models import (
     DayStatus,
     MealMoney,
     PayRate,
+    Payslip,
     ReviewReason,
     TimeCheck,
 )
@@ -1583,3 +1585,169 @@ def test_another_shops_money_is_never_shared_here(
         days = {day.staff_id: day for day in work_out_days(shop_a, MONDAY, MONDAY)}
     assert days[asha.pk].meal_share == Decimal("1000.00")
     assert staff_b.pk not in days
+
+
+# A day a payslip paid (WAGE-3): answered as it was kept, whatever came since, and never written (A3).
+
+
+def pay(day: AttendanceDay, by: StaffMember) -> None:
+    # The day marked as paid, as the approval marks it, by its job's payslip of the month (approve_month). Marked past
+    # the service, which asks much more: these tests read what the book makes of a day that is marked.
+    with shop_context(day.shop_id):
+        slip = Payslip(
+            shop_id=day.shop_id,
+            staff=day.staff,
+            month=day.date.replace(day=1),
+            total=Decimal("10000.00"),
+            created_by=by,
+        )
+        slip.save()
+        AttendanceDay.objects.filter(pk=day.pk).update(payslip=slip)
+
+
+def cross_out(tap_made: AttendanceEvent, by: StaffMember) -> None:
+    # A tap crossed out past the service, as a fix a moment before the approval might be read late.
+    with shop_context(tap_made.shop_id):
+        AttendanceEvent.objects.filter(pk=tap_made.pk).update(
+            voided_at=timezone.now(), voided_by=by, void_reason="Kwa makosa"
+        )
+
+
+def test_a_paid_day_stays_as_it_was_paid(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
+    # Juma came on time on Monday and was paid for it. Both his taps are crossed out since: worked out now, he would be
+    # absent. The book answers what was paid, and writes nothing; Asha's same Monday, not paid, follows her taps as
+    # ever.
+    both = [
+        (staff, kind, at(MONDAY, *when))
+        for staff in (juma, asha)
+        for kind, when in ((ClockKind.IN, (7, 20)), (ClockKind.OUT, (18, 45)))
+    ]
+    made = [tap(device_a, staff, kind, moment) for staff, kind, moment in both]
+    pay(_days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)], asha)
+    for each in made:
+        cross_out(each, asha)
+    with shop_context(shop_a):
+        before = EditEvent.objects.filter(subject_type="attendance_day").count()
+    days = _days(shop_a, MONDAY, MONDAY)
+    assert (days[("Juma", MONDAY)].status, days[("Asha", MONDAY)].status) == (DayStatus.ON_TIME, DayStatus.ABSENT)
+    assert (days[("Juma", MONDAY)].first_in, days[("Juma", MONDAY)].first_out) == (dt.time(7, 20), dt.time(18, 45))
+    with shop_context(shop_a):
+        # One line more in the history: Asha's Monday.
+        assert EditEvent.objects.filter(subject_type="attendance_day").count() == before + 1
+
+
+def test_a_tap_that_comes_after_a_day_was_paid_moves_nothing(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Juma was paid as absent on Monday; an old laptop then sends his taps of it. They are kept, as sync never refuses a
+    # tap, and the day stays what he was paid: a mistake is an adjustment in a later month (A3, WAGE-9).
+    pay(_days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)], asha)
+    came(device_a, juma)
+    assert _days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)].status == DayStatus.ABSENT
+    with shop_context(shop_a):
+        assert AttendanceEvent.objects.filter(staff=juma).count() == 2
+
+
+def test_a_paid_day_is_answered_though_its_job_no_longer_runs_on_it(
+    shop_a: Shop, device_a: Device, attendance_on: None
+) -> None:
+    # Neema was paid for Monday 9 and Tuesday 10. Then her first day is moved to Thursday 12, and she is marked as gone:
+    # both days would fall outside her job, one to review and one nobody's. They were paid, so they stay, in their place
+    # among the others' days, by date and then by job.
+    neema = _worker(shop_a, "Neema", started_on=NOV_9)
+    zawadi = _worker(shop_a, "Zawadi", started_on=NOV_9)
+    _came(device_a, neema, NOV_10)
+    kept = _days(shop_a, NOV_9, NOV_10)
+    with shop_context(shop_a):
+        slip = Payslip(
+            shop=shop_a, staff=neema, month=NOV_9.replace(day=1), total=Decimal("10000.00"), created_by=zawadi
+        )
+        slip.save()
+        AttendanceDay.objects.filter(staff=neema).update(payslip=slip)
+        neema = change_worker(neema, version=neema.version, reason="Alianza Alhamisi", by=None, started_on=NOV_12)
+        mark_left(neema, left_on=NOV_12, by=None, reason="Amehama")
+        again = [(day.date, day.staff_id, day.status) for day in work_out_days(shop_a, NOV_9, NOV_10)]
+    assert again == [
+        (NOV_9, neema.pk, DayStatus.ABSENT),
+        (NOV_9, zawadi.pk, DayStatus.ABSENT),
+        (NOV_10, neema.pk, DayStatus.ON_TIME),
+        (NOV_10, zawadi.pk, DayStatus.ABSENT),
+    ]
+    assert kept[("Neema", NOV_10)].status == DayStatus.ON_TIME
+
+
+def test_a_paid_ones_share_stays_and_counts_among_the_others(
+    shop_a: Shop,
+    device_a: Device,
+    asha: StaffMember,
+    juma: StaffMember,
+    give_role: Callable[[StaffMember, RoleTemplate, Side | None], None],
+) -> None:
+    # Monday's 3,000. Asha and Juma came, 1,500 each, and Salim's day waits. Juma leaves and is paid, 1,500 taken. Then
+    # Baba decides that Salim came too: three ate, so 1,000 each for Asha and Salim; Juma's stays 1,500, as he paid it.
+    baba = _worker(shop_a, "Baba")
+    give_role(baba, RoleTemplate.OWNER, None)
+    salim = _worker(shop_a, "Salim")
+    for each in (asha, juma, salim):
+        rate(each)
+    came(device_a, asha)
+    came(device_a, juma)
+    tap(device_a, salim, ClockKind.IN, at(MONDAY, 7, 20))
+    meal(shop_a, "3000.00", baba)
+    days = _days(shop_a, MONDAY, MONDAY)
+    assert days[("Juma", MONDAY)].meal_share == Decimal("1500.00")
+    pay(days[("Juma", MONDAY)], baba)
+    with shop_context(shop_a):
+        decide_day(days[("Salim", MONDAY)], choice=DayChoice.ON_TIME, reason="Alisahau Toka", replaces=None, by=baba)
+    days = _days(shop_a, MONDAY, MONDAY)
+    assert {name: days[(name, MONDAY)].meal_share for name in ("Asha", "Juma", "Salim")} == {
+        "Asha": Decimal("1000.00"),
+        "Juma": Decimal("1500.00"),
+        "Salim": Decimal("1000.00"),
+    }
+    with shop_context(shop_a):
+        assert AttendanceDay.objects.get(staff=juma, date=MONDAY).meal_share == Decimal("1500.00")
+
+
+def test_a_paid_one_still_ate_though_their_taps_are_crossed_out(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Juma's share was 1,500 and is paid. His taps crossed out since never make Asha pay the whole 3,000.
+    for each in (asha, juma):
+        rate(each)
+    came(device_a, asha)
+    came_in = tap(device_a, juma, ClockKind.IN, at(MONDAY, 7, 20))
+    went_out = tap(device_a, juma, ClockKind.OUT, at(MONDAY, 18, 45))
+    meal(shop_a, "3000.00", asha)
+    pay(_days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)], asha)
+    for each_tap in (came_in, went_out):
+        cross_out(each_tap, asha)
+    days = _days(shop_a, MONDAY, MONDAY)
+    assert (days[("Asha", MONDAY)].meal_share, days[("Juma", MONDAY)].meal_share) == (
+        Decimal("1500.00"),
+        Decimal("1500.00"),
+    )
+
+
+def test_money_moved_after_a_day_was_paid_moves_only_the_others(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # One who left alone doesn't lock the shop's meal money: 1,000 more is typed for Monday, 4,000 among two. Asha's
+    # share follows it; Juma's, paid, doesn't. And asked again, the book writes nothing.
+    for each in (asha, juma):
+        rate(each)
+        came(device_a, each)
+    meal(shop_a, "3000.00", asha)
+    pay(_days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)], asha)
+    meal(shop_a, "1000.00", asha)
+    days = _days(shop_a, MONDAY, MONDAY)
+    assert (days[("Asha", MONDAY)].meal_share, days[("Juma", MONDAY)].meal_share) == (
+        Decimal("2000.00"),
+        Decimal("1500.00"),
+    )
+    with shop_context(shop_a):
+        before = EditEvent.objects.count()
+        with CaptureQueriesContext(connection) as queries:
+            work_out_days(shop_a, MONDAY, MONDAY)
+        assert EditEvent.objects.count() == before
+    assert not [query for query in queries if query["sql"].startswith("UPDATE")]

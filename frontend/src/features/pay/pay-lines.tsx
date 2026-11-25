@@ -7,20 +7,26 @@
 //   Chakula          siku 16        − 16,000
 //   Leo: siku kamili                  10,000
 //   Advansi                         − 40,000
+//   Deni la Oktoba                  − 18,000
 //   ------------------------------------------
 //   Jumla ya kumlipa leo         TSh 102,000
 //   ! Siku 1 inasubiri uamuzi
 //
 // On the worker's pay page (worker-pay-screen.tsx) and in the card of their own page (worker-month-pay.tsx), so both show
 // the same. Today's lines, once they tapped Toka, are apart, as today isn't over: its meals are split so far (Jack: A).
-// Then what they were given before payday (WAGE-8), today's with it, just above the total. Every amount is the server's;
-// the page multiplies and adds up nothing.
+// Then what they were given before payday (WAGE-8), today's with it, and what an earlier month's pay left owed (WAGE-3),
+// just above the total. A total below 0 pays nothing, and the page says what is owed (Jack: A). Every amount is the
+// server's; the page multiplies and adds up nothing. Once a payslip keeps the pay, these are its lines as they were kept.
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
 
 import { useTranslations } from "use-intl";
 
+import {
+  monthOf,
+  type MonthNumber,
+} from "@/features/attendance/attendance-month";
 import { Decimal } from "@/lib/decimal";
 import { formatAmount, formatMoney } from "@/lib/format";
 
@@ -39,6 +45,7 @@ export function PayLines({
   worker: WorkerPay;
 }) {
   const t = useTranslations("pay");
+  const monthWords = useTranslations("attendanceMonth");
   const { pay, today } = worker;
   const plus = (amount: string) => formatAmount(new Decimal(amount));
   // Money taken off, with its minus: "− 2,000".
@@ -87,14 +94,26 @@ export function PayLines({
       many: "",
       amount: less(today.meals),
     });
-  // The last line before the total, as the money was given, and is no part of a day (WAGE-8). "0" as text: the shared
-  // Decimal refuses a plain number (rule 3).
+  // After the days, as the money was given, and is no part of a day (WAGE-8). "0" as text: the shared Decimal refuses a
+  // plain number (rule 3).
   if (new Decimal(pay.advances).gt("0"))
     rows.push({
       key: "advances",
       what: t("advances"),
       many: "",
       amount: less(pay.advances),
+    });
+  // The last line before the total: what an earlier month's pay left owed, with its month (WAGE-3, Jack: A).
+  if (worker.carried_from !== null)
+    rows.push({
+      key: "carried",
+      what: t("carried", {
+        month: monthWords(
+          `monthNames.${worker.carried_from.slice(5) as MonthNumber}`,
+        ),
+      }),
+      many: "",
+      amount: less(pay.carried),
     });
 
   return (
@@ -125,8 +144,12 @@ export function PayLines({
               colSpan={2}
               className="pt-2 text-left font-semibold"
             >
-              {/* Today, what Baba hands over; of a month gone by, what it came to. */}
-              {t(isThisMonth(answer) ? "totalToday" : "totalMonth")}
+              {/* Today, what Baba hands over; of a month gone by, or once it is approved, what it came to. */}
+              {t(
+                isThisMonth(answer) && worker.approval === null
+                  ? "totalToday"
+                  : "totalMonth",
+              )}
             </th>
             <td className="pt-2 text-right font-semibold whitespace-nowrap">
               {formatMoney(new Decimal(worker.total))}
@@ -135,7 +158,30 @@ export function PayLines({
         </tfoot>
       </table>
       <NotPaid worker={worker} />
+      <Owes answer={answer} worker={worker} />
       <Left worker={worker} />
     </div>
+  );
+}
+
+/** "Analipwa 0. Anadaiwa TSh 18,000…", of a total below 0 of a month that is over (Jack: A): nothing is handed over, and
+ * their next pay takes it off; or, of one who left by its end, with no pay to come, stays owed. Once approved, what it
+ * was: "Alilipwa 0. Alibaki anadaiwa TSh 18,000.", as a payslip is read for ever, long after the next one took it.
+ * Nothing on a month still running, whose days still come. */
+function Owes({ answer, worker }: { answer: Counted; worker: WorkerPay }) {
+  const t = useTranslations("pay");
+  const total = new Decimal(worker.total);
+  if (!total.lt("0") || (isThisMonth(answer) && worker.approval === null))
+    return null;
+  // Days as text sort as days do, and so do months.
+  const goneByItsEnd =
+    worker.left_on !== null && monthOf(worker.left_on) <= answer.month;
+  return (
+    <p>
+      {t(
+        worker.approval !== null ? "owed" : goneByItsEnd ? "owesLeft" : "owes",
+        { amount: formatMoney(total.abs()) },
+      )}
+    </p>
   );
 }

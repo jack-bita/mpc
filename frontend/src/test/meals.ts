@@ -69,6 +69,7 @@ export function mealDays(
     total: "0.00",
     days,
     ready_void_reasons: [],
+    closed_to: null,
     ...fields,
   };
 }

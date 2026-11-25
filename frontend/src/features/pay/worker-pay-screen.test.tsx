@@ -297,6 +297,106 @@ describe("a worker's pay", () => {
     expect(screen.queryByText(/uamuzi|malipo kwa siku|Aliondoka/)).toBeNull();
   });
 
+  it("takes off what an earlier month left owed, under what was given, with its month", async () => {
+    jumaIsPaid({
+      pay: pay({
+        advances: "20000.00",
+        carried: "18000.00",
+        total: "94000.00",
+      }),
+      carried_from: "2026-10",
+      total: "94000.00",
+    });
+
+    open();
+
+    expect((await lines()).slice(-3)).toEqual([
+      "Advansi | − 20,000",
+      "Deni la Oktoba | − 18,000",
+      "Jumla ya kumlipa leo | TSh 94,000",
+    ]);
+  });
+
+  it.each([
+    // A month gone by, still open; of one who left in it, whose debt no pay to come takes; and of one who left in the
+    // month after, whose next pay takes it.
+    [
+      { today: "2026-12-01" },
+      {},
+      "Analipwa 0. Anadaiwa TSh 18,000, zitakatwa kwenye malipo yake yajayo.",
+    ],
+    [
+      { today: "2026-12-01" },
+      { left_on: "2026-11-30" },
+      "Analipwa 0. Anadaiwa TSh 18,000.",
+    ],
+    [
+      { today: "2026-12-10" },
+      { left_on: "2026-12-01" },
+      "Analipwa 0. Anadaiwa TSh 18,000, zitakatwa kwenye malipo yake yajayo.",
+    ],
+    // Approved, and approved alone this very month: what it was, true however long after it is read.
+    [
+      { today: "2026-12-01" },
+      { approval: { by: "Baba", at: "2026-12-01T16:05:00Z" } },
+      "Alilipwa 0. Alibaki anadaiwa TSh 18,000.",
+    ],
+    [
+      {},
+      {
+        approval: { by: "Baba", at: "2026-11-25T09:00:00Z" },
+        left_on: "2026-11-25",
+      },
+      "Alilipwa 0. Alibaki anadaiwa TSh 18,000.",
+    ],
+  ])(
+    "says what a total below 0 pays and leaves owed: %j %j",
+    async (month, worker, said) => {
+      jumaIsPaid(
+        { pay: pay({ total: "-18000.00" }), total: "-18000.00", ...worker },
+        month,
+      );
+
+      open();
+
+      await lines();
+      expect(
+        screen.getByText(
+          (_, part) =>
+            part?.tagName === "P" &&
+            (part.textContent ?? "").replace(/\u00a0/g, " ") === said,
+        ),
+      ).toBeTruthy();
+    },
+  );
+
+  it("says nothing of a debt while the month runs, nor of a total of 0 or more", async () => {
+    jumaIsPaid({ pay: pay({ total: "-18000.00" }), total: "-18000.00" });
+    const { unmount } = open();
+    await lines();
+    expect(screen.queryByText(/lipwa 0/)).toBeNull();
+    unmount();
+
+    jumaIsPaid({ total: "0.00" }, { today: "2026-12-01" });
+    open();
+    await lines();
+    expect(screen.queryByText(/lipwa 0/)).toBeNull();
+  });
+
+  it("says who approved the month, and calls its total the month's", async () => {
+    jumaIsPaid(
+      { approval: { by: "Baba", at: "2026-12-01T16:05:00Z" } },
+      { today: "2026-12-01", counted_to: "2026-11-30" },
+    );
+
+    open();
+
+    expect((await lines()).at(-1)).toBe("Jumla ya mwezi | TSh 132,000");
+    expect(
+      screen.getByText("Imeidhinishwa na Baba · 01/12/2026 19:05 usiku"),
+    ).toBeTruthy();
+  });
+
   it("shows a total below 0 with its minus", async () => {
     jumaIsPaid({ pay: NO_PAY, total: "-1500.00" });
 

@@ -5,7 +5,7 @@ a day's own copy for a day decided late (ATT-6).
     on 1 Dec:  late_fine 500.00, closing 18:40    so 30 Nov keeps its rules, and 1 Dec gets the new one
 
 A day is judged by the rules of its own date (A1): each of the nine is a dated setting of the whole shop (02 §12), read
-as get_setting answers it on that date. The book of days (apps/staffpay/services.py) reads a span's in one go
+as get_setting answers it on that date. The book of days (apps/staffpay/services/book.py) reads a span's in one go
 (day_rules_between), hands each day's to the day's rule (work_out_day), and keeps a copy of them with the day (T4), as
 text.
 
@@ -20,16 +20,26 @@ And each date's meal money (meal_money_by_date, WAGE-7), the sum of what was typ
 And what each job was given before payday over a span (advances_between, WAGE-8), the same way:
 
     Juma  10 Nov 20,000   16 Nov 30,000, and 300,000 crossed out      so November: 50,000
+
+And the laptops that have sent nothing since a moment (quiet_laptops, WAGE-3), as taps of the month may still be inside:
+
+    Laptop ya Vyakula, last sent on 28 Nov, asked on 1 Dec of November's end
+
+And whether the pay of a day is approved (is_closed, WAGE-3), so nothing it is made of may change any more:
+
+    November approved:   30 Nov and every day before it, for everyone        Neema approved alone: her days alone
 """
 
 import uuid
+from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Sum
+from django.db.models import Max, Q, Sum
 
 from apps.core.settings_registry import (
     AFTERNOON_FROM,
@@ -44,10 +54,11 @@ from apps.core.settings_registry import (
     SettingKey,
 )
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
+from apps.people.models import Device, DeviceStatus
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_settings_between
 from apps.staffpay.calculations import DayRules
-from apps.staffpay.models import Advance, MealMoney, PayRate
+from apps.staffpay.models import Advance, MealMoney, PayRate, PayRun, Payslip
 
 # Each part of a day's rules, by its name in DayRules, and the setting it is read from: one list, so the rules read and
 # the copy a day keeps always name the same nine, and a rule added to DayRules without its setting fails at once
@@ -171,6 +182,25 @@ def meal_money_by_date(shop: Shop, first: date, last: date) -> dict[date, Decima
     )
 
 
+def advances_by_job(shop: Shop, first: date, last: date) -> dict[uuid.UUID, list[tuple[date, Decimal]]]:
+    """Each advance that counts from `first` to `last`, both counted, by the job it was given to, in the order they were
+    given: its day and its amount (WAGE-3). What a payslip copies line by line, where advances_between sums them."""
+    # The same check as the sum's, for the same reason (ADR-0022): a payslip with no advance on it would pay the worker
+    # money they already have, without a word.
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("advances_by_job was given a shop that is not the one open.")
+    given: dict[uuid.UUID, list[tuple[date, Decimal]]] = defaultdict(list)
+    for staff_id, day, amount in (
+        Advance.objects.filter(shop=shop, date__range=(first, last), voided_at__isnull=True)
+        # By their day, then as they were typed; the id last, for two typed at the very same moment.
+        .order_by("date", "created_at", "id")
+        .values_list("staff_id", "date", "amount")
+    ):
+        given[staff_id].append((day, amount))
+    return given
+
+
 def advances_between(shop: Shop, first: date, last: date) -> dict[uuid.UUID, Decimal]:
     """What each job was given before payday from `first` to `last`, both counted: {job id: the sum of its advances not
     voided} (WAGE-8, 02 §12). A job given none, or whose every one is crossed out, has no key. One read for the span,
@@ -190,3 +220,77 @@ def advances_between(shop: Shop, first: date, last: date) -> dict[uuid.UUID, Dec
         .annotate(total=Sum("amount"))
         .values_list("staff_id", "total")
     )
+
+
+def is_closed(shop: Shop, day: date, job: uuid.UUID | None = None) -> bool:
+    """Whether the pay of `day` is approved (WAGE-3, A3), so nothing it is made of may be added, decided or crossed out
+    any more: its month is approved, or a later one, as months are approved in order, so whatever an earlier month holds
+    would be on nobody's pay; or, for a job, its own pay up to then is, approved alone as it left. With no job: the
+    shop's own, its meal money, which one worker approved alone doesn't lock. Asked under the lock the approval takes
+    (lock_jobs), or the job's own row: before it, an approval a moment later would not be seen."""
+    # The same checks as the other reads', for the same reasons (ADR-0022): asked inside another shop's visit, the guard
+    # would hide the approval, and a closed month would take a change without a word.
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("is_closed was given a shop that is not the one open.")
+    if isinstance(day, datetime):
+        raise TypeError("is_closed needs the shop's business date, not a datetime.")
+    month = day.replace(day=1)
+    if PayRun.objects.filter(shop=shop, month__gte=month).exists():
+        return True
+    return job is not None and Payslip.objects.filter(shop=shop, staff_id=job, month__gte=month).exists()
+
+
+def closed_to(shop: Shop) -> date | None:
+    """The last day of the last month approved, or None while none is (WAGE-3): up to it, the shop's own pay is closed
+    (is_closed), so the meal money's page offers no change of those days."""
+    month = PayRun.objects.filter(shop=shop).aggregate(last=Max("month"))["last"]
+    return None if month is None else _months_end(month)
+
+
+@dataclass(frozen=True)
+class ClosedPay:
+    # What of the shop's pay is approved, read once for a page of many days (is_closed asks of one): up to `to`, the
+    # last day of the last month approved, for everyone; and each job approved alone, up to the last day of its month.
+    to: date | None
+    alone: dict[uuid.UUID, date]
+
+    def holds(self, job: uuid.UUID, day: date) -> bool:
+        return (self.to is not None and day <= self.to) or day <= self.alone.get(job, date.min)
+
+
+def closed_pay(shop: Shop) -> ClosedPay:
+    """What of the shop's pay is approved (WAGE-3), in two reads: the last month approved for everyone, and the last one
+    each job was approved alone in. The same rule as is_closed, for a page that asks it of every day it shows."""
+    alone = (
+        Payslip.objects.filter(shop=shop, pay_run__isnull=True)
+        .order_by()
+        .values("staff_id")
+        .annotate(last=Max("month"))
+        .values_list("staff_id", "last")
+    )
+    return ClosedPay(to=closed_to(shop), alone={job: _months_end(month) for job, month in alone})
+
+
+def _months_end(month: date) -> date:
+    return month.replace(day=monthrange(month.year, month.month)[1])
+
+
+@dataclass(frozen=True)
+class QuietLaptop:
+    # A laptop that has sent nothing since a moment, by its name, and when it last did, or None for one that never has.
+    name: str
+    last_synced_at: datetime | None
+
+
+def quiet_laptops(shop: Shop, since: datetime) -> list[QuietLaptop]:
+    """The shop's active laptops that have sent nothing since `since`, by name (WAGE-3): with no internet since the
+    28th, Laptop ya Vyakula may hold taps of the month that nobody has seen. Not a blocked one, whose records come only
+    by a person's doing; nor one paired after `since`, which can hold nothing from before it."""
+    rows = (
+        Device.objects.filter(shop=shop, status=DeviceStatus.ACTIVE, created_at__lt=since)
+        .filter(Q(last_synced_at__isnull=True) | Q(last_synced_at__lt=since))
+        .order_by("name", "pk")
+        .values_list("name", "last_synced_at")
+    )
+    return [QuietLaptop(name, last_synced_at) for name, last_synced_at in rows]

@@ -288,6 +288,45 @@ describe("Badilisha malipo", () => {
     expect(box("Kuanzia").value).toBe("2026-11-25");
   });
 
+  it("starts one who left on their first day, and takes no day after their last (WAGE-3's review)", async () => {
+    // Juma came on the 16th and the 17th, his rate was typed from the 17th, and he left on the 18th: what he lacks is
+    // the 16th's, which holds his approval.
+    const gone = worker({
+      started_on: "2026-11-16",
+      status: "left",
+      left_on: "2026-11-18",
+    });
+    const rate = payRate({ staff: gone.id, effective_from: "2026-11-17" });
+    answer("GET", ME, { status: 200, body: BABA });
+    answer("GET", `${STAFF}${gone.id}/`, { status: 200, body: gone });
+    notPaidByDay(gone.id);
+    answer("GET", PAY_RATES_ROUTE, {
+      status: 200,
+      body: payRates([rate], rate),
+    });
+
+    render(<WorkerScreen id={gone.id} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Badilisha malipo" }),
+    );
+    await screen.findByRole("dialog", { name: "Malipo mapya ya Juma" });
+
+    expect(box("Kuanzia").value).toBe("2026-11-16");
+    expect([box("Kuanzia").min, box("Kuanzia").max]).toEqual([
+      "2026-11-16",
+      "2026-11-18",
+    ]);
+    typeInto(box("Kuanzia"), "2026-11-19");
+    fireEvent.click(sheetButton("Hifadhi malipo"));
+    expect(errorOf(box("Kuanzia"))).toBe(sentence("pay_rate.after_last_day"));
+    expect(await posted()).toEqual([]);
+
+    // Their last day itself is one of theirs.
+    typeInto(box("Kuanzia"), "2026-11-18");
+    fireEvent.click(sheetButton("Hifadhi malipo"));
+    await waitFor(async () => expect(await posted()).toHaveLength(1));
+  });
+
   it("asks about the meals again for each rate", async () => {
     const rate = payRate({ staff: JUMA.id });
     theServerHas(payRates([rate], rate));
@@ -364,6 +403,25 @@ describe("the server's refusals", () => {
         "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
       ),
     );
+  });
+
+  it("shows beside its box that a day's pay is approved (WAGE-3)", async () => {
+    theServerHas(payRates([], null));
+    answer(
+      "POST",
+      PAY_RATES_ROUTE,
+      refusal(400, "invalid", {}, { effective_from: ["pay.day_approved"] }),
+    );
+    await openTheForm("Weka malipo");
+
+    typeInto(box("Kiasi kwa siku"), "10000");
+    fireEvent.click(sheetButton("Hifadhi malipo"));
+
+    await waitFor(() =>
+      expect(errorOf(box("Kuanzia"))).toBe(sentence("pay.day_approved")),
+    );
+    // The form stays, so a day still open can be picked.
+    expect(box("Kiasi kwa siku").value).toBe("10000");
   });
 
   it("shows a box's refusal beside it, as the demo's note", async () => {

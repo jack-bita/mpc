@@ -31,6 +31,16 @@ export function payRate(fields: Partial<PayRate> = {}): PayRate {
 }
 
 /** The route's answer: `rates` newest first, as the server sends them, and the one in force today. */
-export function payRates(rates: PayRate[], inForce: PayRate | null): PayRates {
-  return { today: TODAY, in_force: inForce?.id ?? null, rates };
+export function payRates(
+  rates: PayRate[],
+  inForce: PayRate | null,
+  fields: Partial<PayRates> = {},
+): PayRates {
+  return {
+    today: TODAY,
+    in_force: inForce?.id ?? null,
+    closed: false,
+    rates,
+    ...fields,
+  };
 }
