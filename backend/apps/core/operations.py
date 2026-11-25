@@ -2,12 +2,12 @@
 that may change no more (A3).
 
 A ledger keeps history (T2). The ledgers are listed in 03 §5.6: stock movements, balance entries,
-allocations, payments, money movements, meal money, advances, attendance events, audit events, a flag's notes
-and the people it names, the change log, and the dated rules (prices, product costs, settings, pay rates). Their
-rows are written once and never changed or deleted; a mistake is fixed with a new row. The services only ever
-insert, but a bug, a bulk update() or SQL typed by hand would go straight past them. So each ledger's
-migration puts a trigger on its table: a rule stored in PostgreSQL that runs before every change, however
-it is sent, and refuses it.
+allocations, payments, money movements, meal money, advances, pay runs, payslips and their lines,
+attendance events, audit events, a flag's notes and the people it names, the change log, and the dated
+rules (prices, product costs, settings, pay rates). Their rows are written once and never changed or
+deleted; a mistake is fixed with a new row. The services only ever insert, but a bug, a bulk update() or
+SQL typed by hand would go straight past them. So each ledger's migration puts a trigger on its table: a
+rule stored in PostgreSQL that runs before every change, however it is sent, and refuses it.
 The database is the last line of defence (03 §5.6).
 
 Four rules, one operation each. AppendOnlyTrigger refuses every UPDATE and DELETE. VoidStampTrigger is
