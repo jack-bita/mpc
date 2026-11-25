@@ -70,6 +70,14 @@ def test_a_decision_says_who_came(status: DayStatus, decided: DayStatus, part: M
     assert meal_part(status, decided, shares_meals=True) == part
 
 
+@pytest.mark.parametrize("decided", [DayStatus.ON_TIME, DayStatus.LATE, DayStatus.HALF, DayStatus.ABSENT])
+def test_a_day_the_shop_was_shut_shares_nothing_whatever_was_decided(decided: DayStatus) -> None:
+    # Juma tapped on the Friday of a funeral, so his day waited and Baba decided it; then the tap, a mistake, was
+    # crossed out, and the day is off, its decision kept beside it (A2). An off day is nobody's to count, as on his
+    # month's line, and the table refuses it a share (WAGE-7's review).
+    assert meal_part(DayStatus.OFF, decided, shares_meals=True) == MealPart.NONE
+
+
 @pytest.mark.parametrize("shares_meals", [False, None])
 @pytest.mark.parametrize("status", list(DayStatus))
 def test_the_cook_and_one_with_no_rate_share_nothing(status: DayStatus, shares_meals: bool | None) -> None:

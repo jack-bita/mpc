@@ -1405,6 +1405,41 @@ def test_money_on_a_day_the_shop_was_shut_is_nobodys(shop_a: Shop, device_a: Dev
     assert {days[("Asha", day)].meal_share for day in (FRIDAY, SUNDAY)} == {Decimal("0.00")}
 
 
+def test_a_decided_closed_day_whose_tap_is_crossed_out_shares_nothing(
+    shop_a: Shop,
+    device_a: Device,
+    asha: StaffMember,
+    juma: StaffMember,
+    give_role: Callable[[StaffMember, RoleTemplate, Side | None], None],
+) -> None:
+    # Friday's funeral: the shop was closed, but Juma had tapped Ingia, so his day waited, and Baba decided it half a
+    # day; Asha's too, who stayed half a day. Then Juma's tap turns out a mistake and is crossed out: his day is off,
+    # with the decision still beside it (A2). Friday's 1,000 for breakfast is Asha's alone, and the month still opens:
+    # given a share, his off day would be refused by the table, and every page of the month with it (WAGE-7's review).
+    baba = _worker(shop_a, "Baba")
+    give_role(baba, RoleTemplate.OWNER, None)
+    rate(asha)
+    rate(juma)
+    _closure(shop_a, FRIDAY, FRIDAY)
+    tap(device_a, asha, ClockKind.IN, at(FRIDAY, 7, 20))
+    mistake = tap(device_a, juma, ClockKind.IN, at(FRIDAY, 7, 20))
+    days = _days(shop_a, FRIDAY, FRIDAY)
+    with shop_context(shop_a):
+        for name in ("Asha", "Juma"):
+            decide_day(days[(name, FRIDAY)], choice=DayChoice.HALF, reason="Msiba", replaces=None, by=baba)
+        AttendanceEvent.objects.filter(pk=mistake.pk).update(
+            voided_at=timezone.now(), voided_by=baba, void_reason="Alibonyeza kwa makosa"
+        )
+    meal(shop_a, "1000.00", baba, FRIDAY)
+
+    days = _days(shop_a, FRIDAY, FRIDAY)
+
+    juma_friday = days[("Juma", FRIDAY)]
+    assert (juma_friday.status, juma_friday.decided_status) == (DayStatus.OFF, DayStatus.HALF)
+    assert juma_friday.meal_share == Decimal("0.00")
+    assert days[("Asha", FRIDAY)].meal_share == Decimal("1000.00")
+
+
 def test_meal_money_worked_out_twice_is_written_once(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
     # As for the rest of a day: a month asked for again, with nothing changed, writes nothing.
     rate(asha)

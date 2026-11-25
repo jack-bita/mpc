@@ -458,9 +458,9 @@ class AttendanceDay(ShopScoped):
                 name="staffpay_attendanceday_rules_kept_unless_off",
             ),
             # A share is never below 0, which would pay a worker for eating, and never on an off day, which is nobody's
-            # (WAGE-7). No more than that: who shares reads the decision where there is one (meal_part,
-            # apps/staffpay/calculations.py), and a decision is written a moment before the book's next working out
-            # moves the share (decide_day), so a rule tying the two would refuse a manager's decision.
+            # (WAGE-7), whatever was decided on it. No more than that: who shares reads the decision where there is one
+            # (meal_part, apps/staffpay/calculations.py), and a decision is written a moment before the book's next
+            # working out moves the share (decide_day), so a rule tying the two would refuse a manager's decision.
             models.CheckConstraint(
                 condition=models.Q(meal_share=0) | (models.Q(meal_share__gt=0) & ~models.Q(status=DayStatus.OFF)),
                 name="staffpay_attendanceday_meal_share",

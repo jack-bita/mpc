@@ -321,13 +321,21 @@ CAME = (DayStatus.ON_TIME, DayStatus.LATE, DayStatus.HALF)
 
 
 def meal_part(status: str, decided_status: str, *, shares_meals: bool | None) -> MealPart:
-    """What one worker's day is to its date's meal money: by the decision where there is one, else by the book (A2).
+    """What one worker's day is to its date's meal money: by the decision where there is one, else by the book (A2); an
+    off day is nobody's, decided or not.
     `status`: what the book worked out. `decided_status`: what a person decided, "" for none (ATT-6). `shares_meals`: as
     the pay rate in force that day says it, or None with no rate that day."""
     # The cook, whose rate says they share no meals (WAGE-1), and whoever has no rate that day: the owner, who is never
     # paid by the day, or a worker whose rate was typed from a later one. First, so neither ever waits: deciding their
     # day would move nobody's share.
     if not shares_meals:
+        return MealPart.NONE
+    # A day the shop was shut, a Sunday or a closed day nobody tapped on, is nobody's, whatever was decided on it: a tap
+    # on a closed day sent it to a person (ATT-10), who decided it, and the tap was then crossed out, so the day is off
+    # again with its decision kept beside it (A2). Before the decision, as the month's line counts no off day either
+    # (attendance_month); and the table refuses an off day a share, which would stop every page of the month from
+    # opening (WAGE-7's review).
+    if status == DayStatus.OFF:
         return MealPart.NONE
     # Office duty is kept as an absence with its kind (DECISION_OF, ATT-6), so it shares nothing here by itself: paid as
     # a full day, but they ate away (Jack: A, 24 Nov 2026). Permission and a no-show the same.
