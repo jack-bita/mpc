@@ -218,6 +218,44 @@ describe("the month's meal money", () => {
     ]);
   });
 
+  it("never calls a day nobody came forgotten, its one row crossed out", async () => {
+    // 7,000 typed on a Friday when nobody came, and crossed out: the day is still listed, for its row to be seen (A2),
+    // but nobody forgot anything. A day someone came, or may have, is forgotten (WAGE-7's review).
+    const slip = row({
+      date: "2026-11-20",
+      voided: {
+        by: "Baba",
+        at: "2026-11-20T16:00:00Z",
+        reason: "Siku nyingine",
+      },
+    });
+    theShopHas({
+      "2026-11-01 2026-11-30": mealDays([
+        mealDay({
+          date: "2026-11-21",
+          amount: "0.00",
+          sharers: 0,
+          share: "0.00",
+          waiting: 1,
+        }),
+        mealDay({
+          date: "2026-11-20",
+          amount: "0.00",
+          sharers: 0,
+          share: "0.00",
+          rows: [slip],
+        }),
+      ]),
+    });
+
+    render(<MealMoneyScreen />);
+
+    expect(await lines()).toEqual([
+      "Jumamosi 21/11 | Haijaandikwa",
+      "Ijumaa 20/11 | TSh 0",
+    ]);
+  });
+
   it("says today is not written yet, before anyone types it", async () => {
     theShopHas({
       "2026-11-01 2026-11-30": mealDays([

@@ -205,7 +205,19 @@ describe("one day's meal money", () => {
   });
 
   it("says a forgotten day is not written, and offers to write it, starting on that day", async () => {
-    theDayIs(mealDays([], { first: "2026-11-21", last: "2026-11-21" }));
+    theDayIs(
+      mealDays(
+        [
+          mealDay({
+            date: "2026-11-21",
+            amount: "0.00",
+            sharers: 6,
+            share: "0.00",
+          }),
+        ],
+        { first: "2026-11-21", last: "2026-11-21" },
+      ),
+    );
 
     render(<MealMoneyDayScreen date="2026-11-21" />);
 
@@ -255,18 +267,45 @@ describe("one day's meal money", () => {
   });
 
   it.each([["2026-11-22"], ["2026-11-25"]])(
-    "offers nothing to write on a Sunday, or a day to come: %s",
+    "says a Sunday, or a day to come, has none, and offers nothing to write: %s",
     async (date) => {
+      // Not "Haijaandikwa": nobody forgot it (WAGE-7's review).
       theDayIs(mealDays([], { first: date, last: date }));
 
       render(<MealMoneyDayScreen date={date} />);
 
-      await screen.findByText("Haijaandikwa");
+      await screen.findByText("Hakuna hela ya chakula siku hii.");
+      expect(screen.queryByText("Haijaandikwa")).toBeNull();
       expect(
         screen.queryByRole("button", { name: "Andika hela ya chakula" }),
       ).toBeNull();
     },
   );
+
+  it("says a working day nobody came has none, and still offers to write it", async () => {
+    // A day the cook alone came, or nobody: the server answers no day. Its money may still be typed.
+    theDayIs(mealDays([], { first: MONDAY, last: MONDAY }));
+
+    render(<MealMoneyDayScreen date={MONDAY} />);
+
+    await screen.findByText("Hakuna hela ya chakula siku hii.");
+    expect(
+      screen.getByRole("button", { name: "Andika hela ya chakula" }),
+    ).toBeTruthy();
+  });
+
+  it("says a day nobody came, its one row crossed out, has none", async () => {
+    theDayIs(
+      mealDays([
+        mealDay({ amount: "0.00", sharers: 0, share: "0.00", rows: [SLIP] }),
+      ]),
+    );
+
+    render(<MealMoneyDayScreen date={MONDAY} />);
+
+    expect((await rows()).length).toBe(1);
+    expect(screen.getByText("Hakuna hela ya chakula siku hii.")).toBeTruthy();
+  });
 
   it.each([[null], ["jana"], ["2026-11-31"]])(
     "asks nothing for a day the address can't mean: %s",

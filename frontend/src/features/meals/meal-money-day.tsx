@@ -45,6 +45,8 @@ import {
 
 import {
   isDay,
+  isForgotten,
+  isTyped,
   MEAL_MONEY_PAGE,
   type MealMoneyDays,
   type MealMoneyLine,
@@ -118,13 +120,11 @@ function TheDay({
   const t = useTranslations("mealMoney");
   // The day, or none: a Sunday, or a day nobody came and nobody typed, isn't answered (meal_money_days).
   const day = answer.days[0];
-  // "0" as text: the shared Decimal refuses a plain number, so no float ever reaches money (rule 3).
-  const typed = day !== undefined && new Decimal(day.amount).gt("0");
   const rows = day?.rows ?? [];
   return (
     <>
       <div className="grid gap-1">
-        {typed ? (
+        {day !== undefined && isTyped(day) ? (
           <>
             <p className="text-lg font-semibold tabular-nums">
               {t("dayPage.total", {
@@ -134,7 +134,12 @@ function TheDay({
             <Split day={day} />
           </>
         ) : (
-          <p className="text-lg font-semibold">{t("notTyped")}</p>
+          // Forgotten, or a day with none to write: a Sunday, one to come, or one nobody came.
+          <p className="text-lg font-semibold">
+            {day !== undefined && isForgotten(day)
+              ? t("notTyped")
+              : t("dayPage.none")}
+          </p>
         )}
       </div>
       {rows.length === 0 ? null : (

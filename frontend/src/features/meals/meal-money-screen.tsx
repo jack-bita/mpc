@@ -63,6 +63,8 @@ import { shopToday } from "@/offline/rules";
 import { ChooseDaysSheet } from "./choose-days";
 import {
   FIRST_PARAM,
+  isForgotten,
+  isTyped,
   LAST_PARAM,
   mayRecordMeals,
   type MealDay,
@@ -270,10 +272,6 @@ function TheDays({
 function DayLine({ day, isToday }: { day: MealDay; isToday: boolean }) {
   const t = useTranslations("mealMoney");
   const monthWords = useTranslations("attendanceMonth");
-  const amount = new Decimal(day.amount);
-  // "0" as text: the shared Decimal refuses a plain number, so no float ever reaches money (rule 3). Nothing that counts
-  // was typed: the day's rows are none, or all crossed out.
-  const typed = amount.gt("0");
   return (
     <>
       <p>
@@ -292,9 +290,13 @@ function DayLine({ day, isToday }: { day: MealDay; isToday: boolean }) {
         </TextLink>
       </p>
       <p className="text-right tabular-nums">
-        {typed ? formatMoney(amount) : t("notTyped")}
+        {/* Forgotten, or the money there is: none, on a day nobody came whose rows are all crossed out, listed for them
+            to be seen (A2). */}
+        {isForgotten(day)
+          ? t("notTyped")
+          : formatMoney(new Decimal(day.amount))}
       </p>
-      {typed ? <Split day={day} /> : null}
+      {isTyped(day) ? <Split day={day} /> : null}
     </>
   );
 }

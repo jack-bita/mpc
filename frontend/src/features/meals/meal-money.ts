@@ -13,6 +13,7 @@ import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { STALE_AFTER } from "@/features/attendance/attendance-month";
 import type { WhoIsHere } from "@/features/people/who-is-here";
+import { Decimal } from "@/lib/decimal";
 
 export type MealMoneyDays = components["schemas"]["MealMoneyDaysAnswer"];
 export type MealDay = components["schemas"]["MealDay"];
@@ -39,6 +40,19 @@ export function mealDayPage(day: string): string {
  * together. */
 export function mayRecordMeals(me: WhoIsHere): boolean {
   return me.permissions.whole_shop.includes(RECORDS_MEALS);
+}
+
+/** Whether a day holds money that counts. "0" as text: the shared Decimal refuses a plain number, so no float ever reaches
+ * money (rule 3). */
+export function isTyped(day: MealDay): boolean {
+  return new Decimal(day.amount).gt("0");
+}
+
+/** Whether a day's money waits to be written, *Haijaandikwa*: nothing that counts was typed, and someone came who shares
+ * the meals, or may have, or the day isn't over. Never a day nobody came, though a row of it was crossed out: nobody
+ * forgot it (WAGE-7's review). */
+export function isForgotten(day: MealDay): boolean {
+  return !isTyped(day) && (day.sharers > 0 || day.waiting > 0 || !day.over);
 }
 
 /** Days from one to another, both counted, as the server takes them: "2026-11-20". */

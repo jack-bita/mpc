@@ -793,6 +793,7 @@
     "wholeMonth": "Mwezi mzima",
     "dayPage": {
       "noDay": "Hakuna siku iliyochaguliwa.",
+      "none": "Hakuna hela ya chakula siku hii.",
       "total": "Jumla {amount}",
       "rowsLabel": "Hela iliyoandikwa siku hii",
       "rowWithNote": "{amount} · {note}",
