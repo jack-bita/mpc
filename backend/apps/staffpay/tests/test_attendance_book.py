@@ -1394,6 +1394,50 @@ def test_a_share_rounds_by_its_own_dates_step(
     assert shares == (Decimal("513.00"), Decimal("500.00"))
 
 
+def test_one_hired_again_the_same_day_pays_one_share(
+    shop_a: Shop,
+    device_a: Device,
+    asha: StaffMember,
+    give_role: Callable[[StaffMember, RoleTemplate, Side | None], None],
+) -> None:
+    # Baraka left on Monday and was hired again the same day (PPL-11): two jobs, a day each, and he tapped on both. He
+    # ate once, so he pays one share (Jack: A, 25 Nov 2026), on the job he came under first: Monday's 2,000 is 1,000 for
+    # Asha and 1,000 for him, not three shares.
+    baba = _worker(shop_a, "Baba")
+    give_role(baba, RoleTemplate.OWNER, None)
+    old = _worker(shop_a, "Baraka")
+    rate(asha)
+    rate(old)
+    came(device_a, asha)
+    tap(device_a, old, ClockKind.IN, at(MONDAY, 7, 20))
+    with shop_context(shop_a):
+        mark_left(old, left_on=MONDAY, by=None, reason="Ameacha kazi")
+        old.refresh_from_db()
+        new = hire_again(old, display_name="Baraka", started_on=MONDAY, by=None)
+    rate(new, MONDAY)
+    tap(device_a, new, ClockKind.OUT, at(MONDAY, 18, 45))
+    meal(shop_a, "2000.00", baba)
+
+    def shares() -> dict[str, Decimal]:
+        with shop_context(shop_a):
+            days = {day.staff_id: day for day in work_out_days(shop_a, MONDAY, MONDAY)}
+        return {"asha": days[asha.pk].meal_share, "old": days[old.pk].meal_share, "new": days[new.pk].meal_share}
+
+    def decide(job: StaffMember) -> None:
+        with shop_context(shop_a):
+            day = next(day for day in work_out_days(shop_a, MONDAY, MONDAY) if day.staff_id == job.pk)
+            decide_day(day, choice=DayChoice.HALF, reason="Nusu siku", replaces=None, by=baba)
+
+    # Both his days wait, one tap each: Asha pays it all.
+    assert shares() == {"asha": Decimal("2000"), "old": Decimal("0"), "new": Decimal("0")}
+    # One of them decided: he shares it, whichever of his jobs it was.
+    decide(new)
+    assert shares() == {"asha": Decimal("1000"), "old": Decimal("0"), "new": Decimal("1000")}
+    # The other too: still one share, on the first job.
+    decide(old)
+    assert shares() == {"asha": Decimal("1000"), "old": Decimal("1000"), "new": Decimal("0")}
+
+
 def test_money_on_a_day_the_shop_was_shut_is_nobodys(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
     # A Sunday, which no service types money for, and a closed day nobody came on: off, so nobody pays.
     rate(asha)

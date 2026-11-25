@@ -55,6 +55,7 @@ import calendar
 import datetime as dt
 import uuid
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any, cast
@@ -133,7 +134,7 @@ class _TheBook:
 # What the book works out on a day, and so what it writes again when a day comes out otherwise. Not the job, the date
 # or the shop, which say which day it is; nor `created_at`, which says when the day was first kept. The reason too
 # (ATT-5): a day to decide kept before it had none, and gets its reason the next time it is worked out. And its share of
-# the date's meal money (WAGE-7), which money typed later, or another worker's day decided, moves.
+# the date's meal money (WAGE-7), which money typed later, another worker's day decided, or a pay rate typed, moves.
 WORKED_OUT = ["status", "fine", "first_in", "first_out", "rules_used", "review_reason", "meal_share"]
 
 # A person's decision on a day (ATT-6), which only decide_day writes, and the book never: what the book works out above
@@ -324,26 +325,48 @@ def _share_meals(
         return
     # Who shares the meals, on each day: by the rate in force that day (WAGE-1), which names the cook.
     rates = rates_between(shop, first, last)
-    sharing: dict[dt.date, list[AttendanceDay]] = defaultdict(list)
+    by_date: dict[dt.date, list[tuple[AttendanceDay, str]]] = defaultdict(list)
     for day in answered:
         if day.date not in money:
             continue
         # The day as a person decided it, where one did: the decision is on the row kept before, which this run read and
         # whose decision nothing changes meanwhile, as deciding waits for the jobs' lock too (decide_day).
         old = kept.get((day.staff_id, day.date))
-        rate = rates.get((day.staff_id, day.date))
-        part = meal_part(
-            day.status,
-            old.decided_status if old is not None else "",
-            shares_meals=rate.shares_meals if rate is not None else None,
-        )
-        if part is MealPart.SHARES:
-            sharing[day.date].append(day)
-    for date, days in sharing.items():
+        by_date[day.date].append((day, old.decided_status if old is not None else ""))
+    for date, days in by_date.items():
+        sharing = _sharing(days, rates)
         # The same for everyone who came, a half day too, rounded by the date's own step (A1).
-        share = meal_share(money[date], len(days), steps[date])
-        for day in days:
+        share = meal_share(money[date], len(sharing.days), steps[date])
+        for day in sharing.days:
             day.meal_share = share
+
+
+@dataclass(frozen=True)
+class _Sharing:
+    # Who shares one date's meals (WAGE-7): a day for each person, which carries their share; and how many more people
+    # may, once their day is decided.
+    days: list[AttendanceDay]
+    waiting: int
+
+
+def _sharing(days: Iterable[tuple[AttendanceDay, str]], rates: dict[tuple[uuid.UUID, dt.date], PayRate]) -> _Sharing:
+    # Of one date's days, each with its decision ("" for none), those that share its meals. By the person, not the job:
+    # a person who left and was hired again the same day has two jobs, so two days (PPL-11), and ate once (Jack: A, 25
+    # Nov 2026). Their share is on the job they had first, as ids are made in time's order (UUIDv7); and one who shares
+    # already waits for nothing, whatever their other day does. One rule, for the book, which writes the shares, and for
+    # the page, which counts who shares and who waits (_meal_day).
+    carries: dict[uuid.UUID, AttendanceDay] = {}
+    waits: set[uuid.UUID] = set()
+    for day, decided in sorted(days, key=lambda pair: pair[0].staff_id):
+        rate = rates.get((day.staff_id, day.date))
+        part = meal_part(day.status, decided, shares_meals=rate.shares_meals if rate is not None else None)
+        # The job comes with each day, in the read that found it, or as the book made it (work_out_days): no query here.
+        person = day.staff.user_id
+        if part is MealPart.SHARES:
+            carries.setdefault(person, day)
+        elif part is MealPart.WAITS:
+            waits.add(person)
+    return _Sharing(days=list(carries.values()), waiting=len(waits - carries.keys()))
 
 
 def _answer_log() -> Any:
@@ -1435,21 +1458,17 @@ def _meal_day(
     rates: dict[tuple[uuid.UUID, dt.date], PayRate],
 ) -> MealDay:
     # One date of Hela ya chakula, from its jobs' days as the book answered them, its rows, and the rates in force.
-    parts = []
-    for day in worked_out:
-        rate = rates.get((day.staff_id, date))
-        part = meal_part(day.status, day.decided_status, shares_meals=rate.shares_meals if rate is not None else None)
-        parts.append((part, day.meal_share))
+    sharing = _sharing([(day, day.decided_status) for day in worked_out], rates)
     # The share as the book kept it, the same for everyone who shares the date's meals: never worked out a second time
     # here, so the page and the pay can't differ (WAGE-2).
-    shares = [share for part, share in parts if part is MealPart.SHARES]
+    shares = [day.meal_share for day in sharing.days]
     return MealDay(
         date=date,
         amount=sum((row.amount for row in rows if row.voided_at is None), NO_MONEY),
         over=date < today,
         sharers=len(shares),
         share=shares[0] if shares else NO_MEAL_SHARE,
-        waiting=sum(part is MealPart.WAITS for part, _ in parts),
+        waiting=sharing.waiting,
         rows=[meal_line(row) for row in rows],
     )
 

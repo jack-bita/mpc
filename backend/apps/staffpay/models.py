@@ -386,8 +386,10 @@ class AttendanceDay(ShopScoped):
 
     # The worker's part of the date's meal money (WAGE-7, 02 §15, 14): worked out with the day, so a worker's meals up
     # to any day are a sum of days already worked out, and one who leaves on the 15th is paid at once. One of the book's
-    # answers (WORKED_OUT): it moves when money is typed or crossed out, and when any worker's day of the date is
-    # decided, as the date is then split again. 0 on every day with nothing to share. Money, so numeric(14,2) (rule 3).
+    # answers (WORKED_OUT): it moves when money is typed or crossed out, when any worker's day of the date is decided or
+    # its taps fixed, and when a pay rate is typed, as the date is then split again. 0 on every day with nothing to
+    # share, and on all but one of a person's days of one date (_sharing, apps/staffpay/services.py). Money, so
+    # numeric(14,2) (rule 3).
     meal_share = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
 
     # A manager's or the owner's decision on the day (ATT-6, 02 §12's `override`): what the day was, whatever the book

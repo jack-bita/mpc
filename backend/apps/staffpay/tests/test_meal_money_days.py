@@ -29,6 +29,7 @@ from apps.core.permissions import RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
+from apps.people.services import hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
 from apps.staffpay.models import AttendanceDay, ClockKind, DayChoice, MealMoney
 from apps.staffpay.services import (
@@ -268,6 +269,28 @@ def test_a_decision_moves_the_split(shop_a: Shop, baba: StaffMember, asha: Staff
         decide_day(waits, choice=DayChoice.ON_TIME, reason="Alisahau Toka", replaces=None, by=baba)
     friday = by_date(days_of(shop_a))[FRIDAY]
     assert (friday.sharers, friday.share, friday.waiting) == (2, Decimal("3500"), 0)
+
+
+def test_one_hired_again_the_same_day_counts_once(
+    shop_a: Shop, device_a: Device, baba: StaffMember, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Juma left on Monday and was hired again the same day (PPL-11), and tapped on both jobs: one person waits, not two;
+    # and once one of his days is decided, two share Monday's money and nobody waits (Jack: A, 25 Nov 2026).
+    kept_day(asha, *FULL_DAY, date=MONDAY)
+    waits = kept_day(juma, (ClockKind.IN, 7, 20), date=MONDAY)
+    with shop_context(shop_a):
+        mark_left(juma, left_on=MONDAY, by=None, reason="Ameacha kazi")
+        juma.refresh_from_db()
+        again = hire_again(juma, display_name="Juma", started_on=MONDAY, by=None)
+        set_pay_rate(again, daily_rate=Decimal("10000"), effective_from=MONDAY, by=None)
+    kept_day(again, (ClockKind.OUT, 18, 45), date=MONDAY)
+    typed(baba, MONDAY, "2000")
+    monday = by_date(days_of(shop_a))[MONDAY]
+    assert (monday.sharers, monday.share, monday.waiting) == (1, Decimal("2000"), 1)
+    with shop_context(shop_a):
+        decide_day(waits, choice=DayChoice.HALF, reason="Aliondoka mchana", replaces=None, by=baba)
+    monday = by_date(days_of(shop_a))[MONDAY]
+    assert (monday.sharers, monday.share, monday.waiting) == (2, Decimal("1000"), 0)
 
 
 def test_the_days_are_read_in_a_few_queries(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
