@@ -291,6 +291,25 @@ describe("Andika advansi", () => {
     );
   });
 
+  it("shows only what the last try found, never the one before's refusal", async () => {
+    answer("POST", ADVANCES_ROUTE, refusal(400, "advance.own"));
+    openSheet();
+    pick("Juma");
+    type("Kiasi (TSh)", "20000");
+    fireEvent.click(save());
+    await within(sheet()).findByRole("alert");
+
+    type("Kiasi (TSh)", "");
+    fireEvent.click(save());
+
+    await waitFor(() =>
+      expect(errorOf(box("Kiasi (TSh)"))).toBe(
+        "Andika kiasi cha shilingi nzima, zaidi ya sifuri.",
+      ),
+    );
+    expect(within(sheet()).queryByRole("alert")).toBeNull();
+  });
+
   it("sends the same try again under the same id, and a changed one under a new id", async () => {
     // The answer was lost on the way: the same try must find the row the first made, never give the money twice. Another
     // worker is another row, for the list to show beside the first.

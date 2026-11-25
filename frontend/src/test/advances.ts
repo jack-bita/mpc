@@ -92,3 +92,11 @@ export function advancesAreAnswered(): () => number {
         new URL(request.url).pathname === ADVANCES_ROUTE,
     ).length;
 }
+
+/** One advance as its own page reads it, not the asker's own, unless told otherwise. */
+export function advancePageOf(
+  line: AdvanceLine,
+  fields: Partial<AdvancePage> = {},
+): AdvancePage {
+  return { advance: line, own: false, ready_void_reasons: [], ...fields };
+}

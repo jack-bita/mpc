@@ -843,6 +843,25 @@
       "note": "Maelezo (si lazima)",
       "save": "Hifadhi",
       "saved": "Imeandikwa: {amount}, {name}, {weekday} {date}."
+    },
+    "day": "{weekday} {date}",
+    "page": {
+      "title": "Advansi ya {name}",
+      "none": "Hakuna advansi iliyochaguliwa.",
+      "typedBy": "Imeandikwa na {by} · {date} {time}",
+      "voidedBy": "Imebatilishwa na {by}, {date}",
+      "reason": "Sababu: {reason}",
+      "own": "Hii ni advansi yako. Mtu mwingine ndiye anayeweza kuibatilisha."
+    },
+    "void": {
+      "title": "Batilisha {amount}",
+      "about": "{name} · {day}",
+      "aboutWithNote": "{name} · {day} · {note}",
+      "reason": "Sababu",
+      "action": "Batilisha"
+    },
+    "readyReason": {
+      "wrong_amount": "Kiasi kimekosewa"
     }
   },
   "pay": {
