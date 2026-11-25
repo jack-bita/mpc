@@ -887,6 +887,7 @@
     "meals": "Meals",
     "mealDays": "{count, plural, one {1 day} other {# days}}",
     "advances": "Advances",
+    "carried": "Owed from {month}",
     "less": "− {amount}",
     "todayLine": {
       "full": "Today: full day",
@@ -896,6 +897,8 @@
     },
     "totalToday": "Total to pay today",
     "totalMonth": "Total for the month",
+    "owes": "They are paid 0. They owe {amount}, which comes off their next pay.",
+    "owesLeft": "They are paid 0. They owe {amount}.",
     "notPaidByDay": "No daily pay in this month.",
     "worker": "A worker's pay",
     "cardTitle": "The month's pay",
@@ -914,7 +917,10 @@
       "day": "{name} · {weekday} {date}",
       "laptopQuiet": "{name} has sent nothing since {date}",
       "laptopNever": "{name} has never sent anything",
-      "cameUnpaid": "{name} came to work, but has no daily pay"
+      "cameUnpaid": "{name} came to work, but has no daily pay",
+      "leaverTitle": "Approve {name}'s pay",
+      "leaverAbout": "{month} · Total {total}",
+      "leaverFinal": "Once approved, their pay of {month} never changes again."
     }
   },
   "attendanceWorker": {

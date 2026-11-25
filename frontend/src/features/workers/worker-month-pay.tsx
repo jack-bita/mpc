@@ -22,6 +22,7 @@ import { useTranslations } from "use-intl";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Card, CardContent } from "@/components/design/card";
 import { MonthSwitch } from "@/features/attendance/month-switch";
+import { ApprovedLine } from "@/features/pay/approved-line";
 import type { WorkerPayMonth } from "@/features/pay/pay";
 import { PayLines } from "@/features/pay/pay-lines";
 import { useCountedTo } from "@/features/pay/pay-notes";
@@ -32,12 +33,15 @@ export function WorkerMonthPay({
   month,
   thisMonth,
   onChoose,
+  timezone,
   read,
 }: {
   /** The month shown, and this month, which › stops at. */
   month: string;
   thisMonth: string;
   onChoose: (month: string) => void;
+  /** The shop's, for when the pay was approved. */
+  timezone: string;
   /** The pay of that month, read by the page, the part always on it, and handed down by its values (RolesRead,
    * workers.ts). */
   read: {
@@ -65,20 +69,32 @@ export function WorkerMonthPay({
           {read.isPending ? <p role="status">{loginWords("waiting")}</p> : null}
           {/* A failed read keeps the pay last read, with the reason above it. */}
           <ApiErrorAlert error={read.error} />
-          {read.data ? <ThePay answer={read.data} /> : null}
+          {read.data ? <ThePay answer={read.data} timezone={timezone} /> : null}
         </section>
       </CardContent>
     </Card>
   );
 }
 
-/** How far the month is counted, and the lines; or that the shop doesn't pay them by the day in it. */
-function ThePay({ answer }: { answer: WorkerPayMonth }) {
+/** How far the month is counted, or who approved it (WAGE-3), and the lines; or that the shop doesn't pay them by the day
+ * in it. Approving is their own pay page's, off Mishahara. */
+function ThePay({
+  answer,
+  timezone,
+}: {
+  answer: WorkerPayMonth;
+  timezone: string;
+}) {
   const t = useTranslations("pay");
   const counted = useCountedTo(answer);
+  const { approval } = answer.worker;
   return (
     <>
-      {counted === null ? null : <p>{counted}</p>}
+      {approval !== null ? (
+        <ApprovedLine approval={approval} timezone={timezone} />
+      ) : counted === null ? null : (
+        <p>{counted}</p>
+      )}
       {/* Their line whenever there is one: money given on a 1st that is a Sunday is one, before any working day (WAGE-8).
           With none, nothing more when the line above says no working day has come: whether they are paid by the day isn't
           known yet. */}

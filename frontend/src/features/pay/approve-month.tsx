@@ -3,15 +3,11 @@
 //
 // It sends each worker's total as the page shows it, so whoever approves approves only what they read: a day decided a
 // moment before is refused (pay_run.totals_moved), and the page behind, read again, shows the new totals, in the sheet
-// too. Its id is made once, as it opens: a try whose answer was lost on the way, sent again, is the same approval
-// (ADR-0007). Once approved, it waits for the page to be read again before it closes, so it never closes onto a month
-// that still looks open; and every page the approval locks is asked again: the attendance, the meal money, the advances.
+// too. How it is sent, and what is read again after it, is useApproval's (use-approval.ts).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -19,10 +15,10 @@ import { answerOf } from "@/api/refusal";
 import { Button } from "@/components/design/button";
 import { Decimal } from "@/lib/decimal";
 import { formatMoney } from "@/lib/format";
-import { newId } from "@/lib/ids";
 
 import { ApproveSheet, NOTHING_STOPS, useMonthTitle } from "./approve-sheet";
-import { type PayMonth, whatAnApprovalLocks } from "./pay";
+import type { PayMonth } from "./pay";
+import { useApproval } from "./use-approval";
 
 export function ApproveMonth({
   answer,
@@ -43,18 +39,9 @@ export function ApproveMonth({
   finalFocus: () => HTMLElement | null;
 }) {
   const t = useTranslations("pay.approval");
-  const store = useQueryClient();
   const monthTitle = useMonthTitle();
-  const [id] = useState(newId);
-
-  const askAgain = () =>
-    Promise.all(
-      whatAnApprovalLocks().map((queryKey) =>
-        store.invalidateQueries({ queryKey }),
-      ),
-    );
-  const approve = useMutation({
-    mutationFn: () =>
+  const approve = useApproval(
+    (id) =>
       answerOf(
         api.POST("/api/v1/staffpay/pay-runs/", {
           body: {
@@ -64,16 +51,8 @@ export function ApproveMonth({
           },
         }),
       ),
-    onSuccess: async () => {
-      await askAgain();
-      onDone();
-    },
-    onError: () => {
-      // Asked again too: refused because a total moved, the new ones show; and with no answer, it may have been approved
-      // all the same.
-      void askAgain();
-    },
-  });
+    onDone,
+  );
 
   const month = monthTitle(answer.month);
   return (

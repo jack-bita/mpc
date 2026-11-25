@@ -887,6 +887,7 @@
     "meals": "Chakula",
     "mealDays": "siku {count}",
     "advances": "Advansi",
+    "carried": "Deni la {month}",
     "less": "− {amount}",
     "todayLine": {
       "full": "Leo: siku kamili",
@@ -896,6 +897,8 @@
     },
     "totalToday": "Jumla ya kumlipa leo",
     "totalMonth": "Jumla ya mwezi",
+    "owes": "Analipwa 0. Anadaiwa {amount}, zitakatwa kwenye malipo yake yajayo.",
+    "owesLeft": "Analipwa 0. Anadaiwa {amount}.",
     "notPaidByDay": "Hana malipo kwa siku katika mwezi huu.",
     "worker": "Malipo ya mfanyakazi",
     "cardTitle": "Malipo ya mwezi",
@@ -914,7 +917,10 @@
       "day": "{name} · {weekday} {date}",
       "laptopQuiet": "{name} haijatuma tangu {date}",
       "laptopNever": "{name} haijawahi kutuma",
-      "cameUnpaid": "{name} alikuja kazini, lakini hana malipo kwa siku"
+      "cameUnpaid": "{name} alikuja kazini, lakini hana malipo kwa siku",
+      "leaverTitle": "Idhinisha malipo ya {name}",
+      "leaverAbout": "{month} · Jumla {total}",
+      "leaverFinal": "Baada ya kuidhinisha, malipo yake ya {month} hayabadiliki tena."
     }
   },
   "attendanceWorker": {
