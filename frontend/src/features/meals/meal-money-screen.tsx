@@ -23,9 +23,9 @@
 //   20/11/2026 hadi 23/11/2026  [ Mwezi mzima ]
 //   Jumla                           TSh 15,000
 //
-// Andika hela ya chakula types a day's money in a sheet (record-meal-money.tsx). Which days are listed, their sums and each one's share are the server's
-// (meal_money_days); the page adds nothing up. Haijaandikwa: a day someone came and nobody typed its money, so a
-// forgotten day is easy to see.
+// Andika hela ya chakula types a day's money in a sheet (record-meal-money.tsx). Which days are listed, their sums and
+// each one's share are the server's (meal_money_days); the page adds nothing up. Haijaandikwa: a day someone came, or may
+// have, and nobody typed its money, so a forgotten day is easy to see (isForgotten).
 //
 // An office screen: it asks the server through the store of server answers (rule 5), and needs the internet, which the
 // office area says while it is gone. Its routes ask meals.record on the whole shop; someone without it has no button,
@@ -115,6 +115,16 @@ export function MealMoneyScreen() {
   const chooseButton = useRef<HTMLButtonElement>(null);
   const may = who.data !== undefined && mayRecordMeals(who.data);
   const answer = useMealMoney(span);
+  // Today, the shop's: as the server last said it, as a phone's date can be wrong, kept while other days are on their way;
+  // the phone's own count, on the shop's clock, only until it first answers. What may be typed and chosen, both by this
+  // one (WAGE-7's review).
+  const said = answer.data?.today;
+  const [lastSaid, setLastSaid] = useState<string | null>(null);
+  if (said !== undefined && said !== lastSaid) setLastSaid(said);
+  const today =
+    said ??
+    lastSaid ??
+    (who.data ? shopToday(who.data.shop.timezone, now) : null);
   // "Subiri kidogo…", through the store's own tries too, and only once there is something to wait for, as on the month
   // page.
   const waiting = who.isPending || (span !== null && answer.isPending);
@@ -132,13 +142,8 @@ export function MealMoneyScreen() {
       </p>
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
-      {/* Only for someone who may see it, so no ‹ › only asks to be refused again (the month page's review). */}
-      {/* Today, the shop's, as the server last said it, or the phone's own count until it answers. */}
-      {who.data && may ? (
-        <RecordMealMoney
-          day={answer.data?.today ?? shopToday(who.data.shop.timezone, now)}
-          today={answer.data?.today ?? shopToday(who.data.shop.timezone, now)}
-        />
+      {today !== null && may ? (
+        <RecordMealMoney day={today} today={today} />
       ) : null}
       {may ? (
         <Button
@@ -150,6 +155,7 @@ export function MealMoneyScreen() {
           {t("choose.title")}
         </Button>
       ) : null}
+      {/* Only for someone who may see it, so no ‹ › only asks to be refused again (the month page's review). */}
       {may && chosen === null && month !== null && thisMonth !== null ? (
         <MonthSwitch month={month} thisMonth={thisMonth} onChoose={choose} />
       ) : null}
@@ -163,10 +169,10 @@ export function MealMoneyScreen() {
           }}
         />
       ) : null}
-      {who.data && may && choosing && span !== null ? (
+      {today !== null && may && choosing && span !== null ? (
         <ChooseDaysSheet
           span={span}
-          today={shopToday(who.data.shop.timezone, now)}
+          today={today}
           onShow={(next) => {
             keepTo(next);
             setChoosing(false);

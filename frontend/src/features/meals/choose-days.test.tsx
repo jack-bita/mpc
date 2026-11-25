@@ -220,6 +220,9 @@ describe("choosing the days", () => {
     ["2026-11-20", "", "Hadi", "Jaza sehemu hii."],
     ["2026-11-25", "2026-11-26", "Kuanzia", "Siku hii bado haijafika."],
     ["2026-11-20", "2026-11-25", "Hadi", "Siku hii bado haijafika."],
+    // A year typed "26" becomes 0026: no shop's day, so the sheet says so, never closes on the month (WAGE-7's review).
+    ["0026-11-20", "2026-11-23", "Kuanzia", "Siku hii si sahihi."],
+    ["2026-11-20", "0026-11-23", "Hadi", "Siku hii si sahihi."],
   ])(
     "says a wrong pair beside its box, and asks nothing: %s to %s",
     async (first, last, box, sentence) => {
@@ -244,6 +247,44 @@ describe("choosing the days", () => {
           .map((id) => document.getElementById(id)?.textContent),
       ).toContain(sentence);
       expect(spansAsked()).toEqual(before);
+    },
+  );
+
+  it.each([
+    // The server's today is the shop's; a phone's can be a day behind, or ahead.
+    ["a day behind", "2026-11-23T09:00:00Z"],
+    ["a day ahead", "2026-11-25T09:00:00Z"],
+  ])(
+    "goes by the shop's own today, with the phone's clock %s",
+    async (_how, now) => {
+      vi.setSystemTime(new Date(now));
+      theShopHas({
+        "2026-11-01 2026-11-30": mealDays([mealDay()], { total: "8000.00" }),
+        [`${TODAY} ${TODAY}`]: mealDays([], { first: TODAY, last: TODAY }),
+      });
+      render(<MealMoneyScreen />);
+      // Counted up to the shop's today, whatever the phone says.
+      await screen.findByText("Jumla hadi leo, 24/11");
+      const sheet = await openTheSheet();
+      const last = within(sheet).getByLabelText("Hadi") as HTMLInputElement;
+      expect([last.value, last.max]).toEqual([TODAY, TODAY]);
+
+      type(sheet, "Kuanzia", TODAY);
+      show(sheet);
+
+      expect(
+        await screen.findByRole("heading", { name: "24/11/2026" }),
+      ).toBeTruthy();
+      fireEvent.click(
+        screen.getByRole("button", { name: "Andika hela ya chakula" }),
+      );
+      expect(
+        (
+          within(await screen.findByRole("dialog")).getByLabelText(
+            "Siku",
+          ) as HTMLInputElement
+        ).value,
+      ).toBe(TODAY);
     },
   );
 

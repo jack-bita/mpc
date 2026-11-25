@@ -10,9 +10,9 @@
 //
 // The same date in both is one day. It starts on the days the list shows. What the sheet can see is wrong is said at
 // once beside its box, in the server's own sentences, and nothing is asked: an empty box, a day to come, Hadi before
-// Kuanzia, more than a year. The screen keeps the days, in its address, and this sheet only picks them: Ghairi leaves
-// the list as it was. The way back to the month is Mwezi mzima, on the page beside the days chosen, as Tofauti's
-// Onyesha zote is, so every sheet keeps its Ghairi.
+// Kuanzia, more than a year, or no shop's day, as a year typed "26". The screen keeps the days, in its address, and this
+// sheet only picks them: Ghairi leaves the list as it was. The way back to the month is Mwezi mzima, on the page beside
+// the days chosen, as Tofauti's Onyesha zote is, so every sheet keeps its Ghairi.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and keeps what is picked.
 "use client";
@@ -24,23 +24,33 @@ import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 
-import { isTooLong, type Span } from "./meal-money";
+import { isDay, isTooLong, type Span } from "./meal-money";
 
-/** The form's own checks, by box, as the codes the server would send. */
+/** A day no shop has, as a year typed "26", which the box keeps as 0026: the sheet's own word, as it asks nothing. */
+const NOT_A_DAY = "not_a_day";
+
+/** The form's own checks, by box, as the codes the server would send, or the sheet's own one. */
 type Checks = { first?: string; last?: string };
 
-/** What is wrong with the two days, if anything: each box's first problem. Days as text sort as days do. */
+/** What is wrong with one box's day by itself, if anything. Days as text sort as days do. */
+function problemOf(day: string, today: string): string | undefined {
+  if (day === "") return "required";
+  if (!isDay(day)) return NOT_A_DAY;
+  return day > today ? "meal_money.in_future" : undefined;
+}
+
+/** What is wrong with the two days, if anything: each box's first problem, then the two together, beside Hadi, only once
+ * each holds a day. */
 function checksOf({ first, last }: Span, today: string): Checks {
-  const checks: Checks = {};
-  if (first === "") checks.first = "required";
-  else if (first > today) checks.first = "meal_money.in_future";
-  if (last === "") checks.last = "required";
-  else if (last > today) checks.last = "meal_money.in_future";
-  // Only once both hold a day: an empty box is said once, beside itself.
-  else if (first !== "" && last < first)
-    checks.last = "meal_money.days_backwards";
-  else if (first !== "" && isTooLong({ first, last }))
-    checks.last = "meal_money.too_many_days";
+  const checks: Checks = {
+    first: problemOf(first, today),
+    last: problemOf(last, today),
+  };
+  if (checks.first === undefined && checks.last === undefined) {
+    if (last < first) checks.last = "meal_money.days_backwards";
+    else if (isTooLong({ first, last }))
+      checks.last = "meal_money.too_many_days";
+  }
   return checks;
 }
 
@@ -68,7 +78,11 @@ export function ChooseDaysSheet({
   const [last, setLast] = useState(span.last > today ? today : span.last);
   const [own, setOwn] = useState<Checks>({});
   const said = (code?: string) =>
-    code === undefined ? undefined : codeMessage(codes, code);
+    code === undefined
+      ? undefined
+      : code === NOT_A_DAY
+        ? t("notADay")
+        : codeMessage(codes, code);
 
   return (
     <Sheet
