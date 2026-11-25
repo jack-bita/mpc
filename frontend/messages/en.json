@@ -837,7 +837,7 @@
       "title": "Record an advance",
       "worker": "Worker",
       "workerLeft": "{name} (left {date})",
-      "nobody": "No worker is paid by the day in this month.",
+      "nobody": "No other worker is paid by the day in this month.",
       "date": "Day",
       "amount": "Amount (TSh)",
       "note": "Note (optional)",

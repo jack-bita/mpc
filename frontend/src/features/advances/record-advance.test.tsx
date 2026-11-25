@@ -159,12 +159,14 @@ describe("Andika advansi", () => {
     ).toBeTruthy();
   });
 
-  it("says when there is nobody to pick, and holds the main button", () => {
+  it("says when there is nobody else to pick, and holds the main button", () => {
+    // Meneja alone is paid by the day, and isn't offered their own: "nobody is paid by the day" would be untrue (the
+    // review).
     openSheet({ offered: [] });
 
     expect(
       within(sheet()).getByText(
-        "Hakuna mfanyakazi anayelipwa kwa siku katika mwezi huu.",
+        "Hakuna mfanyakazi mwingine anayelipwa kwa siku katika mwezi huu.",
       ),
     ).toBeTruthy();
     expect((save() as HTMLButtonElement).disabled).toBe(true);
