@@ -13,7 +13,7 @@
 // The month: this one, on the shop's clock, unless the address names an earlier one (?month=2026-10), as on Mahudhurio
 // ya mwezi, whose switch it wears. Newest first, each line opening its own page (advance-page.tsx). One crossed out stays,
 // struck through (A2), and the total, which is the server's, leaves it out. What was given comes off that month's pay at
-// once (Mishahara).
+// once (Mishahara). Andika advansi types one in a sheet (record-advance.tsx), for a worker the month's answer names.
 //
 // An office screen: it asks the server through the store of server answers (rule 5). Its routes ask money.advance on the
 // whole shop; someone without it has no button, and opening the address shows the server's refusal.
@@ -52,6 +52,7 @@ import {
   mayGiveAdvances,
   useAdvances,
 } from "./advances";
+import { RecordAdvance } from "./record-advance";
 
 export function AdvancesScreen() {
   const t = useTranslations("advances");
@@ -89,6 +90,19 @@ export function AdvancesScreen() {
       </p>
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
+      {/* Once the month has answered, as it names whom one may be typed for. Today on the sheet is the server's: a phone's
+          date can be wrong. On a month gone by it starts on no day, as today isn't in it. */}
+      {may && answer.data ? (
+        <RecordAdvance
+          day={
+            monthOf(answer.data.today) === answer.data.month
+              ? answer.data.today
+              : ""
+          }
+          today={answer.data.today}
+          workers={answer.data.workers}
+        />
+      ) : null}
       {/* Only for someone who may see it, so no ‹ › only asks to be refused again (the month page's review). */}
       {may && month !== null && thisMonth !== null ? (
         <MonthSwitch month={month} thisMonth={thisMonth} onChoose={choose} />

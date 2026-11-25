@@ -1,7 +1,9 @@
 // advances.ts — a made-up shop's money given before payday, for tests: a month's and one as the server answers them
 // (WAGE-8), and who may open them. Tests only. Fake data: every name, amount and id is made up (rule 10).
 import type { components } from "@/api/schema";
+import { useAdvances } from "@/features/advances/advances";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
+import { answer, sent } from "@/test/fake-server";
 
 export type AdvancesMonth = components["schemas"]["AdvancesMonthAnswer"];
 export type AdvanceLine = components["schemas"]["AdvanceLine"];
@@ -71,4 +73,22 @@ export function advancesMonth(
     workers: [ASHA, JUMA],
     ...fields,
   };
+}
+
+/** The month's advances open somewhere else on the page's store, as a tab's list is: for a test of what asks them
+ * again. */
+export function AdvancesAsked() {
+  useAdvances("2026-11");
+  return null;
+}
+
+/** The server answers AdvancesAsked's question, and how many times it was asked so far. */
+export function advancesAreAnswered(): () => number {
+  answer("GET", ADVANCES_ROUTE, { status: 200, body: advancesMonth([]) });
+  return () =>
+    sent.filter(
+      (request) =>
+        request.method === "GET" &&
+        new URL(request.url).pathname === ADVANCES_ROUTE,
+    ).length;
 }

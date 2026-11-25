@@ -201,6 +201,56 @@ describe("the month's advances", () => {
     }
   });
 
+  it("shows one typed at once, the month asked again", async () => {
+    // Meneja types Juma's 20,000 from the list: the server's own new total and line, never one worked out on the phone.
+    theShopHas({ "2026-11": advancesMonth([]) });
+    render(<AdvancesScreen />);
+    await screen.findByText("Hakuna advansi katika mwezi huu.");
+
+    answer("POST", ADVANCES_ROUTE, { status: 201, body: advance() });
+    theShopHas({ "2026-11": NOVEMBER });
+    fireEvent.click(screen.getByRole("button", { name: "Andika advansi" }));
+    const sheet = screen.getByRole("dialog");
+    expect(
+      (within(sheet).getByLabelText("Siku") as HTMLInputElement).value,
+    ).toBe("2026-11-25");
+    fireEvent.click(within(sheet).getByRole("radio", { name: "Juma" }));
+    fireEvent.change(within(sheet).getByLabelText("Kiasi (TSh)"), {
+      target: { value: "20000" },
+    });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Hifadhi" }));
+
+    await waitFor(async () => expect((await lines()).length).toBe(3));
+    expect(screen.getByText(/^Imeandikwa: TSh/)).toBeTruthy();
+  });
+
+  it("starts the sheet on no day for a month gone by, whom it may be typed for that month's own", async () => {
+    // Halima left in October: offered there, not in November. Today isn't in October, so no day is put in the box.
+    window.history.replaceState(null, "", "/advances/?month=2026-10");
+    theShopHas({
+      "2026-10": advancesMonth([], {
+        month: "2026-10",
+        workers: [
+          { staff: "h", display_name: "Halima", left_on: "2026-10-31" },
+        ],
+      }),
+    });
+    render(<AdvancesScreen />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Andika advansi" }),
+    );
+
+    const sheet = screen.getByRole("dialog");
+    expect(
+      within(sheet).getByRole("radio", {
+        name: "Halima (aliondoka 31/10/2026)",
+      }),
+    ).toBeTruthy();
+    const day = within(sheet).getByLabelText("Siku") as HTMLInputElement;
+    expect([day.value, day.max]).toEqual(["", "2026-11-25"]);
+  });
+
   it("shows only the server's refusal to someone without the key, with no month to move", async () => {
     // A seller who typed the address. The key on Dawa alone opens nothing either: a worker's pay is the whole shop's.
     for (const permissions of [["sale.write"], ["money.advance"]]) {
@@ -217,8 +267,23 @@ describe("the month's advances", () => {
         screen.queryByRole("button", { name: "Mwezi uliopita" }),
       ).toBeNull();
       expect(screen.queryByText("Jumla")).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: "Andika advansi" }),
+      ).toBeNull();
       shown.unmount();
     }
+  });
+
+  it("offers nothing to type to someone whose key is gone, though the month was read a moment before", async () => {
+    // The two answers crossed: the month read with the key, then who is here without it.
+    theShopHas({ "2026-11": NOVEMBER });
+    answer("GET", ME, { status: 200, body: whoIsHere([]) });
+
+    render(<AdvancesScreen />);
+
+    expect((await lines()).length).toBe(3);
+    expect(screen.queryByRole("button", { name: "Andika advansi" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mwezi uliopita" })).toBeNull();
   });
 
   it("keeps the month last read when a later read fails, with the reason above it", async () => {

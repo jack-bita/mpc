@@ -15,6 +15,7 @@ import type { WhoIsHere } from "@/features/people/who-is-here";
 
 export type AdvancesMonth = components["schemas"]["AdvancesMonthAnswer"];
 export type AdvanceLine = components["schemas"]["AdvanceLine"];
+export type AdvanceWorker = components["schemas"]["AdvanceWorker"];
 
 /** The key its routes ask, on the whole shop: in the owner's role and the manager's (Jack: A). */
 export const GIVES_ADVANCES = "money.advance";

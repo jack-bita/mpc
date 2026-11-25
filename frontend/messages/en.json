@@ -832,7 +832,18 @@
     "rowsLabel": "The month's advances",
     "line": "{weekday} {date} · {name}",
     "voided": "Crossed out",
-    "none": "No advances in this month."
+    "none": "No advances in this month.",
+    "record": {
+      "title": "Write an advance",
+      "worker": "Worker",
+      "workerLeft": "{name} (left {date})",
+      "nobody": "No worker is paid by the day in this month.",
+      "date": "Day",
+      "amount": "Amount (TSh)",
+      "note": "Note (optional)",
+      "save": "Save",
+      "saved": "Written: {amount}, {name}, {weekday} {date}."
+    }
   },
   "pay": {
     "title": "Pay",
@@ -1475,6 +1486,15 @@
       "reason_missing": "Write why.",
       "days_backwards": "To is before From.",
       "too_many_days": "Choose at most a year of days."
+    },
+    "advance": {
+      "amount_invalid": "Type a whole number of shillings, above 0.",
+      "amount_too_big": "This amount is too big. Check its zeros.",
+      "in_future": "This day hasn't come yet.",
+      "outside_job": "This day is before the worker's first day, or after their last.",
+      "not_paid_by_day": "This worker has no daily pay.",
+      "own": "You can't write or cross out your own advance.",
+      "reason_missing": "Write why."
     },
     "flag": {
       "note_required": "Write a note.",
