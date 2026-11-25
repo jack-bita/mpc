@@ -28,6 +28,11 @@ first Ingia gives, by the rules that day used (T4):
 A day's meal money (WAGE-7, 02 §15, 14): who shares it, and how much each pays:
 
     8,000 and 8 who came → 1,000 each     8,000 and 7 → 1,143 each     8,000 and nobody → 0.00, the shop bears it
+
+What a day pays (WAGE-2, 02 §15, 8), each day alone, with its own rate, fine and decision, at 10,000 a day:
+
+    on time → 10,000          half a day → 5,000                  waits for a decision → nothing yet
+    late    → 10,000 less 500 half, fine 6,000 → 5,000 less 5,000  office duty → 10,000, absent → nothing
 """
 
 import datetime as dt
@@ -37,7 +42,7 @@ from dataclasses import dataclass
 from decimal import Decimal, localcontext
 
 from apps.core.numbers import round_money
-from apps.staffpay.models import ClockKind, DayChoice, DayStatus, ReviewReason, TimeCheck
+from apps.staffpay.models import AbsenceType, ClockKind, DayChoice, DayStatus, ReviewReason, TimeCheck
 
 # A clock-in the laptop sent within 2 minutes of the tap, both by its own clock, was made online: the push runs 2
 # seconds after a new record (03 §6.5), and a retry or two still fits. Its time is the server's time of the tap: the
@@ -366,3 +371,95 @@ def meal_share(money: Decimal, sharers: int, step: Decimal) -> Decimal:
     with localcontext(prec=40):
         each = money / sharers
     return round_money(each, step)
+
+
+class PaidAs(enum.Enum):
+    # What one worker's day is paid as (WAGE-2, 02 §15, 8): the whole of the day's rate, half of it, nothing, or nobody
+    # knows yet, as the day waits for a decision.
+    FULL = "full"
+    HALF = "half"
+    NOTHING = "nothing"
+    WAITS = "waits"
+
+
+# What a day counts as, and so what it is paid as. An off day and office duty aren't here: _paid_as asks for them first.
+# A status missing from this list fails loudly (KeyError), where an "else, nothing" would leave a worker unpaid without
+# a word should a status be added.
+PAID_AS = {
+    DayStatus.ON_TIME: PaidAs.FULL,
+    # The whole rate too: what a late arrival costs is its fine, a line of its own.
+    DayStatus.LATE: PaidAs.FULL,
+    DayStatus.HALF: PaidAs.HALF,
+    DayStatus.ABSENT: PaidAs.NOTHING,
+    DayStatus.NEEDS_REVIEW: PaidAs.WAITS,
+}
+
+
+@dataclass(frozen=True)
+class DayToPay:
+    # One worker's day as the pay reads it: what the book worked out and its fine; the decision beside it, empty where
+    # there is none (ATT-6); the share of the meals the book kept; and, as they were on that date (A1), the worker's
+    # daily rate, None for no rate, and the shop's rounding step. Values, never the table's row: the sum reads no
+    # database, and today's day, which is never kept, is paid by the same rule.
+    status: str
+    fine: Decimal
+    decided_status: str
+    absence_type: str
+    decided_fine: Decimal | None
+    meal_share: Decimal
+    rate: Decimal | None
+    step: Decimal
+
+
+@dataclass(frozen=True)
+class PaidDay:
+    # What one day pays: what it is paid as, how much, the fine taken off it, and whether it should be paid but has no
+    # rate. The fine is apart, as the pay shows it on a line of its own (spec §8.1).
+    paid_as: PaidAs
+    amount: Decimal
+    fine: Decimal
+    no_rate: bool = False
+
+
+# A day that pays nothing. Two places, as NO_FINE.
+NO_PAY = Decimal("0.00")
+
+
+def _paid_as(day: DayToPay) -> PaidAs:
+    # The shop was shut: the day is nobody's, whatever was decided on it. A tap on a closed day sent it to a person
+    # (ATT-10), who decided it, and the tap was then crossed out, so the day is off again with its decision kept (A2).
+    # As the meals and the month's counts read it (meal_part, attendance_month).
+    if day.status == DayStatus.OFF:
+        return PaidAs.NOTHING
+    # Office duty is kept as an absence with its kind (DECISION_OF, ATT-6), and paid as a full day: they worked for the
+    # shop elsewhere. Asked before the list, which pays an absence nothing.
+    if day.absence_type == AbsenceType.OFFICE_DUTY:
+        return PaidAs.FULL
+    # The decision where there is one, else the book's answer (A2).
+    return PAID_AS[DayStatus(day.decided_status or day.status)]
+
+
+def pay_day(day: DayToPay) -> PaidDay:
+    """What one worker's day pays (WAGE-2; spec §8.1, 02 §15, 8): the day's own rate, or half of it rounded once to the
+    shop's step that day, or nothing; and the fine taken off it, never more than it pays (Jack: A)."""
+    paid_as = _paid_as(day)
+    if paid_as not in (PaidAs.FULL, PaidAs.HALF):
+        return PaidDay(paid_as, NO_PAY, NO_FINE)
+    # A day to pay with no rate in force: the worker's first day was moved earlier (PPL-10), and no rate typed from it.
+    # Nobody knows what it pays, so nothing, and the page says how many such days there are, for the owner to type one.
+    if day.rate is None:
+        return PaidDay(paid_as, NO_PAY, NO_FINE, no_rate=True)
+    # A whole day pays the rate as the owner typed it, whole shillings, never rounded.
+    amount = day.rate
+    if paid_as is PaidAs.HALF:
+        # Half a day is rounded here, once, by the one shared function (ADR-0024), never the month's total: two half
+        # days of 9,001 are 2 × 4,501 on the page, and the line is 9,002, so whoever reads it can check it. Divided
+        # with more digits than any column holds, whatever other code set for this thread, as meal_share is.
+        with localcontext(prec=40):
+            half = day.rate / 2
+        amount = round_money(half, day.step)
+    # The decision's fine where there is a decision, which has one always (the table's rule), else the book's. Never
+    # more than the day pays: half a day of 5,000 with a fine of 6,000 pays nothing, and takes nothing of the worker's
+    # other days (Jack: A).
+    fine = day.fine if day.decided_fine is None else day.decided_fine
+    return PaidDay(paid_as, amount, min(fine, amount))
