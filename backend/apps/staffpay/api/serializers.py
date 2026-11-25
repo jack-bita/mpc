@@ -26,7 +26,9 @@ may be typed for (AdvancesMonthAnswer), read by advances_month; one, for its own
 each answered as the pages show it (AdvanceAnswer).
 
 And the month's pay (WAGE-2), for the month in the address (AttendanceMonthQuery): everyone's (PayMonthAnswer), worked
-out by pay_month, and one worker's (WorkerPayMonthAnswer), by worker_pay, each line by line.
+out by pay_month, and one worker's (WorkerPayMonthAnswer), by worker_pay, each line by line, with who approved it, or
+what its approval waits for (WAGE-3). And its approval: a month's (ApproveMonthSerializer), kept by approve_month, and
+one worker's alone (ApproveLeaverSerializer), by approve_leaver.
 """
 
 import re
@@ -52,6 +54,8 @@ from apps.staffpay.models import (
     MealMoney,
     NoPhoto,
     PayRate,
+    PayRun,
+    Payslip,
     ReviewReason,
 )
 from apps.staffpay.services import (
@@ -300,6 +304,9 @@ class WorkerAttendanceAnswer(serializers.Serializer[Any]):
     yours = serializers.BooleanField(
         help_text="Whether the month is the viewer's own: then none of its days is theirs to decide (ATT-6)."
     )
+    closed = serializers.BooleanField(
+        help_text="Whether the month's pay is approved: then its days take no decision and its taps no fix (WAGE-3)."
+    )
     ready_reasons = serializers.ListField(
         child=serializers.ChoiceField(choices=DEMO_REASONS),
         help_text="On the demo, the ready reasons a decision may take, as codes; elsewhere none (ATT-6).",
@@ -431,6 +438,10 @@ class MealMoneyDaysAnswer(serializers.Serializer[Any]):
         child=serializers.ChoiceField(choices=DEMO_MONEY_VOID_REASONS),
         help_text="On the demo, the ready reasons a row may be crossed out with, as codes; elsewhere none.",
     )
+    closed_to = serializers.DateField(
+        allow_null=True,
+        help_text="The last day whose pay is approved, or none: no money up to it is typed or crossed out (WAGE-3).",
+    )
 
 
 class RecordMealMoneySerializer(serializers.Serializer[Any]):
@@ -496,6 +507,9 @@ class AdvancesMonthAnswer(serializers.Serializer[Any]):
     total = serializers.DecimalField(max_digits=14, decimal_places=2, help_text="Those not crossed out, added up.")
     rows = AdvanceLineSerializer(many=True)
     workers = AdvanceWorkerSerializer(many=True)
+    closed = serializers.BooleanField(
+        help_text="Whether the month's pay is approved: then none is typed in it, or crossed out (WAGE-3)."
+    )
 
 
 class AdvancePageAnswer(serializers.Serializer[Any]):
@@ -503,6 +517,9 @@ class AdvancePageAnswer(serializers.Serializer[Any]):
     # page offers no Batilisha (Jack: A); and the reasons its sheet offers on the demo.
     advance = AdvanceLineSerializer()
     own = serializers.BooleanField(help_text="Whether it was given to the person asking, by whichever job of theirs.")
+    closed = serializers.BooleanField(
+        help_text="Whether the pay it comes off is approved, the month's or the worker's alone (WAGE-3)."
+    )
     ready_void_reasons = serializers.ListField(
         child=serializers.ChoiceField(choices=DEMO_MONEY_VOID_REASONS),
         help_text="On the demo, the ready reasons it may be crossed out with, as codes; elsewhere none.",
@@ -546,29 +563,67 @@ class PayLineSerializer(serializers.Serializer[Any]):
 
 class PaySerializer(serializers.Serializer[Any]):
     # A worker's pay over some days (Pay, apps/staffpay/calculations.py): the lines, the full days first; the fines and
-    # the meals, each with how many days; the money given before payday (WAGE-8), on the days that are over and never on
-    # today's part; how many days wait for a decision, and how many paid days have no rate, neither paid; and what is
-    # left, which may be below 0.
+    # the meals, each with how many days; the money given before payday (WAGE-8) and a debt carried from an earlier
+    # month (WAGE-3), on the days that are over and never on today's part; how many days wait for a decision, and how
+    # many paid days have no rate, neither paid; and what is left, which may be below 0.
     lines = PayLineSerializer(many=True)
     fined_days = serializers.IntegerField()
     fines = serializers.DecimalField(max_digits=14, decimal_places=2)
     meal_days = serializers.IntegerField()
     meals = serializers.DecimalField(max_digits=14, decimal_places=2)
     advances = serializers.DecimalField(max_digits=14, decimal_places=2)
+    carried = serializers.DecimalField(max_digits=14, decimal_places=2)
     waiting = serializers.IntegerField()
     no_rate = serializers.IntegerField()
     total = serializers.DecimalField(max_digits=14, decimal_places=2)
 
 
+class ApprovalSerializer(serializers.Serializer[Any]):
+    # Who approved a month's pay, or one worker's alone, by nickname, and when (WAGE-3).
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+
+
+class OpenDaySerializer(serializers.Serializer[Any]):
+    # A day that stops an approval, as the sheet names it and opens it (WAGE-3).
+    staff = serializers.UUIDField(source="staff_id")
+    display_name = serializers.CharField()
+    date = serializers.DateField()
+
+
+class QuietLaptopSerializer(serializers.Serializer[Any]):
+    # A laptop that has sent nothing since the pay's last day was over, and when it last did, or null for never.
+    name = serializers.CharField()
+    last_synced_at = serializers.DateTimeField(allow_null=True)
+
+
+class ToApproveSerializer(serializers.Serializer[Any]):
+    # What an approval waits for, and what it warns of (WAGE-3): nothing to wait for when `earlier` is null,
+    # `still_clocked_in` false, and both lists of days empty; the server asks it all again as it approves.
+    earlier = MonthField(allow_null=True, help_text="An earlier month whose pay is still open, or none.")
+    waiting = OpenDaySerializer(many=True, help_text="Days that wait for a decision, the oldest first.")
+    no_rate = OpenDaySerializer(many=True, help_text="Days to pay that have no daily rate, the oldest first.")
+    still_clocked_in = serializers.BooleanField(
+        help_text="Whether the worker, alone, has not tapped Toka on their last evening."
+    )
+    quiet_laptops = QuietLaptopSerializer(many=True, help_text="A warning: their taps may be missing.")
+    came_unpaid = serializers.ListField(
+        child=serializers.CharField(), help_text="A warning: who came with no daily pay, by nickname."
+    )
+
+
 class WorkerPaySerializer(serializers.Serializer[Any]):
     # One worker's line of Mishahara, and their own page's: whose, and their last day if they left; the days that are
-    # over; today alone, once they tapped Toka, or null (Leo); and what is left to pay, the two together.
+    # over; today alone, once they tapped Toka, or null (Leo); and what is left to pay, the two together. The month a
+    # debt among them is from; and who approved it, once a payslip keeps it (WAGE-3).
     staff = serializers.UUIDField(source="staff_id")
     display_name = serializers.CharField()
     left_on = serializers.DateField(allow_null=True)
     pay = PaySerializer()
     today = PaySerializer(allow_null=True)
     total = serializers.DecimalField(max_digits=14, decimal_places=2)
+    carried_from = MonthField(allow_null=True, help_text="The month a debt among them is from, or none (WAGE-3).")
+    approval = ApprovalSerializer(allow_null=True, help_text="Who approved it, once a payslip keeps it, or none.")
 
 
 # One object, not a list, as for the pay rates' answer above.
@@ -585,6 +640,10 @@ class PayMonthAnswer(serializers.Serializer[Any]):
     )
     total = serializers.DecimalField(max_digits=14, decimal_places=2)
     workers = WorkerPaySerializer(many=True)
+    approval = ApprovalSerializer(allow_null=True, help_text="Who approved the month, or none while it is open.")
+    to_approve = ToApproveSerializer(
+        allow_null=True, help_text="What its approval waits for, once it is over and open; else none (WAGE-3)."
+    )
 
 
 class WorkerPayMonthAnswer(serializers.Serializer[Any]):
@@ -602,3 +661,56 @@ class WorkerPayMonthAnswer(serializers.Serializer[Any]):
         help_text="Whether the worker's first working day of this month is still to come."
     )
     worker = WorkerPaySerializer()
+    to_approve = ToApproveSerializer(
+        allow_null=True,
+        help_text="For one who left, with pay still open: what approving it alone waits for; else none (WAGE-3).",
+    )
+
+
+class SeenTotalSerializer(serializers.Serializer[Any]):
+    # One worker's total, as the person read it: whoever approves approves only what they read.
+    staff = serializers.UUIDField()
+    total = serializers.DecimalField(max_digits=14, decimal_places=2)
+
+
+class ApproveMonthSerializer(serializers.Serializer[Any]):
+    # What the page sends to approve a month (WAGE-3), with the id it made itself (ADR-0007): the month, and each
+    # worker's total as it was read. A worker named twice is the last one said; whether they are every worker, and the
+    # very totals, is approve_month's to check.
+    id = serializers.UUIDField(validators=[uuid7_only])
+    month = MonthField()
+    seen = SeenTotalSerializer(many=True)
+
+
+class PayRunAnswer(serializers.ModelSerializer[PayRun]):
+    # An approval, as it was kept: the page then reads the month again. Who and when are always there, as the table
+    # holds.
+    month = MonthField(read_only=True)
+    approved_by = serializers.CharField(source="created_by.display_name", read_only=True)
+    approved_at = serializers.DateTimeField(source="created_at", read_only=True)
+
+    class Meta:
+        model = PayRun
+        fields = ["id", "month", "approved_by", "approved_at"]
+        read_only_fields = fields
+
+
+class ApproveLeaverSerializer(serializers.Serializer[Any]):
+    # What the page sends to approve one who left, alone (WAGE-3), with the id it made itself: whose, the month, and the
+    # total as it was read.
+    id = serializers.UUIDField(validators=[uuid7_only])
+    staff = WorkerField()
+    month = MonthField()
+    seen = serializers.DecimalField(max_digits=14, decimal_places=2)
+
+
+class PayslipAnswer(serializers.ModelSerializer[Payslip]):
+    # A payslip approved alone, as it was kept: the page then reads the worker's pay again.
+    month = MonthField(read_only=True)
+    approved_by = serializers.CharField(source="created_by.display_name", read_only=True)
+    approved_at = serializers.DateTimeField(source="created_at", read_only=True)
+
+    class Meta:
+        model = Payslip
+        fields = ["id", "staff", "month", "total", "approved_by", "approved_at"]
+        read_only_fields = fields

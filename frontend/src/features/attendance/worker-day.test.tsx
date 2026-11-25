@@ -101,6 +101,7 @@ function november(
     days,
     taps: dayTaps,
     yours: false,
+    closed: false,
     ready_reasons: [],
     ready_add_reasons: [],
     ready_void_reasons: [],

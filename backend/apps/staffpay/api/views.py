@@ -1,17 +1,18 @@
 """apps/staffpay/api/views.py — the staffpay routes an office screen calls, under /api/v1/staffpay/ (WAGE-1; 03 §5.10).
 
-Eight: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
+Ten: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
 read on Mahudhurio ya mwezi (ATT-5); one worker's month, their calendar and its days' taps (ATT-12); a decision on one
 of their days, sent from the sheet under the calendar (ATT-6); a manager's fixes to the taps, a tap added and a tap
 crossed out, each sent from its sheet under the calendar (ATT-13); the day's meal money, read, typed and crossed out on
 Hela ya chakula (WAGE-7); money given before payday, read, typed and crossed out on Advansi (WAGE-8); and the month's
-pay, everyone's on Mishahara and one worker's on their page, read alone (WAGE-2). Thin, as every route is (ADR-0015):
+pay, everyone's on Mishahara and one worker's on their page, read alone (WAGE-2); and its approval, a month's and one
+worker's alone (WAGE-3). Thin, as every route is (ADR-0015):
 who may set a rate, and what it may be, are set_pay_rate's (apps/staffpay/services/money.py); which rate is in force,
 the selectors'; what a month holds, attendance_month's; what a worker's month holds, worker_attendance's; who may decide
 a day, and how, decide_day's; who may fix a tap, and how, add_tap's and void_tap's; the meal money of any days,
 meal_money_days'; who may type it, and cross it out, and how, record_meal_money's and void_meal_money's; the advances of
 a month, advances_month's; who may type one, and cross it out, and how, record_advance's and void_advance's; what the
-month pays, pay_month's and worker_pay's.
+month pays, pay_month's and worker_pay's; and who may approve it, and when, approve_month's and approve_leaver's.
 """
 
 from datetime import date
@@ -34,6 +35,8 @@ from apps.staffpay.api.serializers import (
     AdvanceAnswer,
     AdvancePageAnswer,
     AdvancesMonthAnswer,
+    ApproveLeaverSerializer,
+    ApproveMonthSerializer,
     AttendanceMonthAnswer,
     AttendanceMonthQuery,
     DayDecisionSerializer,
@@ -46,6 +49,8 @@ from apps.staffpay.api.serializers import (
     PayRatesAnswer,
     PayRateSerializer,
     PayRatesQuery,
+    PayRunAnswer,
+    PayslipAnswer,
     RecordAdvanceSerializer,
     RecordMealMoneySerializer,
     TapAnswer,
@@ -55,12 +60,25 @@ from apps.staffpay.api.serializers import (
     WorkerAttendanceAnswer,
     WorkerPayMonthAnswer,
 )
-from apps.staffpay.models import Advance, AttendanceDay, AttendanceEvent, ClockKind, DayChoice, MealMoney, PayRate
-from apps.staffpay.selectors import NEWEST_FIRST, rate_in_force
+from apps.staffpay.models import (
+    Advance,
+    AttendanceDay,
+    AttendanceEvent,
+    ClockKind,
+    DayChoice,
+    MealMoney,
+    PayRate,
+    PayRun,
+    Payslip,
+)
+from apps.staffpay.selectors import NEWEST_FIRST, is_closed, rate_in_force
 from apps.staffpay.services import (
+    APPROVES,
     add_tap,
     advance_line,
     advances_month,
+    approve_leaver,
+    approve_month,
     attendance_month,
     decide_day,
     decision_of,
@@ -83,9 +101,15 @@ def _ask_the_workers_key_too(view: ShopViewSet[Any]) -> None:
     Whoever may see a worker's pay holds the same two keys as whoever may change it (Jack, WAGE-1's review: A), so a
     manager handed settings.manage only to change the late fine reads nobody's pay. Asked in `initial`, before anything
     is read, as the route names one key per action."""
-    if Permission.STAFF_MANAGE not in view.held.on(None):
-        # English for the logs; the screens translate the code (ADR-0032).
-        raise exceptions.PermissionDenied(f"This person may not {Permission.STAFF_MANAGE} here.")
+    _ask(view, Permission.STAFF_MANAGE)
+
+
+def _ask(view: ShopViewSet[Any], *keys: Permission) -> None:
+    # Refuse a visit whose person lacks one of the keys on the whole shop.
+    for key in keys:
+        if key not in view.held.on(None):
+            # English for the logs; the screens translate the code (ADR-0032).
+            raise exceptions.PermissionDenied(f"This person may not {key} here.")
 
 
 class PayRateViewSet(CreateOnceMixin[PayRate]):
@@ -396,7 +420,13 @@ class AdvanceViewSet(CreateOnceMixin[Advance]):
         row = self.get_object()
         # By the person, not the job, as void_advance asks: someone hired again crosses out none of their old job's.
         own = row.staff.user_id == cast(StaffMember, self.actor).user_id
-        answer = {"advance": advance_line(row), "own": own, "ready_void_reasons": ready_advance_void_reasons()}
+        answer = {
+            "advance": advance_line(row),
+            "own": own,
+            # Its pay approved, the month's or the worker's alone (WAGE-3): the page offers no Batilisha.
+            "closed": is_closed(Shop.objects.get(pk=row.shop_id), row.date, row.staff_id),
+            "ready_void_reasons": ready_advance_void_reasons(),
+        }
         return Response(AdvancePageAnswer(answer).data)
 
     def create_row(self, data: dict[str, Any]) -> Advance:
@@ -428,16 +458,16 @@ class PayViewSet(ShopViewSet[StaffMember]):
     # GET pay/?month=2026-11: the month's pay of everyone the shop pays by the day, on Mishahara (WAGE-2), each worker's
     # line by line, with the whole of it. GET pay/{id}/?month=2026-11: one worker's, on their own pay page and in the
     # card of their own page. Only reads: the draft is worked out each time and never saved (Jack); approving it is
-    # WAGE-3's. Both work the days out through the book, as the month's route does, so these GETs write too, and are
-    # safe to send again (ATT-10).
+    # pay-runs/ and payslips/, below, and an approved month is read from its payslips (WAGE-3). Both work an open month
+    # out through the book, as the month's route does, so these GETs write too, and are safe to send again (ATT-10).
     # The worker in the address, a job of the visit's shop, found through the guard (get_object): another shop's, or an
     # id no shop has, is "not found" alike (03 §5.4).
     model = StaffMember
     # A worker belongs to the whole shop, as their pay does: no side.
     side_field = None
     # The two keys of pay, on the whole shop, as the rates' route asks them (WAGE-1): "14 × 10,000" shows the rate. So a
-    # manager without both sees nobody's pay here either; `pay.run`, which every Manager holds, opens nothing until
-    # WAGE-3 decides what preparing the pay may show.
+    # manager without both sees nobody's pay here either; `pay.run`, which every Manager holds, opens nothing: reading
+    # the pay is approving's, and handing it out is WAGE-9's to decide.
     action_permissions = {"list": Permission.SETTINGS_MANAGE, "retrieve": Permission.SETTINGS_MANAGE}
     # One answer, not pages: a shop's workers are a few dozen lines, and the page adds nothing up.
     pagination_class = None
@@ -466,3 +496,62 @@ class PayViewSet(ShopViewSet[StaffMember]):
     def _shop(self) -> Shop:
         # The visit's own shop, open already (ShopViewSet): everything below reads inside it, through the guard.
         return Shop.objects.get(pk=self.actor.shop_id)
+
+
+class _ApprovalViewSet[M: PayRun | Payslip](CreateOnceMixin[M]):
+    # What the two approvals share (WAGE-3): who may. Not a route itself.
+    # A worker's pay belongs to the whole shop: no side.
+    side_field = None
+    # The owner's own key to the approval, on the whole shop.
+    action_permissions = {"create": Permission.PAY_APPROVE}
+
+    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
+        # The base's checks first: the login, the action named, and its key above (apps/core/api/base.py). Then every
+        # key an approval asks, before anything is read: the two of pay, as nobody approves what they may not read; and
+        # the approval's own again, as a create sent again hands back the row it made and asks no key for that
+        # (CreateOnceMixin), and who approved a month, and one worker's total, are the pay's own (as a tap's, ATT-13).
+        # The services ask all three again, inside their transactions.
+        super().initial(request, *args, **kwargs)
+        _ask(self, *APPROVES)
+
+    def base_rows(self) -> QuerySet[M]:
+        # Each names who approved it: their job comes in the same read.
+        return super().base_rows().select_related("created_by")
+
+
+class PayRunViewSet(_ApprovalViewSet[PayRun]):
+    # POST pay-runs/: a month's pay approved, once, for everyone (WAGE-3), from the sheet on Mishahara. No list and no
+    # read of one alone: an approved month is read through pay/, and nothing ever changes or undoes one (A3).
+    model = PayRun
+    serializer_class = PayRunAnswer
+    create_serializer_class = ApproveMonthSerializer
+
+    def create_row(self, data: dict[str, Any]) -> PayRun:
+        # approve_month checks the month, its days and the totals, and refuses with its codes. The visit's own shop,
+        # open already (ShopViewSet). cast: the login leaves the staff member acting in `request.auth`.
+        return approve_month(
+            Shop.objects.get(pk=self.actor.shop_id),
+            data["month"],
+            run_id=data["id"],
+            seen={each["staff"]: each["total"] for each in data["seen"]},
+            by=cast(StaffMember, self.actor),
+        )
+
+
+class PayslipViewSet(_ApprovalViewSet[Payslip]):
+    # POST payslips/: the pay of one worker who left, approved alone (WAGE-3), from the sheet on their pay page. No list
+    # and no read of one alone: a payslip is read through pay/{id}/.
+    model = Payslip
+    serializer_class = PayslipAnswer
+    create_serializer_class = ApproveLeaverSerializer
+
+    def create_row(self, data: dict[str, Any]) -> Payslip:
+        # The worker is one of the visit's shop (WorkerField); approve_leaver checks the rest, and refuses with its
+        # codes.
+        return approve_leaver(
+            data["staff"],
+            data["month"],
+            payslip_id=data["id"],
+            seen=data["seen"],
+            by=cast(StaffMember, self.actor),
+        )

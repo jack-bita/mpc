@@ -1516,6 +1516,25 @@
       "own": "Huwezi kuandika wala kubatilisha advansi yako mwenyewe.",
       "reason_missing": "Andika sababu."
     },
+    "pay": {
+      "day_approved": "Malipo ya siku hii yameshaidhinishwa, hayabadiliki tena."
+    },
+    "pay_run": {
+      "already_approved": "Malipo ya mwezi huu yameshaidhinishwa.",
+      "month_not_over": "Mwezi huu haujaisha. Utaidhinishwa ukiisha.",
+      "nobody": "Hakuna mfanyakazi wa kulipwa katika mwezi huu.",
+      "earlier_month_open": "Kuna mwezi wa nyuma ambao haujaidhinishwa. Uidhinishe huo kwanza.",
+      "days_waiting": "Kuna siku zinazosubiri uamuzi. Ziamue kwanza.",
+      "days_without_rate": "Kuna siku zisizo na malipo kwa siku. Weka malipo kwa siku kwanza.",
+      "totals_moved": "Hesabu zimebadilika tangu ulipozisoma. Zisome tena, kisha idhinisha."
+    },
+    "payslip": {
+      "not_left": "Mfanyakazi huyu bado yupo kazini. Malipo yake yataidhinishwa na ya wengine mwezi ukiisha.",
+      "already_approved": "Malipo ya mfanyakazi huyu yameshaidhinishwa.",
+      "nothing": "Mfanyakazi huyu hana malipo katika mwezi huu.",
+      "own": "Huwezi kuidhinisha malipo yako mwenyewe peke yake.",
+      "still_clocked_in": "Mfanyakazi huyu bado hajabonyeza Toka leo."
+    },
     "flag": {
       "note_required": "Andika maelezo.",
       "closed": "Tofauti hii imeshafungwa.",

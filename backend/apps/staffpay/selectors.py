@@ -31,6 +31,7 @@ And whether the pay of a day is approved (is_closed, WAGE-3), so nothing it is m
 """
 
 import uuid
+from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -38,7 +39,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Q, Sum
+from django.db.models import Max, Q, Sum
 
 from apps.core.settings_registry import (
     AFTERNOON_FROM,
@@ -238,6 +239,13 @@ def is_closed(shop: Shop, day: date, job: uuid.UUID | None = None) -> bool:
     if PayRun.objects.filter(shop=shop, month__gte=month).exists():
         return True
     return job is not None and Payslip.objects.filter(shop=shop, staff_id=job, month__gte=month).exists()
+
+
+def closed_to(shop: Shop) -> date | None:
+    """The last day of the last month approved, or None while none is (WAGE-3): up to it, the shop's own pay is closed
+    (is_closed), so the meal money's page offers no change of those days."""
+    month = PayRun.objects.filter(shop=shop).aggregate(last=Max("month"))["last"]
+    return None if month is None else month.replace(day=monthrange(month.year, month.month)[1])
 
 
 @dataclass(frozen=True)

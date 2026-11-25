@@ -47,7 +47,7 @@ from apps.staffpay.models import (
     MealMoney,
     PayRate,
 )
-from apps.staffpay.selectors import is_closed, rates_between
+from apps.staffpay.selectors import closed_to, is_closed, rates_between
 from apps.staffpay.services.book import (
     SUNDAY,
     lock_jobs,
@@ -302,6 +302,8 @@ class MealMoneyDays:
     total: Decimal
     days: list[MealDay]
     ready_void_reasons: list[str]
+    # Up to which day the shop's pay is approved (WAGE-3), or None: no money of those days is typed or crossed out.
+    closed_to: dt.date | None = None
 
 
 # No money: a day nobody typed, or a span of them. Two places, as every amount.
@@ -318,7 +320,7 @@ def meal_money_days(shop: Shop, first: dt.date, last: dt.date) -> MealMoneyDays:
     if today < first:
         # Days to come alone, when nobody has eaten yet: nothing to read. Answered as they were asked for, so the page
         # never heads them with a last day before the first.
-        return MealMoneyDays(first, last, today, NO_MONEY, [], ready)
+        return MealMoneyDays(first, last, today, NO_MONEY, [], ready, closed_to(shop))
     last = min(last, today)
     # The book first, so each day's share is as it is now: the money typed a moment ago, a tap that came late, a day
     # decided. It answers every job's day up to yesterday. The rows are read after it, so money typed between the two
@@ -343,7 +345,7 @@ def meal_money_days(shop: Shop, first: dt.date, last: dt.date) -> MealMoneyDays:
         # it is a working day, as that is when its money is typed.
         if day.rows or day.sharers or day.waiting or (date == today and _works_today(shop, today)):
             days.append(day)
-    return MealMoneyDays(first, last, today, sum((day.amount for day in days), NO_MONEY), days, ready)
+    return MealMoneyDays(first, last, today, sum((day.amount for day in days), NO_MONEY), days, ready, closed_to(shop))
 
 
 def _dates_back(first: dt.date, last: dt.date) -> list[dt.date]:
@@ -567,6 +569,8 @@ class AdvancesMonth:
     total: Decimal
     rows: list[AdvanceLine]
     workers: list[AdvanceWorker]
+    # Whether the month's pay is approved (WAGE-3): then none is typed in it, and the page offers no button.
+    closed: bool = False
 
 
 def ready_advance_void_reasons() -> list[str]:
@@ -613,6 +617,7 @@ def advances_month(shop: Shop, month: dt.date, *, viewer: StaffMember) -> Advanc
             AdvanceWorker(staff_id=staff.pk, display_name=staff.display_name, left_on=staff.left_on)
             for staff in sorted(workers, key=lambda staff: (staff.display_name.casefold(), staff.pk))
         ],
+        closed=is_closed(shop, first),
     )
 
 

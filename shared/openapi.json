@@ -3405,6 +3405,52 @@
                 }
             }
         },
+        "/api/v1/staffpay/pay-runs/": {
+            "post": {
+                "operationId": "staffpay_pay_runs_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ApproveMonthRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PayRunAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/staffpay/pay/{id}/": {
             "get": {
                 "operationId": "staffpay_pay_retrieve",
@@ -3445,6 +3491,52 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/WorkerPayMonthAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/staffpay/payslips/": {
+            "post": {
+                "operationId": "staffpay_payslips_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ApproveLeaverRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PayslipAnswer"
                                 }
                             }
                         },
@@ -3629,6 +3721,10 @@
                         "type": "boolean",
                         "description": "Whether it was given to the person asking, by whichever job of theirs."
                     },
+                    "closed": {
+                        "type": "boolean",
+                        "description": "Whether the pay it comes off is approved, the month's or the worker's alone (WAGE-3)."
+                    },
                     "ready_void_reasons": {
                         "type": "array",
                         "items": {
@@ -3639,6 +3735,7 @@
                 },
                 "required": [
                     "advance",
+                    "closed",
                     "own",
                     "ready_void_reasons"
                 ]
@@ -3694,9 +3791,14 @@
                         "items": {
                             "$ref": "#/components/schemas/AdvanceWorker"
                         }
+                    },
+                    "closed": {
+                        "type": "boolean",
+                        "description": "Whether the month's pay is approved: then none is typed in it, or crossed out (WAGE-3)."
                     }
                 },
                 "required": [
+                    "closed",
                     "month",
                     "rows",
                     "today",
@@ -3745,6 +3847,76 @@
                     "fields",
                     "message",
                     "params"
+                ]
+            },
+            "Approval": {
+                "type": "object",
+                "properties": {
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "at",
+                    "by"
+                ]
+            },
+            "ApproveLeaverRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "month": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11"
+                    },
+                    "seen": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "month",
+                    "seen",
+                    "staff"
+                ]
+            },
+            "ApproveMonthRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "month": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11"
+                    },
+                    "seen": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SeenTotalRequest"
+                        }
+                    }
+                },
+                "required": [
+                    "id",
+                    "month",
+                    "seen"
                 ]
             },
             "AttendanceMonthAnswer": {
@@ -5422,9 +5594,16 @@
                             "$ref": "#/components/schemas/MoneyVoidReasonEnum"
                         },
                         "description": "On the demo, the ready reasons a row may be crossed out with, as codes; elsewhere none."
+                    },
+                    "closed_to": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true,
+                        "description": "The last day whose pay is approved, or none: no money up to it is typed or crossed out (WAGE-3)."
                     }
                 },
                 "required": [
+                    "closed_to",
                     "days",
                     "first",
                     "last",
@@ -5500,6 +5679,27 @@
             "NullEnum": {
                 "enum": [
                     null
+                ]
+            },
+            "OpenDay": {
+                "type": "object",
+                "properties": {
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                },
+                "required": [
+                    "date",
+                    "display_name",
+                    "staff"
                 ]
             },
             "OutageEnvelopeRequest": {
@@ -5759,6 +5959,11 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
                     },
+                    "carried": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
                     "waiting": {
                         "type": "integer"
                     },
@@ -5773,6 +5978,7 @@
                 },
                 "required": [
                     "advances",
+                    "carried",
                     "fined_days",
                     "fines",
                     "lines",
@@ -5841,12 +6047,32 @@
                         "items": {
                             "$ref": "#/components/schemas/WorkerPay"
                         }
+                    },
+                    "approval": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Approval"
+                            }
+                        ],
+                        "nullable": true,
+                        "description": "Who approved the month, or none while it is open."
+                    },
+                    "to_approve": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ToApprove"
+                            }
+                        ],
+                        "nullable": true,
+                        "description": "What its approval waits for, once it is over and open; else none (WAGE-3)."
                     }
                 },
                 "required": [
+                    "approval",
                     "counted_to",
                     "month",
                     "no_day_yet",
+                    "to_approve",
                     "today",
                     "total",
                     "workers"
@@ -5968,6 +6194,37 @@
                     "today"
                 ]
             },
+            "PayRunAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "month": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11",
+                        "readOnly": true
+                    },
+                    "approved_by": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "approved_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "approved_at",
+                    "approved_by",
+                    "id",
+                    "month"
+                ]
+            },
             "PaymentAccountChange": {
                 "type": "object",
                 "properties": {
@@ -6055,6 +6312,50 @@
                     "number",
                     "provider",
                     "sides"
+                ]
+            },
+            "PayslipAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "month": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11",
+                        "readOnly": true
+                    },
+                    "total": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "readOnly": true
+                    },
+                    "approved_by": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "approved_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "approved_at",
+                    "approved_by",
+                    "id",
+                    "month",
+                    "staff",
+                    "total"
                 ]
             },
             "PermissionEnum": {
@@ -6359,6 +6660,23 @@
                 "type": "string",
                 "description": "* `accepted` - Accepted\n* `invalid` - Invalid"
             },
+            "QuietLaptop": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "last_synced_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "last_synced_at",
+                    "name"
+                ]
+            },
             "ReadyAddReasonsEnum": {
                 "enum": [
                     "forgot_tap"
@@ -6549,6 +6867,24 @@
                 ],
                 "type": "string",
                 "description": "* `one_screen` - One screen\n* `writer_cashier_loader` - Writer, cashier, loader"
+            },
+            "SeenTotalRequest": {
+                "type": "object",
+                "properties": {
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "total": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "staff",
+                    "total"
+                ]
             },
             "SetPinRequest": {
                 "type": "object",
@@ -7552,6 +7888,58 @@
                     "reason"
                 ]
             },
+            "ToApprove": {
+                "type": "object",
+                "properties": {
+                    "earlier": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11",
+                        "nullable": true,
+                        "description": "An earlier month whose pay is still open, or none."
+                    },
+                    "waiting": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OpenDay"
+                        },
+                        "description": "Days that wait for a decision, the oldest first."
+                    },
+                    "no_rate": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OpenDay"
+                        },
+                        "description": "Days to pay that have no daily rate, the oldest first."
+                    },
+                    "still_clocked_in": {
+                        "type": "boolean",
+                        "description": "Whether the worker, alone, has not tapped Toka on their last evening."
+                    },
+                    "quiet_laptops": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/QuietLaptop"
+                        },
+                        "description": "A warning: their taps may be missing."
+                    },
+                    "came_unpaid": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "A warning: who came with no daily pay, by nickname."
+                    }
+                },
+                "required": [
+                    "came_unpaid",
+                    "earlier",
+                    "no_rate",
+                    "quiet_laptops",
+                    "still_clocked_in",
+                    "waiting"
+                ]
+            },
             "VoidAdvanceRequest": {
                 "type": "object",
                 "properties": {
@@ -7717,6 +8105,10 @@
                         "type": "boolean",
                         "description": "Whether the month is the viewer's own: then none of its days is theirs to decide (ATT-6)."
                     },
+                    "closed": {
+                        "type": "boolean",
+                        "description": "Whether the month's pay is approved: then its days take no decision and its taps no fix (WAGE-3)."
+                    },
                     "ready_reasons": {
                         "type": "array",
                         "items": {
@@ -7740,6 +8132,7 @@
                     }
                 },
                 "required": [
+                    "closed",
                     "days",
                     "left_on",
                     "month",
@@ -7905,9 +8298,27 @@
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "carried_from": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11",
+                        "nullable": true,
+                        "description": "The month a debt among them is from, or none (WAGE-3)."
+                    },
+                    "approval": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Approval"
+                            }
+                        ],
+                        "nullable": true,
+                        "description": "Who approved it, once a payslip keeps it, or none."
                     }
                 },
                 "required": [
+                    "approval",
+                    "carried_from",
                     "display_name",
                     "left_on",
                     "pay",
@@ -7943,6 +8354,15 @@
                     },
                     "worker": {
                         "$ref": "#/components/schemas/WorkerPay"
+                    },
+                    "to_approve": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ToApprove"
+                            }
+                        ],
+                        "nullable": true,
+                        "description": "For one who left, with pay still open: what approving it alone waits for; else none (WAGE-3)."
                     }
                 },
                 "required": [
@@ -7950,6 +8370,7 @@
                     "month",
                     "no_day_yet",
                     "paid_by_day",
+                    "to_approve",
                     "today",
                     "worker"
                 ]

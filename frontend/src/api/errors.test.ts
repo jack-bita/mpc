@@ -150,6 +150,20 @@ const CODES_THE_API_SENDS = [
   "advance.not_paid_by_day",
   "advance.own",
   "advance.reason_missing",
+  // A month's pay approved, one worker's alone, and whatever an approved month then refuses (WAGE-3).
+  "pay.day_approved",
+  "pay_run.already_approved",
+  "pay_run.month_not_over",
+  "pay_run.nobody",
+  "pay_run.earlier_month_open",
+  "pay_run.days_waiting",
+  "pay_run.days_without_rate",
+  "pay_run.totals_moved",
+  "payslip.not_left",
+  "payslip.already_approved",
+  "payslip.nothing",
+  "payslip.own",
+  "payslip.still_clocked_in",
   // Explaining or closing a flag (CTRL-4, apps/control/services.py): no words; one closed already; one that names the
   // person closing it. On the demo, a note that isn't a ready one is demo.ready_reasons above.
   "flag.note_required",

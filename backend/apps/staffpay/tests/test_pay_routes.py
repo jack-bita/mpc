@@ -68,6 +68,7 @@ def ashas_line(staff: StaffMember) -> dict[str, object]:
             "meal_days": 1,
             "meals": "1000.00",
             "advances": "0.00",
+            "carried": "0.00",
             "waiting": 1,
             "no_rate": 0,
             "total": "23500.00",
@@ -79,11 +80,14 @@ def ashas_line(staff: StaffMember) -> dict[str, object]:
             "meal_days": 0,
             "meals": "0.00",
             "advances": "0.00",
+            "carried": "0.00",
             "waiting": 0,
             "no_rate": 0,
             "total": "10000.00",
         },
         "total": "33500.00",
+        "carried_from": None,
+        "approval": None,
     }
 
 
@@ -98,6 +102,9 @@ def test_the_months_pay_as_the_page_reads_it(staff_client_a: APIClient, asha: St
         "no_day_yet": False,
         "total": "33500.00",
         "workers": [ashas_line(asha)],
+        # Still running: nothing to approve yet (WAGE-3).
+        "approval": None,
+        "to_approve": None,
     }
 
 
@@ -111,6 +118,7 @@ def test_one_workers_pay_as_the_page_reads_it(staff_client_a: APIClient, asha: S
         "paid_by_day": True,
         "no_day_yet": False,
         "worker": ashas_line(asha),
+        "to_approve": None,
     }
 
 

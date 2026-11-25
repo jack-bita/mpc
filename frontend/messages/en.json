@@ -1516,6 +1516,25 @@
       "own": "You can't record or cross out your own advance.",
       "reason_missing": "Write why."
     },
+    "pay": {
+      "day_approved": "The pay of this day is approved, so it can't change any more."
+    },
+    "pay_run": {
+      "already_approved": "This month's pay is already approved.",
+      "month_not_over": "This month isn't over. It is approved once it is.",
+      "nobody": "Nobody is paid in this month.",
+      "earlier_month_open": "An earlier month isn't approved yet. Approve that one first.",
+      "days_waiting": "Some days still wait for a decision. Decide them first.",
+      "days_without_rate": "Some days have no daily pay. Set the daily pay first.",
+      "totals_moved": "The totals have changed since you read them. Read them again, then approve."
+    },
+    "payslip": {
+      "not_left": "This worker still works here. Their pay is approved with everyone's once the month is over.",
+      "already_approved": "This worker's pay is already approved.",
+      "nothing": "This worker has no pay in this month.",
+      "own": "You can't approve your own pay alone.",
+      "still_clocked_in": "This worker hasn't tapped Toka yet today."
+    },
     "flag": {
       "note_required": "Write a note.",
       "closed": "This flag is already closed.",

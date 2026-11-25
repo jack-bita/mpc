@@ -1069,6 +1069,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staffpay/pay-runs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_pay_runs_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/pay/{id}/": {
         parameters: {
             query?: never;
@@ -1079,6 +1104,31 @@ export interface paths {
         get: operations["staffpay_pay_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffpay/payslips/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_payslips_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1144,6 +1194,8 @@ export interface components {
             advance: components["schemas"]["AdvanceLine"];
             /** @description Whether it was given to the person asking, by whichever job of theirs. */
             own: boolean;
+            /** @description Whether the pay it comes off is approved, the month's or the worker's alone (WAGE-3). */
+            closed: boolean;
             /** @description On the demo, the ready reasons it may be crossed out with, as codes; elsewhere none. */
             ready_void_reasons: components["schemas"]["MoneyVoidReasonEnum"][];
         };
@@ -1166,6 +1218,8 @@ export interface components {
             total: string;
             rows: components["schemas"]["AdvanceLine"][];
             workers: components["schemas"]["AdvanceWorker"][];
+            /** @description Whether the month's pay is approved: then none is typed in it, or crossed out (WAGE-3). */
+            closed: boolean;
         };
         ApiError: {
             code: string;
@@ -1176,6 +1230,28 @@ export interface components {
             params: {
                 [key: string]: (string | number | boolean) | null;
             };
+        };
+        Approval: {
+            by: string;
+            /** Format: date-time */
+            at: string;
+        };
+        ApproveLeaverRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            staff: string;
+            /** @example 2026-11 */
+            month: string;
+            /** Format: decimal */
+            seen: string;
+        };
+        ApproveMonthRequest: {
+            /** Format: uuid */
+            id: string;
+            /** @example 2026-11 */
+            month: string;
+            seen: components["schemas"]["SeenTotalRequest"][];
         };
         AttendanceMonthAnswer: {
             /** @example 2026-11 */
@@ -1720,6 +1796,11 @@ export interface components {
             days: components["schemas"]["MealDay"][];
             /** @description On the demo, the ready reasons a row may be crossed out with, as codes; elsewhere none. */
             ready_void_reasons: components["schemas"]["MoneyVoidReasonEnum"][];
+            /**
+             * Format: date
+             * @description The last day whose pay is approved, or none: no money up to it is typed or crossed out (WAGE-3).
+             */
+            closed_to: string | null;
         };
         MealMoneyLine: {
             /** Format: uuid */
@@ -1751,6 +1832,13 @@ export interface components {
         NoPhotoEnum: "no_camera" | "blocked" | "failed" | "old_app" | "demo" | "entered";
         /** @enum {unknown} */
         NullEnum: null;
+        OpenDay: {
+            /** Format: uuid */
+            staff: string;
+            display_name: string;
+            /** Format: date */
+            date: string;
+        };
         OutageEnvelopeRequest: {
             /**
              * Format: uuid
@@ -1869,6 +1957,8 @@ export interface components {
             meals: string;
             /** Format: decimal */
             advances: string;
+            /** Format: decimal */
+            carried: string;
             waiting: number;
             no_rate: number;
             /** Format: decimal */
@@ -1894,6 +1984,10 @@ export interface components {
             /** Format: decimal */
             total: string;
             workers: components["schemas"]["WorkerPay"][];
+            /** @description Who approved the month, or none while it is open. */
+            approval: components["schemas"]["Approval"] | null;
+            /** @description What its approval waits for, once it is over and open; else none (WAGE-3). */
+            to_approve: components["schemas"]["ToApprove"] | null;
         };
         PayRate: {
             /** Format: uuid */
@@ -1932,6 +2026,15 @@ export interface components {
             in_force: string | null;
             rates: components["schemas"]["PayRate"][];
         };
+        PayRunAnswer: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @example 2026-11 */
+            readonly month: string;
+            readonly approved_by: string;
+            /** Format: date-time */
+            readonly approved_at: string;
+        };
         PaymentAccountChange: {
             seq: number;
             /**
@@ -1959,6 +2062,19 @@ export interface components {
             readonly provider: string;
             readonly number: string;
             readonly sides: string[];
+        };
+        PayslipAnswer: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly staff: string;
+            /** @example 2026-11 */
+            readonly month: string;
+            /** Format: decimal */
+            readonly total: string;
+            readonly approved_by: string;
+            /** Format: date-time */
+            readonly approved_at: string;
         };
         /**
          * @description * `sale.write` - Write a sale or an order
@@ -2106,6 +2222,11 @@ export interface components {
          * @enum {string}
          */
         PushedStatusEnum: "accepted" | "invalid";
+        QuietLaptop: {
+            name: string;
+            /** Format: date-time */
+            last_synced_at: string | null;
+        };
         /**
          * @description * `forgot_tap` - forgot_tap
          * @enum {string}
@@ -2185,6 +2306,12 @@ export interface components {
          * @enum {string}
          */
         SaleFlowEnum: "one_screen" | "writer_cashier_loader";
+        SeenTotalRequest: {
+            /** Format: uuid */
+            staff: string;
+            /** Format: decimal */
+            total: string;
+        };
         SetPinRequest: {
             pin: string;
         };
@@ -2474,6 +2601,23 @@ export interface components {
             password: string;
             reason: string;
         };
+        ToApprove: {
+            /**
+             * @description An earlier month whose pay is still open, or none.
+             * @example 2026-11
+             */
+            earlier: string | null;
+            /** @description Days that wait for a decision, the oldest first. */
+            waiting: components["schemas"]["OpenDay"][];
+            /** @description Days to pay that have no daily rate, the oldest first. */
+            no_rate: components["schemas"]["OpenDay"][];
+            /** @description Whether the worker, alone, has not tapped Toka on their last evening. */
+            still_clocked_in: boolean;
+            /** @description A warning: their taps may be missing. */
+            quiet_laptops: components["schemas"]["QuietLaptop"][];
+            /** @description A warning: who came with no daily pay, by nickname. */
+            came_unpaid: string[];
+        };
         VoidAdvanceRequest: {
             reason: string;
         };
@@ -2519,6 +2663,8 @@ export interface components {
             taps: components["schemas"]["AttendanceTap"][];
             /** @description Whether the month is the viewer's own: then none of its days is theirs to decide (ATT-6). */
             yours: boolean;
+            /** @description Whether the month's pay is approved: then its days take no decision and its taps no fix (WAGE-3). */
+            closed: boolean;
             /** @description On the demo, the ready reasons a decision may take, as codes; elsewhere none (ATT-6). */
             ready_reasons: components["schemas"]["ReadyReasonsEnum"][];
             /** @description On the demo, the ready reasons a tap added may take, as codes; elsewhere none (ATT-13). */
@@ -2574,6 +2720,13 @@ export interface components {
             today: components["schemas"]["Pay"] | null;
             /** Format: decimal */
             total: string;
+            /**
+             * @description The month a debt among them is from, or none (WAGE-3).
+             * @example 2026-11
+             */
+            carried_from: string | null;
+            /** @description Who approved it, once a payslip keeps it, or none. */
+            approval: components["schemas"]["Approval"] | null;
         };
         WorkerPayMonthAnswer: {
             /** @example 2026-11 */
@@ -2587,6 +2740,8 @@ export interface components {
             /** @description Whether the worker's first working day of this month is still to come. */
             no_day_yet: boolean;
             worker: components["schemas"]["WorkerPay"];
+            /** @description For one who left, with pay still open: what approving it alone waits for; else none (WAGE-3). */
+            to_approve: components["schemas"]["ToApprove"] | null;
         };
     };
     responses: never;
@@ -4762,6 +4917,37 @@ export interface operations {
             };
         };
     };
+    staffpay_pay_runs_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveMonthRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayRunAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     staffpay_pay_retrieve: {
         parameters: {
             query: {
@@ -4783,6 +4969,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerPayMonthAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_payslips_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveLeaverRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayslipAnswer"];
                 };
             };
             default: {

@@ -294,6 +294,9 @@ class WorkerAttendance:
     # Whether the month is the viewer's own: then no day of it is theirs to decide, and the page says the owner decides
     # it (Jack, ATT-6).
     yours: bool
+    # Whether the month's pay is approved, with everyone's or the worker's alone (WAGE-3): then its days take no
+    # decision and its taps no fix, and the page says so.
+    closed: bool
     # On the demo, the three ready reasons a decision may take (DEMO_REASONS, Jack: A), as codes the page says in
     # words; elsewhere none, and a person types their own.
     ready_reasons: list[str]
@@ -394,6 +397,7 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
         ],
         taps=taps,
         yours=yours,
+        closed=closed,
         ready_reasons=list(DEMO_REASONS) if settings.DEMO_SEED else [],
         ready_add_reasons=list(DEMO_ADD_REASONS) if settings.DEMO_SEED else [],
         ready_void_reasons=list(DEMO_VOID_REASONS) if settings.DEMO_SEED else [],
