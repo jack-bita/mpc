@@ -11,8 +11,8 @@
 // the whole shop, the owner and the managers, as its route asks (ATT-5). Hela ya chakula is for whoever the owner gave
 // meals.record on the whole shop (WAGE-7). Advansi is for whoever may give a worker money before payday, with
 // money.advance on the whole shop, the owner and the managers (WAGE-8). Mishahara is for whoever may see a worker's pay,
-// with settings.manage and staff.manage on the whole shop (WAGE-2). Tofauti is for whoever holds flag.review on some side, as a flag shows only
-// to whoever may close it (CTRL-4).
+// with settings.manage and staff.manage on the whole shop (WAGE-2). Tofauti is for whoever holds flag.review on some
+// side, as a flag shows only to whoever may close it (CTRL-4).
 // A button for a screen someone may not use stays off the page; the server still checks every change
 // itself (PPL-5), so this only keeps a door nobody may use out of sight. Under them, for everyone,
 // Mipangilio yangu: a person's own language and font need no key (UI-9).

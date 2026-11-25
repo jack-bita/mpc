@@ -1889,7 +1889,7 @@ export interface components {
             today: string;
             /** Format: date */
             counted_to: string | null;
-            /** @description Whether no working day of this month has come yet: nobody is listed for want of a day. */
+            /** @description Whether no working day of this month has come yet: listed then is only who was given money in it. */
             no_day_yet: boolean;
             /** Format: decimal */
             total: string;

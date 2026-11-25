@@ -575,12 +575,12 @@ class WorkerPaySerializer(serializers.Serializer[Any]):
 class PayMonthAnswer(serializers.Serializer[Any]):
     # Mishahara's answer (WAGE-2): the month; the shop's today, as a phone's date can be wrong; the last day counted, or
     # null when none is over; whether no working day of it has come yet; the whole of it; and a line per worker paid by
-    # the day, by name.
+    # the day, or given money before payday in it (WAGE-8), by name.
     month = MonthField()
     today = serializers.DateField()
     counted_to = serializers.DateField(allow_null=True)
     no_day_yet = serializers.BooleanField(
-        help_text="Whether no working day of this month has come yet: nobody is listed for want of a day."
+        help_text="Whether no working day of this month has come yet: listed then is only who was given money in it."
     )
     total = serializers.DecimalField(max_digits=14, decimal_places=2)
     workers = WorkerPaySerializer(many=True)
@@ -588,7 +588,9 @@ class PayMonthAnswer(serializers.Serializer[Any]):
 
 class WorkerPayMonthAnswer(serializers.Serializer[Any]):
     # One worker's pay of a month: their line of Mishahara, with its month and its days; and, for the page to say why
-    # there is nothing, whether the shop pays them by the day in it, and whether their first working day is to come.
+    # there is nothing, whether there is a line at all, and whether their first working day is to come. The line's field
+    # is named for what it first said (WAGE-2), before money given made a line too (WAGE-8): renamed, a page still open
+    # in an older copy of the app would read nothing, and say that nobody is paid.
     month = MonthField()
     today = serializers.DateField()
     counted_to = serializers.DateField(allow_null=True)

@@ -12,7 +12,7 @@
 // no button there, and the server refuses it all the same (advance.own). On the demo, the reason is the ready one to tap
 // (the answer's ready_void_reasons), as a typed one would show to every visitor after them; elsewhere it is typed. The
 // server's refusals show beside the reason, or above the buttons. Once done, it waits for the page to be read again
-// before it closes, so it is never struck through beside a pay that still counts it.
+// before it closes, so it never closes onto a page that still shows the money as counting.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";

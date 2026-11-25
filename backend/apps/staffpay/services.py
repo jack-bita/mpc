@@ -1804,8 +1804,9 @@ class WorkerPay:
 @dataclass(frozen=True)
 class PayMonth:
     # Mishahara's answer (WAGE-2): the month, as its first day; the shop's today; the last day counted, or None when no
-    # day of the month is over; a line per worker paid by the day, by name; the whole of it; and the jobs with a working
-    # day in it, over or today's, which says whether there is anything to pay yet.
+    # day of the month is over; a line per worker paid by the day, or given money before payday in it (WAGE-8), by name;
+    # the whole of it; and the jobs with a working day in it, over or today's, which says whether there is anything to
+    # pay yet.
     month: dt.date
     today: dt.date
     counted_to: dt.date | None
@@ -1820,9 +1821,9 @@ class PayMonth:
 
     @property
     def no_day_yet(self) -> bool:
-        # No working day of the month yet, not even today's: on a 1st that is a Sunday or a closed day. Nobody is listed
-        # then for want of a day, not of a rate, so "Hakuna mfanyakazi anayelipwa kwa siku" would be untrue (WAGE-2's
-        # review, as ATT-5's on the attendance month).
+        # No working day of the month yet, not even today's: on a 1st that is a Sunday or a closed day. Whoever isn't
+        # listed then isn't for want of a day, not of a rate, so "Hakuna mfanyakazi anayelipwa kwa siku" would be untrue
+        # (WAGE-2's review, as ATT-5's on the attendance month). Listed then is only who was given money (WAGE-8).
         return self.is_running and not self.worked
 
 
@@ -1841,11 +1842,11 @@ class WorkerPayMonth:
 
 
 def pay_month(shop: Shop, month: dt.date) -> PayMonth:
-    """The pay of the month of `month`, any day of it, for everyone the shop pays by the day, as Mishahara shows it
-    (WAGE-2; spec §8.1, 02 §15, 8): each worker's days that are over, each at its own rate, added up line by line, less
-    what they were given before payday (WAGE-8); today, for whoever has tapped Toka; and the whole of it. Worked out
-    through the book (work_out_days), so it writes as the book does, and asked twice writes nothing the second time; the
-    pay itself is never kept. The shop must be open, as for the book."""
+    """The pay of the month of `month`, any day of it, as Mishahara shows it (WAGE-2; spec §8.1, 02 §15, 8), for
+    everyone the shop pays by the day, or gave money before payday in it (WAGE-8): each worker's days that are over,
+    each at its own rate, added up line by line, less what they were given; today, for whoever has tapped Toka; and the
+    whole. Worked out through the book (work_out_days), so it writes as the book does, and asked twice writes nothing
+    the second time; the pay itself is never kept. The shop must be open, as for the book."""
     first, last = _month_span(month)
     # The shop's today, read once: the pay counts up to the day before it, and today apart, whatever the clock does
     # meanwhile. The book reads its own a moment later, and at midnight answers one day more, which for this answer is
@@ -1925,8 +1926,8 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
 
 def worker_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
     """One job's pay of the month of `month`, any day of it (WAGE-2): the very line Mishahara shows of them (pay_month),
-    so the two pages never say two totals. A worker the shop doesn't pay by the day in it has nothing, and the answer
-    says so. The shop must be open, and the job one of it."""
+    so the two pages never say two totals. A worker the shop neither pays by the day in it nor gave money in it has
+    nothing, and the answer says so. The shop must be open, and the job one of it."""
     # The route finds the job through the guard, so another shop's never comes here; but a service checks what it is
     # given (T1), so a bug that passed one fails loudly.
     if job.shop_id != shop.pk:

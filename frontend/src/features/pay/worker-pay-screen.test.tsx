@@ -1,5 +1,6 @@
 // worker-pay-screen.test.tsx — one worker's pay of a month, line by line (WAGE-2): the lines as Jack drew them, a raise,
-// what they were given before payday (WAGE-8), today once they tapped Toka, what isn't paid, a month gone by, and what the page says with no worker or no pay.
+// what they were given before payday (WAGE-8), today once they tapped Toka, what isn't paid, a month gone by, and what the
+// page says with no worker or no pay.
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

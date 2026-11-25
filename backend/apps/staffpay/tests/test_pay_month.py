@@ -16,7 +16,7 @@ by the book's own rule and never kept:
 
 And money given before payday (WAGE-8) comes off the pay of its day's month, the same day it is typed:
 
-            Advansi                         10,000 taken on Mon 16, so 14,500 to pay
+            Asha, three full days           30,000 less the 5,000 of Mon 16 and the 8,000 of Wed 18: 17,000 to pay
 
 Which days a worker had is the book's (test_attendance_book.py), and what they add up to the sum's (test_pay.py); here,
 who is listed, on which days, at which rate, and that nothing is kept. The clock is fixed, so the days are the same

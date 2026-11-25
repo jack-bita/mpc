@@ -5829,7 +5829,7 @@
                     },
                     "no_day_yet": {
                         "type": "boolean",
-                        "description": "Whether no working day of this month has come yet: nobody is listed for want of a day."
+                        "description": "Whether no working day of this month has come yet: listed then is only who was given money in it."
                     },
                     "total": {
                         "type": "string",
