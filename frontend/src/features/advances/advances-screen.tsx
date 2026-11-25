@@ -90,19 +90,9 @@ export function AdvancesScreen() {
       </p>
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
-      {/* Once the month has answered, as it names whom one may be typed for. Today on the sheet is the server's: a phone's
-          date can be wrong. On a month gone by it starts on no day, as today isn't in it. */}
-      {may && answer.data ? (
-        <RecordAdvance
-          day={
-            monthOf(answer.data.today) === answer.data.month
-              ? answer.data.today
-              : ""
-          }
-          today={answer.data.today}
-          workers={answer.data.workers}
-        />
-      ) : null}
+      {/* On who is here, never on the list's wait (frontend rules): ‹ to a month not read yet takes away neither the button
+          nor the line of what was written (the review). Today on its sheet is the server's: a phone's date can be wrong. */}
+      {may ? <RecordAdvance month={answer.data} /> : null}
       {/* Only for someone who may see it, so no ‹ › only asks to be refused again (the month page's review). */}
       {may && month !== null && thisMonth !== null ? (
         <MonthSwitch month={month} thisMonth={thisMonth} onChoose={choose} />

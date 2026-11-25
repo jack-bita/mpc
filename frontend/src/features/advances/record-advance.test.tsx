@@ -10,6 +10,7 @@ import {
   ADVANCES_ROUTE,
   AdvancesAsked,
   advancesAreAnswered,
+  advancesMonth,
   type AdvanceWorker,
   ASHA,
   JUMA,
@@ -62,12 +63,17 @@ function pick(name: string) {
   fireEvent.click(within(workers()).getByRole("radio", { name }));
 }
 
+/** November's answer, as the page hands it down, unless told otherwise. */
+const month = (offered: AdvanceWorker[], of = "2026-11") =>
+  advancesMonth([], { month: of, workers: offered });
+
 function openSheet({
-  day = TODAY,
+  of = "2026-11",
   offered = [ASHA, JUMA],
-}: { day?: string; offered?: AdvanceWorker[] } = {}) {
-  render(<RecordAdvance day={day} today={TODAY} workers={offered} />);
+}: { of?: string; offered?: AdvanceWorker[] } = {}) {
+  const shown = render(<RecordAdvance month={month(offered, of)} />);
   fireEvent.click(button());
+  return shown;
 }
 
 describe("Andika advansi", () => {
@@ -118,7 +124,7 @@ describe("Andika advansi", () => {
         <>
           <AdvancesAsked />
           <PayAsked />
-          <RecordAdvance day={TODAY} today={TODAY} workers={[JUMA]} />
+          <RecordAdvance month={month([JUMA])} />
         </>,
       );
       await waitFor(() => expect([asked(), payAsked()]).toEqual([1, [1, 1]]));
@@ -164,11 +170,51 @@ describe("Andika advansi", () => {
     expect((save() as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("starts on the day it was opened for, or on none, and offers no day to come", () => {
-    openSheet({ day: "" });
+  it("starts on no day for a month gone by, as today isn't in it, and offers no day to come", () => {
+    openSheet({ of: "2026-10" });
 
     expect(value("Siku")).toBe("");
     expect(box("Siku").getAttribute("max")).toBe(TODAY);
+  });
+
+  it("waits, on the page, while the month it would type for is on its way", () => {
+    // ‹ to a month not read yet: the button stays, held, and the line of the last save with it (the review).
+    const { rerender } = render(<RecordAdvance month={undefined} />);
+    expect((button() as HTMLButtonElement).disabled).toBe(true);
+
+    rerender(<RecordAdvance month={month([JUMA])} />);
+
+    expect((button() as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("keeps an open sheet, and what is typed in it, while the month behind it changes", () => {
+    // Midnight of the 1st crossed with the sheet open moves the page to another month: nothing typed is thrown away.
+    const { rerender } = openSheet();
+    pick("Juma");
+    type("Kiasi (TSh)", "20000");
+
+    rerender(<RecordAdvance month={undefined} />);
+
+    expect(value("Kiasi (TSh)")).toBe("20000");
+    expect(
+      within(workers())
+        .getByRole("radio", { name: "Juma" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+  });
+
+  it("takes the shop's new today once the page reads it, the sheet still open", () => {
+    // Opened at 23:59, sent at 00:01: the first of the two dates is no longer the last it may be (the review).
+    const { rerender } = openSheet();
+    expect(box("Siku").getAttribute("max")).toBe(TODAY);
+
+    rerender(
+      <RecordAdvance
+        month={advancesMonth([], { today: "2026-11-26", workers: [JUMA] })}
+      />,
+    );
+
+    expect(box("Siku").getAttribute("max")).toBe("2026-11-26");
   });
 
   it.each([

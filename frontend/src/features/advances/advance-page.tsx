@@ -70,7 +70,13 @@ export function AdvanceScreen({ id }: { id: string | null }) {
       <ApiErrorAlert error={who.error} />
       <ApiErrorAlert error={answer.error} />
       {who.data && answer.data && !answer.isPending ? (
-        <TheAdvance answer={answer.data} timezone={who.data.shop.timezone} />
+        <TheAdvance
+          // An advance of its own: on another's page, as the browser's back and forward move the address, an open sheet
+          // closes, its reason with it, so Juma's never goes to Asha's (worker-page.tsx).
+          key={answer.data.advance.id}
+          answer={answer.data}
+          timezone={who.data.shop.timezone}
+        />
       ) : null}
     </div>
   );

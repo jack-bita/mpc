@@ -194,6 +194,26 @@ describe("one advance", () => {
     );
   });
 
+  it("closes the sheet, its reason with it, when the address moves to another advance", async () => {
+    // The browser's back and forward move ?id= with the page still on the screen: Juma's reason never goes to Asha's
+    // (the review).
+    const hers = advance({ display_name: "Asha" });
+    thePageIs(advancePageOf(JUMAS));
+    thePageIs(advancePageOf(hers));
+    // Both read already, as a person who went back and forth has, so the page has no wait between them.
+    const { rerender } = render(<AdvanceScreen id={hers.id} />);
+    await screen.findByRole("heading", { level: 1, name: "Advansi ya Asha" });
+    rerender(<AdvanceScreen id={JUMAS.id} />);
+    await screen.findByRole("heading", { level: 1, name: "Advansi ya Juma" });
+    fireEvent.click(screen.getByRole("button", { name: "Batilisha" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+
+    rerender(<AdvanceScreen id={hers.id} />);
+
+    await screen.findByRole("heading", { level: 1, name: "Advansi ya Asha" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("gives the keyboard back to Batilisha on Ghairi", async () => {
     thePageIs(advancePageOf(JUMAS));
     render(<AdvanceScreen id={JUMAS.id} />);

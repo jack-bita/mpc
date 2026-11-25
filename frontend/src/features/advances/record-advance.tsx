@@ -13,7 +13,9 @@
 //
 // The workers are the ones the server named for the page's month: paid by the day, with a day of the job in it, and never
 // the person here (Jack: A); none is picked at first, so nobody's money goes to the first name by a careless tap. It
-// starts on today when the page shows this month, and on no day for a month gone by, as today isn't in it. Who may, and
+// starts on today when the page shows this month, and on no day for a month gone by, as today isn't in it. While a month
+// is on its way the button waits where it is, and a sheet already open keeps what is typed in it: neither hangs on the
+// list's wait (the review). Who may, and
 // what an advance takes, are the server's (record_advance, apps/staffpay/services.py); what the sheet can see itself is
 // said at once, beside its box, in the server's own sentences: nobody picked, an empty day or one to come, an amount that
 // isn't whole shillings above 0. A Sunday is taken: money is asked for on any day. On the demo a note isn't kept
@@ -42,7 +44,7 @@ import { Button } from "@/components/design/button";
 import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
-import type { Weekday } from "@/features/attendance/attendance-month";
+import { monthOf, type Weekday } from "@/features/attendance/attendance-month";
 import { PAY } from "@/features/pay/pay";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { Decimal } from "@/lib/decimal";
@@ -51,7 +53,7 @@ import { newId } from "@/lib/ids";
 import { typedAmount } from "@/lib/typed-amount";
 import { useOnline } from "@/offline/network";
 
-import { ADVANCES, type AdvanceWorker } from "./advances";
+import { ADVANCES, type AdvancesMonth } from "./advances";
 
 /** The server's longest note (Advance.note, 200 characters). */
 const NOTE_LONGEST = 200;
@@ -64,19 +66,17 @@ const ON_A_BOX = new Set(["staff", "date", "amount", "note"]);
 type Checks = { staff?: string; date?: string; amount?: string };
 
 export function RecordAdvance({
-  day,
-  today,
-  workers,
+  month,
 }: {
-  /** The day the sheet starts on, or "" for none. */
-  day: string;
-  /** The shop's today, as the server said it: nothing is given on a day after it yet. */
-  today: string;
-  /** Whom one may be typed for, as the server named them for the page's month. */
-  workers: readonly AdvanceWorker[];
+  /** The month the page shows, as the server answered it: whom one may be typed for in it, and the shop's today. None
+   * while it is on its way. */
+  month: AdvancesMonth | undefined;
 }) {
   const t = useTranslations("advances.record");
   const [open, setOpen] = useState(false);
+  // The month last answered, which an open sheet goes on by while another comes.
+  const [lastRead, setLastRead] = useState(month);
+  if (month !== undefined && month !== lastRead) setLastRead(month);
   // The line that says what the last save wrote.
   const [news, setNews] = useState<string | null>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -89,6 +89,8 @@ export function RecordAdvance({
     <div className="grid gap-3">
       <Button
         ref={button}
+        // Held, not gone, so the page doesn't jump; and the workers of the month before are never offered for this one.
+        disabled={month === undefined}
         onClick={() => {
           afterSave.current = false;
           setNews(null);
@@ -108,11 +110,14 @@ export function RecordAdvance({
           {news ? <AlertDescription>{news}</AlertDescription> : null}
         </Alert>
       </div>
-      {open ? (
+      {open && lastRead !== undefined ? (
         <RecordSheet
-          startingDay={day}
-          today={today}
-          workers={workers}
+          // Today, the shop's, when the month is this one; on a month gone by, no day, as today isn't in it.
+          startingDay={
+            monthOf(lastRead.today) === lastRead.month ? lastRead.today : ""
+          }
+          today={lastRead.today}
+          workers={lastRead.workers}
           onSaved={(sentence) => {
             afterSave.current = true;
             setOpen(false);
@@ -137,8 +142,10 @@ function RecordSheet({
   finalFocus,
 }: {
   startingDay: string;
+  /** The shop's today, as the server last said it: nothing is given on a day after it yet. */
   today: string;
-  workers: readonly AdvanceWorker[];
+  /** Whom one may be typed for, as the server named them for the page's month. */
+  workers: AdvancesMonth["workers"];
   /** Saved: the line that says what, in the person's words. */
   onSaved: (sentence: string) => void;
   onClose: () => void;

@@ -12,11 +12,11 @@ import { api } from "@/api/client";
 import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { MONTH_PARAM } from "@/features/attendance/attendance-month";
+import { askAgainEvery } from "@/features/attendance/worker-month";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 
 export type AdvancesMonth = components["schemas"]["AdvancesMonthAnswer"];
 export type AdvanceLine = components["schemas"]["AdvanceLine"];
-export type AdvanceWorker = components["schemas"]["AdvanceWorker"];
 export type AdvancePage = components["schemas"]["AdvancePageAnswer"];
 
 /** The key its routes ask, on the whole shop: in the owner's role and the manager's (Jack: A). */
@@ -51,7 +51,9 @@ export function mayGiveAdvances(me: WhoIsHere): boolean {
 }
 
 /** A month's advances, from the store of server answers; nothing is asked until the page knows which (`null`). Asked
- * again as the page comes back, as any read is: it works nothing out and locks nothing. */
+ * again as the page comes back, as any read is: it works nothing out and locks nothing. And this month each minute by
+ * itself, while the page is on the screen, so one kept in view past midnight learns the shop's new today, which the sheet
+ * asks for, and what another manager typed (the review). */
 export function useAdvances(month: string | null) {
   return useQuery({
     queryKey: [...ADVANCES, "month", month],
@@ -63,6 +65,7 @@ export function useAdvances(month: string | null) {
         }),
       ),
     enabled: month !== null,
+    refetchInterval: (query) => askAgainEvery(query.state.data),
   });
 }
 

@@ -236,10 +236,10 @@ describe("the month's advances", () => {
       }),
     });
     render(<AdvancesScreen />);
+    // The month has answered, so the button is held no more.
+    await screen.findByText("Hakuna advansi katika mwezi huu.");
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Andika advansi" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Andika advansi" }));
 
     const sheet = screen.getByRole("dialog");
     expect(
@@ -272,6 +272,52 @@ describe("the month's advances", () => {
       ).toBeNull();
       shown.unmount();
     }
+  });
+
+  it("keeps the button and the line of what was written while another month comes", async () => {
+    // ‹ to October, not read yet: what was just written stays said, and the button waits where it is (the review).
+    theShopHas({ "2026-11": NOVEMBER });
+    render(<AdvancesScreen />);
+    await lines();
+    answer("POST", ADVANCES_ROUTE, { status: 201, body: advance() });
+    fireEvent.click(screen.getByRole("button", { name: "Andika advansi" }));
+    const sheet = screen.getByRole("dialog");
+    fireEvent.click(within(sheet).getByRole("radio", { name: "Juma" }));
+    fireEvent.change(within(sheet).getByLabelText("Kiasi (TSh)"), {
+      target: { value: "20000" },
+    });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Hifadhi" }));
+    await screen.findByText(/^Imeandikwa: TSh/);
+    answer("GET", ADVANCES_ROUTE, () => new Promise<Response>(() => {}));
+
+    fireEvent.click(screen.getByRole("button", { name: "Mwezi uliopita" }));
+
+    await screen.findByRole("heading", { name: "Oktoba 2026" });
+    expect(screen.getByText(/^Imeandikwa: TSh/)).toBeTruthy();
+    const button = screen.getByRole("button", { name: "Andika advansi" });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("asks this month again each minute, and a month gone by never by itself", async () => {
+    // A page kept in view past midnight learns the shop's new today, and what another manager typed (the review).
+    vi.useRealTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-11-25T09:00:00Z"));
+    theShopHas({
+      "2026-11": NOVEMBER,
+      "2026-10": advancesMonth([], { month: "2026-10" }),
+    });
+    const shown = render(<AdvancesScreen />);
+    await lines();
+    await act(() => vi.advanceTimersByTimeAsync(61_000));
+    expect(monthsAsked()).toEqual(["2026-11", "2026-11"]);
+    shown.unmount();
+
+    window.history.replaceState(null, "", "/advances/?month=2026-10");
+    render(<AdvancesScreen />);
+    await screen.findByText("Hakuna advansi katika mwezi huu.");
+    await act(() => vi.advanceTimersByTimeAsync(125_000));
+    expect(monthsAsked().slice(2)).toEqual(["2026-10"]);
   });
 
   it("offers nothing to type to someone whose key is gone, though the month was read a moment before", async () => {
