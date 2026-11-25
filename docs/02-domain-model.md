@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.66 · 25 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.67 · 25 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.67** (25 Nov 2026, WAGE-2's review): §12, a daily rate is at most ten million, a technical guard; and the day still running waits at once when one of its taps has no trusted time (04 v1.199). Marked **(v1.67)**.
 
 **Changes in v1.66** (25 Nov 2026, WAGE-2): §12 and §14, a month's draft pay is worked out each time it is asked for and never kept, so a `PayRun` and its `Payslip`s are made at the approval (Jack: A); the day a worker leaves counts once they tap Toka, with that day's meals (Jack: A). §15, a fine takes no more than its day pays (Jack: A), half a day is rounded once, and an off day pays nothing (04 v1.197). Marked **(v1.66)**.
 
@@ -603,7 +605,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - Eid and Easter move, so the owner types each year's dates.
 
 **PayRate** → StaffMember — `daily_rate`, `shares_meals` (yes; the cook's no) **(v1.29)**, `effective_from`, `note` **(v1.49)**. Dated, so a worker who becomes the cook mid-month pays a share up to that day and none after.
-- **(v1.49)** The rate is money, above 0, in whole shillings. Who set it is the row's `created_by` (§1). Append-only, as every dated rule is (T2): a wrong rate is mended by a new row for the same day.
+- **(v1.49)** The rate is money, above 0, in whole shillings, and at most ten million, a slip of the zeros past it **(v1.67)**. Who set it is the row's `created_by` (§1). Append-only, as every dated rule is (T2): a wrong rate is mended by a new row for the same day.
 - In force on a date: the latest row with `effective_from` on or before it; on one date, the row written last wins, as for a setting (§4). A job with no row on or before a date has no rate that day. A rate reads no job's first or last day: it goes on after a last day, as a tap after it goes to review and the owner may decide that day is paid (ATT-11, ATT-6), which needs its rate. So the attendance month page (ATT-5) lists a worker with a rate on some day of the month, and the pay (WAGE-2) pays, only the days the book of days answers **(v1.50)**.
 - From any day of the job, gone by or still to come, never before its first day: a worker hired on 10 Nov whose rate is typed on the 19th is paid from the 10th. A day in an approved pay run takes no new rate (WAGE-3).
 - Never on a shared device: a worker's pay stays on the server (03 §6.1).
@@ -615,7 +617,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - **(v1.63)** Typed on an office page, with the internet, on a phone or on the shop's laptop after a PIN; never offline. For today or an earlier working day: never a day to come, a Sunday or a day attendance was off. The amount is above 0, in whole shillings, and at most ten million, a slip of the zeros past it **(v1.64)**; a row always says who typed it **(v1.64)**. Anyone with the key crosses out a wrong one *(default)*. Never on a laptop's own copy (03 §6.1).
 
 **PayRun** → Shop — one month. Its draft is no row: the month's pay is worked out each time it is asked for, from the book's days, the rates and the meals, and never kept, as a kept draft is old as soon as a day is decided (Jack, WAGE-2) **(v1.66)**. The row is made at the approval, which freezes payslips, attendance days, advances and meal money **(v1.29)**. `status`: `approved` → `paid` **(v1.66)**.
-- **The day still running** **(v1.66)**: the pay counts the days that are over; today is added, apart and never kept, once the worker taps Toka, judged by the same rule, and less today's share of the meals: today's money ÷ those who have tapped today and share them (Jack: A). So one who leaves tonight is paid for today; the book's own split, once the day is over, may differ by a little.
+- **The day still running** **(v1.66)**: the pay counts the days that are over; today is added, apart and never kept, once the worker taps Toka, judged by the same rule (one with a tap of no trusted time waits at once, whatever else is tapped **(v1.67)**), and less today's share of the meals: today's money ÷ those who have tapped today and share them (Jack: A). So one who leaves tonight is paid for today; the book's own split, once the day is over, may differ by a little.
 
 **Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, meal shares **(v1.29)**, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own.
 - **Leaving mid-month** **(v1.29)**: a worker who leaves gets their payslip up to `left_on`, approved and paid on its own, before the month's run: the owner reads it and pays, with nothing to count by hand (Jack, 15 Nov 2026). The month's run then holds it as paid.

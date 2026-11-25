@@ -1628,6 +1628,9 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
         return PayMonth(month=first, today=today, counted_to=None, workers=[], total=NO_PAY, worked=frozenset())
     # Each job's rate on each day, a raise splitting the month at its own day (WAGE-1); the step half a day, and a share
     # of the meals, is rounded to on each day (A1), and the attendance switch, for today. One read each for the month.
+    # After the book has let its lock go, so a first rate typed between the two lists Juma once with no meals taken,
+    # while Asha still carries his share, until the page asks again, as Hela ya chakula's does (_meal_day). A payslip
+    # kept for good must read them inside the lock (WAGE-3).
     rates = rates_between(shop, first, last)
     settings_by_day = shop_settings_between([ATTENDANCE_ON, ROUNDING_STEP], shop, first, last)
     # Today's days, when the month is still running: by the job, as each has one.
