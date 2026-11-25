@@ -18,6 +18,9 @@ And the day's meal money (WAGE-7): the days of a span, with their total (MealMon
 meal_money_days, for the span in the address (MealMoneyQuery); and a row typed (RecordMealMoneySerializer) or crossed
 out (VoidMealMoneySerializer), which record_meal_money and void_meal_money check and keep, each answered as the day's
 page shows it (MealMoneyAnswer).
+
+And the month's pay (WAGE-2), for the month in the address (AttendanceMonthQuery): everyone's (PayMonthAnswer), worked
+out by pay_month, and one worker's (WorkerPayMonthAnswer), by worker_pay, each line by line.
 """
 
 import re
@@ -31,6 +34,7 @@ from rest_framework import serializers
 from apps.core.api.ids import uuid7_only
 from apps.core.api.times import ZonedDateTimeField
 from apps.people.models import StaffMember
+from apps.staffpay.calculations import PaidAs
 from apps.staffpay.models import (
     DECIDED,
     AbsenceType,
@@ -442,3 +446,64 @@ class MealMoneyAnswer(MealMoneyLineSerializer):
     # MealMoneyLineSerializer's own, so the schema describes the answer by itself, as a tap's does (TapAnswer).
     def to_representation(self, instance: MealMoney) -> Any:
         return super().to_representation(meal_line(instance))
+
+
+class PayLineSerializer(serializers.Serializer[Any]):
+    # One line of a worker's pay (WAGE-2): so many full days, or half ones, at so much each, and what they come to. The
+    # amounts are strings (rule 3), and the page multiplies nothing itself.
+    paid_as = serializers.ChoiceField(
+        choices=[(kind.value, kind.value) for kind in (PaidAs.FULL, PaidAs.HALF)], source="paid_as.value"
+    )
+    days = serializers.IntegerField()
+    each = serializers.DecimalField(max_digits=14, decimal_places=2)
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+
+
+class PaySerializer(serializers.Serializer[Any]):
+    # A worker's pay over some days (Pay, apps/staffpay/calculations.py): the lines, the full days first; the fines and
+    # the meals, each with how many days; the advances, none until WAGE-3; how many days wait for a decision, and how
+    # many paid days have no rate, neither paid; and what is left, which may be below 0.
+    lines = PayLineSerializer(many=True)
+    fined_days = serializers.IntegerField()
+    fines = serializers.DecimalField(max_digits=14, decimal_places=2)
+    meal_days = serializers.IntegerField()
+    meals = serializers.DecimalField(max_digits=14, decimal_places=2)
+    advances = serializers.DecimalField(max_digits=14, decimal_places=2)
+    waiting = serializers.IntegerField()
+    no_rate = serializers.IntegerField()
+    total = serializers.DecimalField(max_digits=14, decimal_places=2)
+
+
+class WorkerPaySerializer(serializers.Serializer[Any]):
+    # One worker's line of Mishahara, and their own page's: whose, and their last day if they left; the days that are
+    # over; today alone, once they tapped Toka, or null (Leo); and what is left to pay, the two together.
+    staff = serializers.UUIDField(source="staff_id")
+    display_name = serializers.CharField()
+    left_on = serializers.DateField(allow_null=True)
+    pay = PaySerializer()
+    today = PaySerializer(allow_null=True)
+    total = serializers.DecimalField(max_digits=14, decimal_places=2)
+
+
+# One object, not a list, as for the pay rates' answer above.
+@extend_schema_serializer(many=False)
+class PayMonthAnswer(serializers.Serializer[Any]):
+    # Mishahara's answer (WAGE-2): the month; the shop's today, as a phone's date can be wrong; the last day counted, or
+    # null when none is over; the whole of it; and a line per worker paid by the day, by name.
+    month = MonthField()
+    today = serializers.DateField()
+    counted_to = serializers.DateField(allow_null=True)
+    total = serializers.DecimalField(max_digits=14, decimal_places=2)
+    workers = WorkerPaySerializer(many=True)
+
+
+class WorkerPayMonthAnswer(serializers.Serializer[Any]):
+    # One worker's pay of a month: their line of Mishahara, with its month and its days; and whether the shop pays them
+    # by the day in it, for the page to say why there is nothing otherwise.
+    month = MonthField()
+    today = serializers.DateField()
+    counted_to = serializers.DateField(allow_null=True)
+    paid_by_day = serializers.BooleanField(
+        help_text="Whether the worker has a daily pay rate on a working day of the month: with none, there is no pay."
+    )
+    worker = WorkerPaySerializer()

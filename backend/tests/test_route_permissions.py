@@ -52,7 +52,7 @@ from apps.core.api.base import CreateOnceMixin, ShopViewSet
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
-from apps.people.services import add_staff, grant_permission, mark_left, suspend
+from apps.people.services import add_staff, end_permission, grant_permission, mark_left, suspend
 from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
 from apps.shops.selectors import shop_today
@@ -64,6 +64,7 @@ from apps.staffpay.api.views import (
     AttendanceWorkerViewSet,
     MealMoneyViewSet,
     PayRateViewSet,
+    PayViewSet,
 )
 from apps.staffpay.models import AttendanceEvent, MealMoney, PayRate
 from apps.staffpay.tests.days import job, kept_day, switch_on
@@ -84,6 +85,8 @@ ATTENDANCE_TAPS = "/api/v1/staffpay/attendance-taps/"
 ATTENDANCE_TAP_VOID = "/api/v1/staffpay/attendance-taps/{}/void/"
 MEAL_MONEY = "/api/v1/staffpay/meal-money/"
 MEAL_MONEY_VOID = "/api/v1/staffpay/meal-money/{}/void/"
+PAY = "/api/v1/staffpay/pay/"
+PAY_WORKER = "/api/v1/staffpay/pay/{}/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -1243,6 +1246,62 @@ def test_pay_rate_routes_name_their_permissions() -> None:
     assert PayRateViewSet.action_permissions == {
         "list": Permission.SETTINGS_MANAGE,
         "create": Permission.SETTINGS_MANAGE,
+    }
+
+
+@pytest.mark.django_db
+def test_the_months_pay_needs_both_keys_of_pay(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # What the month pays shows each worker's daily rate ("14 × 10,000"), so it asks the rates' own two keys (Jack,
+    # WAGE-1's review: A): a Manager on every side, who holds `pay.run` and fixes attendance, sees nobody's pay, not
+    # their own either; nor handed one of the two keys, the rules' or the workers'. With both, as the owner holds them,
+    # everyone's and one worker's.
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    manager = client_for(staff_a2)
+    addresses = (PAY, PAY_WORKER.format(staff_a.pk), PAY_WORKER.format(staff_a2.pk))
+
+    def refused() -> None:
+        for address in addresses:
+            reply = manager.get(address, {"month": "2026-10"})
+            assert reply.status_code == 403
+            assert reply.json()["code"] == "permission_denied"
+
+    refused()
+    with shop_context(shop_a):
+        rules = grant_permission(staff_a2, Permission.SETTINGS_MANAGE, side=None, by=None)
+    refused()
+    with shop_context(shop_a):
+        grant_permission(staff_a2, Permission.STAFF_MANAGE, side=None, by=None)
+    for address in addresses:
+        assert manager.get(address, {"month": "2026-10"}).status_code == 200
+    with shop_context(shop_a):
+        end_permission(rules, by=None, reason="Hapaswi")
+    refused()
+
+
+@pytest.mark.django_db
+def test_a_key_on_one_side_sees_no_pay(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
+    # Hamisi holds the two keys on Dawa only (X1): a worker's pay is the whole shop's, so he sees none, whichever of the
+    # two is the side's.
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.SETTINGS_MANAGE, side=sides["D"], by=None)
+        grant_permission(staff_a, Permission.STAFF_MANAGE, side=sides["D"], by=None)
+    hamisi = client_for(staff_a)
+    for address in (PAY, PAY_WORKER.format(staff_a.pk)):
+        assert hamisi.get(address, {"month": "2026-10"}).status_code == 403
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.SETTINGS_MANAGE, side=None, by=None)
+    for address in (PAY, PAY_WORKER.format(staff_a.pk)):
+        assert hamisi.get(address, {"month": "2026-10"}).status_code == 403
+
+
+def test_pay_route_names_its_permissions() -> None:
+    # Everyone's pay and one worker's, both reads, both behind `settings.manage`, the first of the two keys of pay; the
+    # second, staff.manage, is asked for every action (the two tests above). Written out in full, as above.
+    assert PayViewSet.action_permissions == {
+        "list": Permission.SETTINGS_MANAGE,
+        "retrieve": Permission.SETTINGS_MANAGE,
     }
 
 
