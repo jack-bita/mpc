@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.64 · 24 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.65 · 25 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.65** (25 Nov 2026, WAGE-7's review): §15, the meal share is a person's, once, whichever of their jobs they came under (Jack: A), and never an off day's, whatever was decided on it (04 v1.195). Marked **(v1.65)**.
 
 **Changes in v1.64** (24 Nov 2026, WAGE-7 built): §5, the code `meals.record`, one of the owner's own, not the Manager's; §12, a row of meal money is at most ten million, and never without who typed it (04 v1.194). Marked **(v1.64)**.
 
@@ -694,7 +696,7 @@ stateDiagram-v2
 11. **Loss %** (production, jobs) = (input kg − output kg) ÷ input kg.
 12. **Expiry:** days left = expiry − today; alert when ≤ `expiry.alert_days`.
 13. **Shopping list:** on hand ≤ reorder level, or an open restock request.
-14. **Meal share** **(v1.29)** (worker, day) = the day's meal money ÷ the workers who came that day (on time, late or half, by the decision where there is one; not office duty, as they eat away (Jack: A, WAGE-7) **(v1.63)**) and share meals, by a rate in force that day **(v1.63)**, rounded with the shared function (ADR-0024) to the shop's rounding step that day **(v1.63)**. Nobody else pays for that day, so a worker who came 10 days pays 10 days' shares. The rounded shares may add up to a few shillings off the day's money. A day still waiting for a decision has no share, and deciding it splits its whole date again; a date's money with nobody to share it is paid by nobody **(v1.63)**.
+14. **Meal share** **(v1.29)** (worker, day) = the day's meal money ÷ the workers who came that day (on time, late or half, by the decision where there is one; not office duty, as they eat away (Jack: A, WAGE-7) **(v1.63)**) and share meals, by a rate in force that day **(v1.63)**, rounded with the shared function (ADR-0024) to the shop's rounding step that day **(v1.63)**. Nobody else pays for that day, so a worker who came 10 days pays 10 days' shares. The rounded shares may add up to a few shillings off the day's money. A day still waiting for a decision has no share, and deciding it splits its whole date again; a date's money with nobody to share it is paid by nobody **(v1.63)**. A person is counted once, however many of their jobs they came under that date: one who left and was hired again the same day has two days and ate once (Jack: A), so their share is on the job they had first, and the other's is 0. An off day never shares, whatever was decided on it **(v1.65)**.
 
 ## 16. Rules (invariants)
 
