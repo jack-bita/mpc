@@ -6,8 +6,9 @@
 //
 // The sums are checked here as the owner would with a calculator, on whatever days the seed made: the test types no
 // amount of its own, as the weeks may fall across two months, and other tests decide Asha's days (attendance-worker.spec.ts)
-// and clock her in today. The page opens on this month, counted up to yesterday; on a month's first days it says none is
-// over yet, and the test goes back one month, as a person would, so it never reads the clock of the machine it runs on.
+// and clock her in today. The page opens on this month, counted up to yesterday; on a month's first days, the 1st, or a
+// Monday the 2nd after a Sunday, it has nothing of Meneja's to pay yet, and the test goes back one month, as a person
+// would, so it never reads the clock of the machine it runs on.
 //
 // Meneja holds the two keys of pay on the demo (PEOPLE, backend/apps/demo/services.py), and a daily rate of 15,000, which
 // no visitor may change. Nothing here is saved, so it leaves the shop as it found it.
@@ -64,18 +65,18 @@ test("Meneja reads the month's pay on the demo, line by line", async ({
     await expect(
       phone.getByRole("heading", { name: PAY.title, level: 1 }),
     ).toBeVisible();
-    await expect(list).toBeVisible();
-    if (
-      await phone.getByText(PAY.nothingOverYet, { exact: true }).isVisible()
-    ) {
+    // The month has loaded: its list, or, on a 1st that is a Sunday, only that no day is over yet.
+    const nothingOver = phone.getByText(PAY.nothingOverYet, { exact: true });
+    await expect(list.or(nothingOver).first()).toBeVisible();
+    if (!(await list.isVisible()) || (await totalOf("Meneja")) === 0) {
       wentBack = true;
       await phone
         .getByRole("button", { name: MONTH.before, exact: true })
         .click();
-      await expect(
-        phone.getByText(PAY.nothingOverYet, { exact: true }),
-      ).toBeHidden();
+      // The month before has its weeks: something to pay, and no line about how far it is counted.
+      await expect(nothingOver).toBeHidden();
       await expect(list).toBeVisible();
+      await expect.poll(() => totalOf("Meneja")).toBeGreaterThan(0);
     }
   });
 
