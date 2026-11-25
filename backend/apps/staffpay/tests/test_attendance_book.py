@@ -1405,6 +1405,29 @@ def test_money_on_a_day_the_shop_was_shut_is_nobodys(shop_a: Shop, device_a: Dev
     assert {days[("Asha", day)].meal_share for day in (FRIDAY, SUNDAY)} == {Decimal("0.00")}
 
 
+def _shares_in_another_run(shop: Shop, day: dt.date) -> dict[str, Decimal]:
+    # The book run in its own transaction, on its own connection (_statuses_in_another_run): each worker's share, as it
+    # worked it out, plain values the test reads once the thread has ended.
+    with shop_context(shop):
+        return {row.staff.display_name: row.meal_share for row in work_out_days(shop, day, day)}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_book_reads_the_money_after_its_lock(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Two managers open November at once, and Asha types Monday's 1,000 between them. The second run, waiting for the
+    # first to commit, must split the money as it is then, never as it was before it waited: else its older split, none,
+    # would be kept over a newer one. As in test_a_second_run_waits_for_the_first, the test holds the jobs' lock itself.
+    rate(asha)
+    came(device_a, asha)
+    with shop_context(shop_a), transaction.atomic():
+        list(StaffMember.objects.filter(shop=shop_a).order_by("pk").select_for_update(no_key=True))
+        second, ended = in_another_transaction(lambda: _shares_in_another_run(shop_a, MONDAY))
+        wait_until_someone_waits_for_me()
+        meal(shop_a, "1000.00", asha)
+    second.join(timeout=10)
+    assert ended == [{"Asha": Decimal("1000.00")}]
+
+
 def test_a_decided_closed_day_whose_tap_is_crossed_out_shares_nothing(
     shop_a: Shop,
     device_a: Device,
