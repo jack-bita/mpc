@@ -1,7 +1,7 @@
 """apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12), the month the month
 page shows, worked out through it (ATT-5), a worker's own month (ATT-12), a person's decision on a day (ATT-6), a
-manager's fixes to the taps (ATT-13), each worker's daily pay rate (WAGE-1), the day's meal money (WAGE-7), and the
-month's pay, worked out from all of them (WAGE-2).
+manager's fixes to the taps (ATT-13), each worker's daily pay rate (WAGE-1), the day's meal money (WAGE-7), money given
+to a worker before payday (WAGE-8), and the month's pay, worked out from all of them (WAGE-2).
 
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
@@ -50,6 +50,10 @@ The day's meal money is typed by whoever the owner gave the key to (record_meal_
 and its meat, 3,000. A wrong one is crossed out, with who, when and why (void_meal_money), and the book splits what
 counts among who came, as above. Hela ya chakula asks for any days of it, and the whole of them, through
 meal_money_days, which works them out through the book too, so it writes as the month's page does.
+
+Money given before payday is typed on the day it is given by whoever holds money.advance, the owner or a manager, and
+never their own (record_advance, WAGE-8): Juma's 20,000 of the 10th. A wrong one is crossed out, with who, when and why
+(void_advance). No line in the change log, as for a rate.
 
 The month's pay is asked for by Mishahara (pay_month) and by one worker's page (worker_pay): the book's days, each at
 its own rate, added up by the sum (work_out_pay, apps/staffpay/calculations.py). The draft is never saved (Jack,
@@ -110,9 +114,11 @@ from apps.staffpay.calculations import (
 )
 from apps.staffpay.models import (
     DECISION_OF,
+    MOST_ADVANCE,
     MOST_DAILY_RATE,
     MOST_MEAL_MONEY,
     AbsenceType,
+    Advance,
     AttendanceDay,
     AttendanceEvent,
     ClockKind,
@@ -1555,6 +1561,120 @@ def _works_today(shop: Shop, today: dt.date) -> bool:
         and today not in closed_days(shop, today, today)
         and bool(get_setting(ATTENDANCE_ON, shop, on=today))
     )
+
+
+# On the demo, the ready reason a wrong advance is crossed out with, kept as its code, which the page says in words, as
+# for meal money (DEMO_MEAL_VOID_REASONS): a typed one would show to every visitor after.
+DEMO_ADVANCE_VOID_REASONS = ("wrong_amount",)
+
+
+def record_advance(
+    staff: StaffMember, *, advance_id: uuid.UUID, date: dt.date, amount: Decimal, note: str = "", by: StaffMember
+) -> Advance:
+    """Type money given to a worker before payday (WAGE-8, 02 §12): Juma asked for 20,000 on the 10th, and Meneja gave
+    it. It comes off the pay of its day's month the next time the pay is asked for. `advance_id`: the client's
+    (ADR-0007), so the route answers a request sent twice with the row it made (CreateOnceMixin). `by`: who types it,
+    with money.advance on the whole shop, and never the worker themself. Refuses: one's own (advance.own); and, all
+    together, each beside its box, a worker with no daily pay (advance.not_paid_by_day); an amount of 0 or less, or with
+    cents (advance.amount_invalid), or over ten million (advance.amount_too_big); a day to come (advance.in_future), or
+    one outside the job's days (advance.outside_job); and on the demo, a note (demo.no_note). Returns the row as
+    saved."""
+    # A job of another shop typing this shop's money is a bug in the calling code (T1), never a person's mistake: the
+    # route finds both in the one shop open. A server error, before anything is read.
+    if by.shop_id != staff.shop_id:
+        raise ShopMismatch("record_advance was given a person of another shop.")
+    # Spaces around a note say nothing, and "  " is no note.
+    note = note.strip()
+    # Not a recording_changes block: an advance writes no line in the change log, as no laptop gets one (03 §6.1). No
+    # lock either: the pay reads the advances each time it is asked (pay_month), so one typed beside a read of it is in
+    # the next. WAGE-3 takes one, once an approved month refuses new ones.
+    with transaction.atomic():
+        # First, so someone without it sets nothing to work; read afresh, so a key taken away a moment ago counts. On
+        # the whole shop, as a worker and their pay belong to it.
+        require(by, Permission.MONEY_ADVANCE, None)
+        # The job as it is now: its first or last day may have just moved (PPL-10). An advance may be of a day gone by,
+        # so a worker who left still takes one for a day they worked: a forgotten one, or their last pay would be wrong.
+        staff = StaffMember.objects.get(pk=staff.pk)
+        # Never one's own (Jack: A), as nobody sets their own rate or decides their own day: a manager alone in the shop
+        # would give themself its money on their own word. By the person, not the job: someone hired again (PPL-11) has
+        # two jobs, and neither's is theirs to type.
+        if staff.user_id == by.user_id:
+            raise ValidationError("Nobody types their own advance.", code="advance.own")
+        # The boxes, all together, so a person who got two wrong sees both at once, each beside its own (ADR-0040).
+        errors: dict[str, list[ValidationError]] = {}
+        # Only a worker the shop pays by the day, from whatever day: it comes off that pay, and off nothing else. The
+        # owner, who has no rate, takes the shop's money as a withdrawal, the drawer's (02 §10).
+        if not PayRate.objects.filter(shop_id=staff.shop_id, staff=staff).exists():
+            errors["staff"] = [ValidationError("This worker has no daily pay.", code="advance.not_paid_by_day")]
+        # As the table's rules hold: named here, beside the amount's box, where the table's own would name the whole
+        # row. to_integral_value() drops the places without rounding the check away: 20000.50 is not whole. One bigger
+        # than the pay so far is taken: the money was given, and the pay shows its minus.
+        if amount <= 0 or amount != amount.to_integral_value():
+            errors["amount"] = [ValidationError("An advance is a whole amount above 0.", code="advance.amount_invalid")]
+        elif amount > MOST_ADVANCE:
+            errors["amount"] = [ValidationError("An advance is at most ten million.", code="advance.amount_too_big")]
+        if date > shop_today(Shop.objects.get(pk=staff.shop_id)):
+            # Tomorrow's isn't given yet, so it is a wrong date. A Sunday's is taken, and a closed day's: money is asked
+            # for on any day, and nothing is shared or worked on it.
+            errors["date"] = [ValidationError("An advance is never of a day to come.", code="advance.in_future")]
+        elif not _ran_on(staff, date):
+            # Before the first day or after the last, the person wasn't a worker of this job, so it is a slip of the
+            # date; and a day outside the job is in no pay of it the worker would look for it in.
+            errors["date"] = [
+                ValidationError("An advance is of a day the worker had this job.", code="advance.outside_job")
+            ]
+        # On the demo every visitor logs in as Meneja (OPS-3): a note would show to every visitor after them, signed by
+        # the shared manager, until the morning's seed, so it isn't kept, as for a rule (demo.no_note, set_setting).
+        if settings.DEMO_SEED and note:
+            errors["note"] = [ValidationError("On the demo, a note isn't kept.", code="demo.no_note")]
+        if errors:
+            raise ValidationError(errors)
+        row = Advance(
+            id=advance_id, shop_id=staff.shop_id, staff=staff, date=date, amount=amount, note=note, created_by=by
+        )
+        # The row's own checks last, as a guard on what the boxes above already asked: a note too long, an id taken.
+        row.full_clean()
+        # An INSERT, never an UPDATE: an id another row holds clashes, loudly, and never overwrites it (03 §5.4).
+        row.save(force_insert=True)
+    return row
+
+
+def void_advance(advance: Advance, *, reason: str, by: StaffMember) -> Advance:
+    """Cross out an advance typed wrong (WAGE-8, 02 §12, T2): 300,000 for 30,000, "Sifuri moja zaidi". The row stays,
+    voided once with who, when and why, and counts for nothing; the right amount is typed again. Never brought back.
+    `by`: who crosses it out, with money.advance on the whole shop, whoever typed it, and never the worker it was given
+    to. A row crossed out already, by this request sent twice or by someone a moment before, is answered as it was
+    crossed out, never stamped again (CORE-3's Watch out). Refuses: one's own (advance.own); and, beside the reason's
+    box, no reason (advance.reason_missing), or on the demo a reason not the ready one (demo.ready_reasons). Returns the
+    row as saved."""
+    # Who voids is a staff member of the row's own shop (T1): the void rule in the database checks only that the stamp
+    # is filled whole, so this is the check it can't make with one column.
+    if by.shop_id != advance.shop_id:
+        raise ShopMismatch("void_advance was given a person of another shop.")
+    reason = reason.strip()
+    with transaction.atomic():
+        require(by, Permission.MONEY_ADVANCE, None)
+        # Never one's own (Jack: A): crossing it out would pay the money twice, so a worker never erases what they took.
+        # By the person, as typing one is.
+        if StaffMember.objects.get(pk=advance.staff_id).user_id == by.user_id:
+            raise ValidationError("Nobody crosses out their own advance.", code="advance.own")
+        if not reason:
+            raise ValidationError(
+                {"reason": [ValidationError("An advance crossed out says why.", code="advance.reason_missing")]}
+            )
+        if settings.DEMO_SEED and reason not in DEMO_ADVANCE_VOID_REASONS:
+            raise ValidationError(
+                {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
+            )
+        # The stamp, filled once, by one guarded UPDATE, as a row of meal money's (void_meal_money): only while the row
+        # is not crossed out, so two voids never both write it. Never save(), which AppendOnly refuses; the void trigger
+        # lets this UPDATE change the stamp and nothing else (ADR-0021).
+        Advance.objects.filter(pk=advance.pk, voided_at__isnull=True).update(
+            voided_at=timezone.now(), voided_by=by, void_reason=reason
+        )
+        # Read back as it is now: crossed out by this request, or by the same one sent before, its answer lost, or by
+        # someone a moment before, whose stamp the page is then shown.
+        return Advance.objects.get(pk=advance.pk)
 
 
 @dataclass(frozen=True)
