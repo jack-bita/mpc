@@ -1746,6 +1746,8 @@ export interface components {
             today: string;
             /** Format: date */
             counted_to: string | null;
+            /** @description Whether no working day of this month has come yet: nobody is listed for want of a day. */
+            no_day_yet: boolean;
             /** Format: decimal */
             total: string;
             workers: components["schemas"]["WorkerPay"][];
@@ -2418,6 +2420,8 @@ export interface components {
             counted_to: string | null;
             /** @description Whether the worker has a daily pay rate on a working day of the month: with none, there is no pay. */
             paid_by_day: boolean;
+            /** @description Whether the worker's first working day of this month is still to come. */
+            no_day_yet: boolean;
             worker: components["schemas"]["WorkerPay"];
         };
     };

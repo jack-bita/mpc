@@ -489,21 +489,28 @@ class WorkerPaySerializer(serializers.Serializer[Any]):
 @extend_schema_serializer(many=False)
 class PayMonthAnswer(serializers.Serializer[Any]):
     # Mishahara's answer (WAGE-2): the month; the shop's today, as a phone's date can be wrong; the last day counted, or
-    # null when none is over; the whole of it; and a line per worker paid by the day, by name.
+    # null when none is over; whether no working day of it has come yet; the whole of it; and a line per worker paid by
+    # the day, by name.
     month = MonthField()
     today = serializers.DateField()
     counted_to = serializers.DateField(allow_null=True)
+    no_day_yet = serializers.BooleanField(
+        help_text="Whether no working day of this month has come yet: nobody is listed for want of a day."
+    )
     total = serializers.DecimalField(max_digits=14, decimal_places=2)
     workers = WorkerPaySerializer(many=True)
 
 
 class WorkerPayMonthAnswer(serializers.Serializer[Any]):
-    # One worker's pay of a month: their line of Mishahara, with its month and its days; and whether the shop pays them
-    # by the day in it, for the page to say why there is nothing otherwise.
+    # One worker's pay of a month: their line of Mishahara, with its month and its days; and, for the page to say why
+    # there is nothing, whether the shop pays them by the day in it, and whether their first working day is to come.
     month = MonthField()
     today = serializers.DateField()
     counted_to = serializers.DateField(allow_null=True)
     paid_by_day = serializers.BooleanField(
         help_text="Whether the worker has a daily pay rate on a working day of the month: with none, there is no pay."
+    )
+    no_day_yet = serializers.BooleanField(
+        help_text="Whether the worker's first working day of this month is still to come."
     )
     worker = WorkerPaySerializer()

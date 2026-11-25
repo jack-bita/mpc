@@ -11,11 +11,13 @@ import { formatDay, formatDayMonth, weekdayOf } from "@/lib/format";
 
 import type { WorkerPay } from "./pay";
 
-/** A month of pay, as either answer says it: which, the shop's today, and the last day counted. */
+/** A month of pay, as either answer says it: which, the shop's today, the last day counted, and whether no working day of
+ * it has come yet: the shop's, or the worker's own. */
 export type Counted = {
   month: string;
   today: string;
   counted_to: string | null;
+  no_day_yet: boolean;
 };
 
 /** Whether the pay is of the month still running: the server's to say, from its own two answers, as a phone's date can be
@@ -24,13 +26,15 @@ export function isThisMonth(answer: Counted): boolean {
   return monthOf(answer.today) === answer.month;
 }
 
-/** "Hadi jana, Jumanne 24/11" on this month, as no day is paid before it is over; on the 1st, that none is yet. Nothing
- * on a month gone by, which is counted to its end. */
+/** "Hadi jana, Jumanne 24/11" on this month, as no day is paid before it is over; that none is yet, on the 1st, and after
+ * a 1st that was a Sunday or a closed day until a working day comes (the review). Nothing on a month gone by, which is
+ * counted to its end. */
 export function useCountedTo(answer: Counted): string | null {
   const t = useTranslations("pay");
   const monthWords = useTranslations("attendanceMonth");
   if (!isThisMonth(answer)) return null;
-  if (answer.counted_to === null) return t("nothingOverYet");
+  if (answer.counted_to === null || answer.no_day_yet)
+    return t("nothingOverYet");
   return t("countedTo", {
     weekday: monthWords(
       `weekdays.${String(weekdayOf(answer.counted_to)) as Weekday}`,

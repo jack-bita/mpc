@@ -79,7 +79,9 @@ function ThePay({ answer }: { answer: WorkerPayMonth }) {
   return (
     <>
       {counted === null ? null : <p>{counted}</p>}
-      {answer.paid_by_day ? (
+      {/* Nothing more when the line above says no working day has come: whether they are paid by the day isn't known
+          yet. */}
+      {answer.no_day_yet ? null : answer.paid_by_day ? (
         <PayLines answer={answer} worker={answer.worker} />
       ) : (
         <p>{t("notPaidByDay")}</p>

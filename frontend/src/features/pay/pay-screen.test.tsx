@@ -240,6 +240,32 @@ describe("the month's pay", () => {
     expect(screen.queryByText(/Hadi jana/)).toBeNull();
   });
 
+  it("says only that no day is over yet when the 1st is a Sunday or a closed day, and on the 2nd a Sunday", async () => {
+    // Friday 1 January 2027 is a holiday: ten workers have a rate, and none is listed for want of a working day. "Hakuna
+    // mfanyakazi anayelipwa kwa siku" would be untrue (the review). On the 2nd of a month whose 1st was closed and 2nd a
+    // Sunday, a day is counted, and still none was worked.
+    for (const [today, counted_to] of [
+      ["2027-01-01", null],
+      ["2027-05-02", "2027-05-01"],
+    ] as const) {
+      vi.setSystemTime(new Date(`${today}T05:00:00Z`));
+      const month = today.slice(0, 7);
+      theShopPays({
+        [month]: payMonth([], { month, today, counted_to, no_day_yet: true }),
+      });
+
+      const shown = render(<PayScreen />);
+
+      expect(
+        await screen.findByText(
+          "Bado hakuna siku ya kazi iliyokwisha mwezi huu.",
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText(/Hakuna mfanyakazi|Hadi jana/)).toBeNull();
+      shown.unmount();
+    }
+  });
+
   it("reads which month it is from the server's two answers, not the phone's date", async () => {
     // A phone a month behind still shows November as the server's own month gone by: no "Hadi jana".
     theShopPays({

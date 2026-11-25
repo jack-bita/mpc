@@ -5435,6 +5435,10 @@
                         "format": "date",
                         "nullable": true
                     },
+                    "no_day_yet": {
+                        "type": "boolean",
+                        "description": "Whether no working day of this month has come yet: nobody is listed for want of a day."
+                    },
                     "total": {
                         "type": "string",
                         "format": "decimal",
@@ -5450,6 +5454,7 @@
                 "required": [
                     "counted_to",
                     "month",
+                    "no_day_yet",
                     "today",
                     "total",
                     "workers"
@@ -7475,6 +7480,10 @@
                         "type": "boolean",
                         "description": "Whether the worker has a daily pay rate on a working day of the month: with none, there is no pay."
                     },
+                    "no_day_yet": {
+                        "type": "boolean",
+                        "description": "Whether the worker's first working day of this month is still to come."
+                    },
                     "worker": {
                         "$ref": "#/components/schemas/WorkerPay"
                     }
@@ -7482,6 +7491,7 @@
                 "required": [
                     "counted_to",
                     "month",
+                    "no_day_yet",
                     "paid_by_day",
                     "today",
                     "worker"

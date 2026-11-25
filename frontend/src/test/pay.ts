@@ -88,6 +88,7 @@ export function payMonth(
     month: "2026-11",
     today: TODAY,
     counted_to: "2026-11-24",
+    no_day_yet: false,
     total: "0.00",
     workers,
     ...fields,
@@ -104,6 +105,7 @@ export function workerPayMonth(
     today: TODAY,
     counted_to: "2026-11-24",
     paid_by_day: true,
+    no_day_yet: false,
     worker,
     ...fields,
   };

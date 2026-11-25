@@ -106,7 +106,11 @@ function TheMonth({ answer }: { answer: PayMonth }) {
     <>
       {counted === null ? null : <p>{counted}</p>}
       {answer.workers.length === 0 ? (
-        <p>{t("nobody")}</p>
+        // Nobody paid by the day; or no working day yet, which the line above says, and is all the page knows: on a
+        // Sunday the 1st, ten workers with a rate are listed nowhere (the review, as on the attendance month).
+        answer.no_day_yet ? null : (
+          <p>{t("nobody")}</p>
+        )
       ) : (
         <>
           <p className="flex flex-wrap justify-between gap-x-4 text-lg font-semibold">

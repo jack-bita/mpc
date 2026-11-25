@@ -224,6 +224,26 @@ describe("Malipo ya mwezi", () => {
     expect(within(card).queryByRole("table")).toBeNull();
   });
 
+  it("says only that no day is over yet before the worker's first working day", async () => {
+    theServerHas(JUMA, {
+      "2026-11": workerPayMonth(workerPay({ staff: JUMA.id }), {
+        paid_by_day: false,
+        no_day_yet: true,
+      }),
+    });
+
+    render(<WorkerScreen id={JUMA.id} />);
+    const card = await theCard();
+
+    expect(
+      await within(card).findByText(
+        "Bado hakuna siku ya kazi iliyokwisha mwezi huu.",
+      ),
+    ).toBeTruthy();
+    expect(within(card).queryByText(/Hana malipo|Hadi jana/)).toBeNull();
+    expect(within(card).queryByRole("table")).toBeNull();
+  });
+
   it("says why when the pay can't be read, and keeps the other cards", async () => {
     theServerHas(JUMA, {});
     answer("GET", payRoute(JUMA.id), refusal(403, "permission_denied"));

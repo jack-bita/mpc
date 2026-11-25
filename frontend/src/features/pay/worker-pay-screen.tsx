@@ -44,14 +44,15 @@ export function WorkerPayScreen({
   const who = useWhoIsHere();
   // The moment the page opened, read once, never while drawing (React's rule; worker-month-screen.tsx).
   const [openedAt] = useState(() => Date.now());
-  // The month the address names, as Mishahara wrote it; or, with none, or one that is no month, this month on the
-  // shop's clock, once the page knows the shop.
+  // The month the address names, as Mishahara wrote it; or, with none, one that is no month, or one to come, this month
+  // on the shop's clock, as Mishahara opens it. Once the page knows the shop.
+  const thisMonth = who.data
+    ? monthOf(shopToday(who.data.shop.timezone, openedAt))
+    : null;
   const month =
-    asked !== null && isMonth(asked)
+    thisMonth !== null && asked !== null && isMonth(asked) && asked <= thisMonth
       ? asked
-      : who.data
-        ? monthOf(shopToday(who.data.shop.timezone, openedAt))
-        : null;
+      : thisMonth;
   const answer = useWorkerPay(staff, month);
   // Until both answer, through the store's own tries too; only for a worker the address names.
   const waiting =
@@ -97,15 +98,19 @@ function TheWorkersPay({ answer }: { answer: WorkerPayMonth }) {
       <h2 className="text-lg font-semibold">
         {counted === null ? month : t("monthAndCounted", { month, counted })}
       </h2>
-      <Card>
-        <CardContent>
-          {answer.paid_by_day ? (
-            <PayLines answer={answer} worker={answer.worker} />
-          ) : (
-            <p>{t("notPaidByDay")}</p>
-          )}
-        </CardContent>
-      </Card>
+      {/* Nothing under the heading when it says no working day has come: whether they are paid by the day isn't known
+          yet. */}
+      {answer.no_day_yet ? null : (
+        <Card>
+          <CardContent>
+            {answer.paid_by_day ? (
+              <PayLines answer={answer} worker={answer.worker} />
+            ) : (
+              <p>{t("notPaidByDay")}</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </>
   );
 }

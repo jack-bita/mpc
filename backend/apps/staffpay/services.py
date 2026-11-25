@@ -1567,22 +1567,38 @@ class WorkerPay:
 @dataclass(frozen=True)
 class PayMonth:
     # Mishahara's answer (WAGE-2): the month, as its first day; the shop's today; the last day counted, or None when no
-    # day of the month is over; a line per worker paid by the day, by name; and the whole of it.
+    # day of the month is over; a line per worker paid by the day, by name; the whole of it; and the jobs with a working
+    # day in it, over or today's, which says whether there is anything to pay yet.
     month: dt.date
     today: dt.date
     counted_to: dt.date | None
     workers: list[WorkerPay]
     total: Decimal
+    worked: frozenset[uuid.UUID]
+
+    @property
+    def is_running(self) -> bool:
+        # Whether it is this month, by the shop's own today.
+        return self.month == self.today.replace(day=1)
+
+    @property
+    def no_day_yet(self) -> bool:
+        # No working day of the month yet, not even today's: on a 1st that is a Sunday or a closed day. Nobody is listed
+        # then for want of a day, not of a rate, so "Hakuna mfanyakazi anayelipwa kwa siku" would be untrue (WAGE-2's
+        # review, as ATT-5's on the attendance month).
+        return self.is_running and not self.worked
 
 
 @dataclass(frozen=True)
 class WorkerPayMonth:
-    # One worker's pay of a month, as their page shows it: their line of Mishahara, with its month and its days; and
-    # whether the shop pays them by the day in it, for the page to say why there is nothing otherwise.
+    # One worker's pay of a month, as their page shows it: their line of Mishahara, with its month and its days; and,
+    # for the page to say why there is nothing, whether the shop pays them by the day in it, and whether their first
+    # working day of it is still to come: on a 1st that is a Sunday, or hired from the 28th and looked at on the 25th.
     month: dt.date
     today: dt.date
     counted_to: dt.date | None
     paid_by_day: bool
+    no_day_yet: bool
     worker: WorkerPay
 
 
@@ -1602,7 +1618,7 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
     if today < first:
         # A month to come: nothing of it is worked yet, and nothing more is read. So the calendar's last month is an
         # answer too, never a day past the last one Python knows (ATT-5's review).
-        return PayMonth(month=first, today=today, counted_to=None, workers=[], total=NO_PAY)
+        return PayMonth(month=first, today=today, counted_to=None, workers=[], total=NO_PAY, worked=frozenset())
     # Each job's rate on each day, a raise splitting the month at its own day (WAGE-1); the step half a day, and a share
     # of the meals, is rounded to on each day (A1), and the attendance switch, for today. One read each for the month.
     rates = rates_between(shop, first, last)
@@ -1613,12 +1629,8 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
     # rule (attendance_month), or today. So not Baba, who has none; nor Neema, whose rate goes on after she left in
     # October; nor one whose only days of the month are Sundays. And on the 1st, when no day is over, everyone who works
     # today.
-    listed = {
-        day.staff_id
-        for day in [*days, *todays.values()]
-        if day.status != DayStatus.OFF and (day.staff_id, day.date) in rates
-    }
-    workers = {day.staff_id: day.staff for day in [*days, *todays.values()] if day.staff_id in listed}
+    working = [day for day in [*days, *todays.values()] if day.status != DayStatus.OFF]
+    workers = {day.staff_id: day.staff for day in working if (day.staff_id, day.date) in rates}
     # The book answers date by date, so each worker's days come in their order, and so do the lines of their pay.
     over: dict[uuid.UUID, list[AttendanceDay]] = defaultdict(list)
     for day in days:
@@ -1652,6 +1664,7 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
         counted_to=min(last, today - dt.timedelta(days=1)) if first < today else None,
         workers=lines,
         total=sum((line.total for line in lines), NO_PAY),
+        worked=frozenset(day.staff_id for day in working),
     )
 
 
@@ -1670,6 +1683,8 @@ def worker_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
         today=whole.today,
         counted_to=whole.counted_to,
         paid_by_day=line is not None,
+        # Not one who left, whose last day may be in a month before: nothing of theirs is to come.
+        no_day_yet=whole.is_running and job.left_on is None and job.pk not in whole.worked,
         worker=_worker_pay(job, work_out_pay([]), None) if line is None else line,
     )
 

@@ -95,6 +95,7 @@ def test_the_months_pay_as_the_page_reads_it(staff_client_a: APIClient, asha: St
         "month": "2026-11",
         "today": "2026-11-24",
         "counted_to": "2026-11-23",
+        "no_day_yet": False,
         "total": "33500.00",
         "workers": [ashas_line(asha)],
     }
@@ -108,6 +109,7 @@ def test_one_workers_pay_as_the_page_reads_it(staff_client_a: APIClient, asha: S
         "today": "2026-11-24",
         "counted_to": "2026-11-23",
         "paid_by_day": True,
+        "no_day_yet": False,
         "worker": ashas_line(asha),
     }
 

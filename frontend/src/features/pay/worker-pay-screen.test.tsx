@@ -267,8 +267,26 @@ describe("a worker's pay", () => {
     );
   });
 
-  it("opens this month when the address names none, or one that is no month", async () => {
-    for (const asked of [null, "Novemba", "2026-1", "1999-12"]) {
+  it("says only that no day is over yet before the worker's first working day", async () => {
+    // Zawadi is hired from the 28th with a rate: "Hana malipo kwa siku" would be untrue (the review).
+    jumaIsPaid(
+      { display_name: "Zawadi", pay: NO_PAY, total: "0.00" },
+      { paid_by_day: false, no_day_yet: true },
+    );
+
+    open();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Novemba 2026 · Bado hakuna siku ya kazi iliyokwisha mwezi huu.",
+      }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Hana malipo|Hadi jana/)).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("opens this month when the address names none, one that is no month, or one to come", async () => {
+    for (const asked of [null, "Novemba", "2026-1", "1999-12", "2026-12"]) {
       sent.length = 0;
       jumaIsPaid();
       const { unmount } = open(asked);

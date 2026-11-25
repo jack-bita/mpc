@@ -369,6 +369,57 @@ def test_on_the_first_no_day_is_over(shop_a: Shop, asha: StaffMember, monkeypatc
     assert (answer.counted_to, line_of(answer, "Asha").total) == (None, Decimal("10000.00"))
 
 
+@pytest.mark.parametrize("closed", [False, True])
+def test_a_1st_with_no_work_has_no_day_yet(
+    shop_a: Shop, asha: StaffMember, baba: StaffMember, monkeypatch: pytest.MonkeyPatch, closed: bool
+) -> None:
+    # 1 November 2026 is a Sunday, and 1 January 2027, a Friday, is a holiday: no working day of the month has come, so
+    # nobody is listed for want of a day, never of a rate, and the pages can say so (WAGE-2's review). On the 2nd, a
+    # working day, everyone paid by the day is listed, with nothing to pay yet.
+    first = dt.date(2027, 1, 1) if closed else NOVEMBER
+    if closed:
+        with shop_context(shop_a):
+            Closure.objects.create(shop=shop_a, first_day=first, last_day=first, name="Mwaka mpya")
+    monkeypatch.setattr(timezone, "now", at(dt.datetime.combine(first, dt.time(10))))
+    answer = month(shop_a, first)
+    assert (answer.workers, answer.no_day_yet) == ([], True)
+    with shop_context(shop_a):
+        assert (worker_pay(shop_a, asha, first).paid_by_day, worker_pay(shop_a, asha, first).no_day_yet) == (
+            False,
+            True,
+        )
+
+    second = first + dt.timedelta(days=1)
+    monkeypatch.setattr(timezone, "now", at(dt.datetime.combine(second, dt.time(10))))
+    answer = month(shop_a, first)
+    assert ([line.display_name for line in answer.workers], answer.no_day_yet) == (["Asha"], False)
+    # The 1st is over, though nobody worked it.
+    assert answer.counted_to == first
+
+
+def test_whose_first_day_is_still_to_come(shop_a: Shop, baba: StaffMember) -> None:
+    # Zawadi is hired from the 28th, paid from then, and looked at on the 24th: her first working day is to come, so her
+    # page says no day is over yet, never that she has no daily pay. Baba works and has none. Neema left in October:
+    # nothing of hers is to come. And a month gone by has nothing to come for anyone.
+    zawadi = paid(shop_a, "Zawadi", since=dt.date(2026, 11, 28))
+    neema = paid(shop_a, "Neema")
+    with shop_context(shop_a):
+        change_worker(zawadi, version=zawadi.version, reason="Ataanza", by=None, started_on=dt.date(2026, 11, 28))
+        mark_left(neema, left_on=dt.date(2026, 10, 31), by=baba, reason="Amehama")
+        asked = {
+            staff.display_name: (answer.paid_by_day, answer.no_day_yet)
+            for staff in (zawadi, baba, neema)
+            for answer in [worker_pay(shop_a, StaffMember.objects.get(pk=staff.pk), NOVEMBER)]
+        }
+        gone_by = worker_pay(shop_a, StaffMember.objects.get(pk=zawadi.pk), OCTOBER)
+    assert asked == {"Zawadi": (False, True), "Baba": (False, False), "Neema": (False, False)}
+    assert (gone_by.paid_by_day, gone_by.no_day_yet) == (False, False)
+    assert (month(shop_a).no_day_yet, month(shop_a, OCTOBER).no_day_yet) == (False, False)
+    # A month before the shop switched attendance on had no working day either, and none is to come; nor in December,
+    # which isn't running.
+    assert [month(shop_a, of).no_day_yet for of in (dt.date(2025, 12, 1), dt.date(2026, 12, 1))] == [False, False]
+
+
 def test_midnight_between_two_reads_counts_no_day_early(
     shop_a: Shop, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
 ) -> None:
