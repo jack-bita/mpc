@@ -40,7 +40,7 @@ The demo seed (`manage.py seed_demo`, DATA-1) makes one made-up shop, *Duka la M
 
 | Who | Logs in with | Where |
 |---|---|---|
-| Meneja, the manager, on every side, who may also change the shop's rules (SHOP-5) | `meneja@example.com` and the password `jaribu-demo` | his tile on a laptop tapped in with *Jaribu demo*, which opens `/login/` with both filled (OPS-13); or `/login/`, on a phone or a second browser |
+| Meneja, the manager, on every side, who may also change the shop's rules (SHOP-5) and type the workers' meal money (WAGE-7) | `meneja@example.com` and the password `jaribu-demo` | his tile on a laptop tapped in with *Jaribu demo*, which opens `/login/` with both filled (OPS-13); or `/login/`, on a phone or a second browser |
 | Asha, a seller on Dawa | PIN `2580` | a laptop's PIN screen: one tapped in with *Jaribu demo* shows it on her tile (OPS-3), or one the manager registered |
 | Baraka, a seller on Vyakula | PIN `1470` | the same, on his tile |
 
@@ -52,12 +52,14 @@ None of them can open the admin: nobody the seed makes is `is_staff`. And nobody
 
 **Three flags to try** (CTRL-4). The same laptop's pushes raise three: one tap sent last, after the later ones, so its missing number is flagged and then closed by the system; and after the last tap, a record the server doesn't know, one number too far, so a missing number and a refused record of Asha's both wait. So Meneja's *Tofauti* shows *Zinasubiri (2)* and one closed. A visitor's note is one of three ready ones (`demo.ready_reasons`). None is about a tap's time or its worker, so *Zinahitaji uamuzi* stays as it is; a flag a visitor closes stays closed until the next reset.
 
+**Meal money** (WAGE-7). Meneja holds `meals.record`, the owner's key to the workers' meal money, so *Hela ya chakula* on the office home shows those same three weeks: a made-up 3,000 on each of the 18 working days but one, the fifth back from today, which says *Haijaandikwa* for a visitor to type. Each day's 3,000 is split among whoever came: 1,000 each when all three did. A visitor types today or a day gone by, with no *Maelezo* (`demo.no_note`), and crosses out any row with the one ready reason, *Kiasi kimekosewa* (`demo.ready_reasons`): what they typed, and what they crossed out, stays until the next reset. Asha and Baraka lack the key, so a laptop's PIN screen shows them no *Hela ya chakula*.
+
 **When it is made again.** The seed runs on every start of the demo, after the migrations:
 - on a new database (the first setup, or every 30 days) it makes the shop;
 - on the first start of a new day, in Arusha's time, it wipes the database and makes the shop again, so whatever visitors changed is gone;
 - on a wake-up from the free plan's sleep the same day, it keeps the shop as visitors left it.
 
-A deploy during the day keeps the day's shop too, so a merge that changes the seed shows the next morning, unless the day's shop lacks something the new seed makes (a rule, a closure, a person's key or rate, the weeks of taps, or the flags): then the deploy makes it again at once (#275, DATA-8, CTRL-4). Every night at 00:30 in Arusha (21:30 UTC), *Deploy demo* runs by itself (`schedule` in `deploy-demo.yml`), and its start is the one that finds yesterday's shop. There is no button to reset it during the day: the free plan has no shell, and the night does it.
+A deploy during the day keeps the day's shop too, so a merge that changes the seed shows the next morning, unless the day's shop lacks something the new seed makes (a rule, a closure, a person's key or rate, the weeks of taps, their meal money, or the flags): then the deploy makes it again at once (#275, DATA-8, CTRL-4, WAGE-7). Every night at 00:30 in Arusha (21:30 UTC), *Deploy demo* runs by itself (`schedule` in `deploy-demo.yml`), and its start is the one that finds yesterday's shop. There is no button to reset it during the day: the free plan has no shell, and the night does it.
 
 **Check, the morning after DATA-1 merges** (*not yet tried*): the evening before, log in as Meneja and rename the demo's laptop, or register one. The next morning: Actions → *Deploy demo* shows a green run started by `schedule`; `/api/health/` shows a version ending in `-nightly-` and a number; the change is gone; and Meneja still logs in. A night whose new start fails turns that run red, as a merge's does.
 
