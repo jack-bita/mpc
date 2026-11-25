@@ -53,7 +53,8 @@ meal_money_days, which works them out through the book too, so it writes as the 
 
 Money given before payday is typed on the day it is given by whoever holds money.advance, the owner or a manager, and
 never their own (record_advance, WAGE-8): Juma's 20,000 of the 10th. A wrong one is crossed out, with who, when and why
-(void_advance). No line in the change log, as for a rate.
+(void_advance). No line in the change log, as for a rate. What each worker was given in a month comes off that month's
+pay.
 
 The month's pay is asked for by Mishahara (pay_month) and by one worker's page (worker_pay): the book's days, each at
 its own rate, added up by the sum (work_out_pay, apps/staffpay/calculations.py). The draft is never saved (Jack,
@@ -131,6 +132,7 @@ from apps.staffpay.models import (
     TimeCheck,
 )
 from apps.staffpay.selectors import (
+    advances_between,
     day_rules_between,
     meal_money_by_date,
     rates_between,
@@ -1681,8 +1683,8 @@ def void_advance(advance: Advance, *, reason: str, by: StaffMember) -> Advance:
 class WorkerPay:
     # One worker's pay of a month (WAGE-2), a job's, as a day is a job's: a person hired again in the month has two,
     # each with its own days and rates (PPL-11). Whose, and their last day if they left, which the page says beside
-    # their name; the sum of the days that are over, line by line; today alone, once they tapped Toka, or None (Leo,
-    # Jack: A); and what is left to pay, the two together.
+    # their name; the sum of the days that are over, line by line, less what they were given before payday (WAGE-8);
+    # today alone, once they tapped Toka, or None (Leo, Jack: A); and what is left to pay, the two together.
     staff_id: uuid.UUID
     display_name: str
     left_on: dt.date | None
@@ -1719,8 +1721,9 @@ class PayMonth:
 @dataclass(frozen=True)
 class WorkerPayMonth:
     # One worker's pay of a month, as their page shows it: their line of Mishahara, with its month and its days; and,
-    # for the page to say why there is nothing, whether the shop pays them by the day in it, and whether their first
-    # working day of it is still to come: on a 1st that is a Sunday, or hired from the 28th and looked at on the 25th.
+    # for the page to say why there is nothing, whether there is a line of theirs, as the shop pays them by the day in
+    # it or gave them money in it (WAGE-8), and whether their first working day of it is still to come: on a 1st that is
+    # a Sunday, or hired from the 28th and looked at on the 25th.
     month: dt.date
     today: dt.date
     counted_to: dt.date | None
@@ -1731,10 +1734,10 @@ class WorkerPayMonth:
 
 def pay_month(shop: Shop, month: dt.date) -> PayMonth:
     """The pay of the month of `month`, any day of it, for everyone the shop pays by the day, as Mishahara shows it
-    (WAGE-2; spec §8.1, 02 §15, 8): each worker's days that are over, each at its own rate, added up line by line;
-    today, for whoever has tapped Toka; and the whole of it. Worked out through the book (work_out_days), so it writes
-    as the book does, and asked twice writes nothing the second time; the pay itself is never kept. The shop must be
-    open, as for the book."""
+    (WAGE-2; spec §8.1, 02 §15, 8): each worker's days that are over, each at its own rate, added up line by line, less
+    what they were given before payday (WAGE-8); today, for whoever has tapped Toka; and the whole of it. Worked out
+    through the book (work_out_days), so it writes as the book does, and asked twice writes nothing the second time; the
+    pay itself is never kept. The shop must be open, as for the book."""
     first, last = _month_span(month)
     # The shop's today, read once: the pay counts up to the day before it, and today apart, whatever the clock does
     # meanwhile. The book reads its own a moment later, and at midnight answers one day more, which for this answer is
@@ -1761,16 +1764,28 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
     # today.
     working = [day for day in [*days, *todays.values()] if day.status != DayStatus.OFF]
     workers = {day.staff_id: day.staff for day in working if (day.staff_id, day.date) in rates}
+    # What each was given before payday in the month, by its own days, today's with them: the money was given, whatever
+    # of today is worked yet (WAGE-8). None is of a day to come, so the whole month is asked for. Read after the book,
+    # as the rates are, so one typed between the two is in this answer, and one typed after it in the next.
+    advances = advances_between(shop, first, last)
+    # A worker given money is listed for it, though no working day of theirs has come, as on a 1st that is a Sunday, or
+    # their rate starts later: or the money would be on nobody's pay until then.
+    unlisted = advances.keys() - workers.keys()
+    if unlisted:
+        workers |= {staff.pk: staff for staff in StaffMember.objects.filter(shop=shop, pk__in=unlisted)}
     # The book answers date by date, so each worker's days come in their order, and so do the lines of their pay.
     over: dict[uuid.UUID, list[AttendanceDay]] = defaultdict(list)
     for day in days:
         over[day.staff_id].append(day)
 
-    def paid(some: Iterable[AttendanceDay]) -> Pay:
-        # Some days of one worker, each with its own rate and step.
+    def paid(some: Iterable[AttendanceDay], given: Decimal = NO_PAY) -> Pay:
+        # Some days of one worker, each with its own rate and step, less what they were given.
         return work_out_pay(
-            _to_pay(day, rates.get((day.staff_id, day.date)), settings_by_day[day.date][ROUNDING_STEP.key])
-            for day in some
+            (
+                _to_pay(day, rates.get((day.staff_id, day.date)), settings_by_day[day.date][ROUNDING_STEP.key])
+                for day in some
+            ),
+            advances=given,
         )
 
     lines = []
@@ -1783,7 +1798,9 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
         tonight = todays.get(job)
         waits = tonight is not None and tonight.review_reason == ReviewReason.TIME_UNKNOWN
         ended = [tonight] if tonight is not None and (tonight.first_out is not None or waits) else []
-        lines.append(_worker_pay(staff, paid(over[job]), paid(ended) if ended else None))
+        # The advances come off the days that are over, never off today's part too, or they would be taken twice.
+        pay = paid(over[job], advances.get(job, NO_PAY))
+        lines.append(_worker_pay(staff, pay, paid(ended) if ended else None))
     # By name, as the month page lists them; "asha" beside "Asha"; then the job's id, so two jobs of one name always
     # come in the same order, the one had first before the other (UUIDv7).
     lines.sort(key=lambda line: (line.display_name.casefold(), line.staff_id))

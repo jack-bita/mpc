@@ -7478,7 +7478,7 @@
                     },
                     "paid_by_day": {
                         "type": "boolean",
-                        "description": "Whether the worker has a daily pay rate on a working day of the month: with none, there is no pay."
+                        "description": "Whether the month has a line of theirs: a daily rate on a working day, or money given before payday."
                     },
                     "no_day_yet": {
                         "type": "boolean",

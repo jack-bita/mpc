@@ -461,8 +461,9 @@ class PayLineSerializer(serializers.Serializer[Any]):
 
 class PaySerializer(serializers.Serializer[Any]):
     # A worker's pay over some days (Pay, apps/staffpay/calculations.py): the lines, the full days first; the fines and
-    # the meals, each with how many days; the advances, none until WAGE-3; how many days wait for a decision, and how
-    # many paid days have no rate, neither paid; and what is left, which may be below 0.
+    # the meals, each with how many days; the money given before payday (WAGE-8), on the days that are over and never on
+    # today's part; how many days wait for a decision, and how many paid days have no rate, neither paid; and what is
+    # left, which may be below 0.
     lines = PayLineSerializer(many=True)
     fined_days = serializers.IntegerField()
     fines = serializers.DecimalField(max_digits=14, decimal_places=2)
@@ -508,7 +509,7 @@ class WorkerPayMonthAnswer(serializers.Serializer[Any]):
     today = serializers.DateField()
     counted_to = serializers.DateField(allow_null=True)
     paid_by_day = serializers.BooleanField(
-        help_text="Whether the worker has a daily pay rate on a working day of the month: with none, there is no pay."
+        help_text="Whether the month has a line of theirs: a daily rate on a working day, or money given before payday."
     )
     no_day_yet = serializers.BooleanField(
         help_text="Whether the worker's first working day of this month is still to come."

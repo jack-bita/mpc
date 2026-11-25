@@ -2418,7 +2418,7 @@ export interface components {
             today: string;
             /** Format: date */
             counted_to: string | null;
-            /** @description Whether the worker has a daily pay rate on a working day of the month: with none, there is no pay. */
+            /** @description Whether the month has a line of theirs: a daily rate on a working day, or money given before payday. */
             paid_by_day: boolean;
             /** @description Whether the worker's first working day of this month is still to come. */
             no_day_yet: boolean;
