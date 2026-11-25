@@ -139,6 +139,19 @@ def test_the_month_as_the_page_reads_it(
     }
 
 
+def test_one_days_come_last_typed_first(
+    staff_client_a: APIClient, juma: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Two of one day, by when the server took each, never by their ids: a phone whose clock is wrong makes an id that
+    # says another moment (UUIDv7), and the list must not put its line elsewhere (the review).
+    earlier_id, later_id = str(uuid.uuid7()), str(uuid.uuid7())
+    for minute, sent_id in ((0, later_id), (5, earlier_id)):
+        moment = dt.datetime(2026, 11, 25, 10, minute, tzinfo=ARUSHA)
+        monkeypatch.setattr(timezone, "now", lambda moment=moment: moment)
+        assert staff_client_a.post(ADVANCES, sheet(juma, id=sent_id), format="json").status_code == 201
+    assert [row["id"] for row in november(staff_client_a)["rows"]] == [earlier_id, later_id]
+
+
 def test_a_month_is_its_own_days(staff_client_a: APIClient, staff_a: StaffMember, juma: StaffMember) -> None:
     # The first and the last day of each, counted.
     for day in (dt.date(2026, 10, 1), dt.date(2026, 10, 31), dt.date(2026, 11, 1), TODAY):

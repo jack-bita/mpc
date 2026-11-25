@@ -29,6 +29,7 @@ from typing import Any
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Sum
+from django.utils import timezone
 from pytest_django import Settings
 
 from apps.core.models import Change
@@ -39,7 +40,7 @@ from apps.people.services import grant_permission, hire_again, mark_left, suspen
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import Advance, PayRate
-from apps.staffpay.services import record_advance, void_advance
+from apps.staffpay.services import advances_month, pay_month, record_advance, void_advance
 from apps.staffpay.tests.days import JAN_1, MONDAY, SUNDAY, job
 
 pytestmark = pytest.mark.django_db
@@ -134,7 +135,7 @@ def test_today_and_a_day_gone_by_are_taken_and_a_day_to_come_is_not(
     shop_a: Shop, meneja: StaffMember, juma: StaffMember
 ) -> None:
     # Typed the day it is given, and a forgotten one later. Tomorrow's isn't given yet: a wrong date, refused beside its
-    # box. The shop's own today, never UTC's.
+    # box.
     with shop_context(shop_a):
         today = shop_today(shop_a)
     with pytest.raises(ValidationError) as refused:
@@ -143,6 +144,24 @@ def test_today_and_a_day_gone_by_are_taken_and_a_day_to_come_is_not(
     give(juma, meneja, day=today)
     give(juma, meneja, day=TENTH)
     assert rows_of(shop_a) == 2
+
+
+def test_today_is_the_shops_own(
+    shop_a: Shop, meneja: StaffMember, juma: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 01:30 on Tuesday 1 December in Arusha, when UTC still says Monday 30 November: money given after midnight is
+    # December's, never refused as of a day to come, and the 2nd is (the review). Baba is called out of bed for it.
+    moment = dt.datetime(2026, 12, 1, 1, 30, tzinfo=dt.timezone(dt.timedelta(hours=3)))
+    monkeypatch.setattr(timezone, "now", lambda: moment)
+    first = dt.date(2026, 12, 1)
+    with pytest.raises(ValidationError) as refused:
+        give(juma, meneja, day=first + dt.timedelta(days=1))
+    assert codes_of(refused) == {"date": {"advance.in_future"}}
+    give(juma, meneja, day=first)
+    with shop_context(shop_a):
+        assert advances_month(shop_a, first, viewer=meneja).today == first
+        (line,) = pay_month(shop_a, first).workers
+    assert (line.display_name, line.pay.advances) == ("Juma", Decimal("20000.00"))
 
 
 def test_a_sunday_is_taken(shop_a: Shop, meneja: StaffMember, juma: StaffMember) -> None:
