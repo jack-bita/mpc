@@ -1,6 +1,8 @@
 // meals.ts — a made-up shop's meal money, for tests: days and rows as the server answers them (WAGE-7), and who may
 // open them. Tests only. Fake data: every name, amount and id is made up.
 import type { components } from "@/api/schema";
+import { useAttendanceMonth } from "@/features/attendance/attendance-month";
+import { useWorkerMonth } from "@/features/attendance/worker-month";
 import { useMealMoney } from "@/features/meals/meal-money";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, sent } from "@/test/fake-server";
@@ -85,4 +87,29 @@ export function mealMoneyIsAnswered(): () => number {
   return () =>
     sent.filter((request) => new URL(request.url).pathname === MEAL_MONEY)
       .length;
+}
+
+const WORKER = "019a8400-0000-7000-8000-0000000000aa";
+const MONTH = "/api/v1/staffpay/attendance-month/";
+const WORKER_MONTH = `/api/v1/staffpay/attendance-worker/${WORKER}/`;
+
+/** The month of attendance and one worker's month, open somewhere else on the page's store, as MealMoneyAsked is. */
+export function MonthsAsked() {
+  useAttendanceMonth("2026-11");
+  useWorkerMonth(WORKER, "2026-11");
+  return null;
+}
+
+/** The server answers MonthsAsked's two questions, and how many times each was asked so far. Nothing shows the answers; a
+ * worker's month says which month it is, and today, as its own read asks, a month gone by here, so it never asks again by
+ * itself. */
+export function monthsAreAnswered(): () => { month: number; worker: number } {
+  answer("GET", MONTH, { status: 200, body: {} });
+  answer("GET", WORKER_MONTH, {
+    status: 200,
+    body: { month: "2026-10", today: TODAY },
+  });
+  const asked = (path: string) =>
+    sent.filter((request) => new URL(request.url).pathname === path).length;
+  return () => ({ month: asked(MONTH), worker: asked(WORKER_MONTH) });
 }
