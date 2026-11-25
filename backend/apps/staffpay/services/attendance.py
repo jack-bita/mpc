@@ -62,13 +62,14 @@ from apps.staffpay.models import (
     ReviewReason,
     TimeCheck,
 )
-from apps.staffpay.selectors import is_closed, rates_between, rules_from_text
+from apps.staffpay.selectors import closed_pay, rates_between, rules_from_text
 from apps.staffpay.services.book import (
     SUNDAY,
     doubt_of,
     doubt_questions,
     falls_between,
     month_span,
+    past_deciding,
     ran_on,
     refuse_if_closed,
     where_it_falls,
@@ -116,7 +117,9 @@ def attendance_month(shop: Shop, month: dt.date) -> AttendanceMonth:
     # The book's answer, never the table's rows: a day kept to decide that the book no longer answers, its tap voided
     # outside a job's days, stays in its row as it was (rule 7), and is no longer anyone's to decide (ATT-11's review).
     # Only days that are over: this month's stop at yesterday. Each comes with its worker, in the same read.
-    days = work_out_days(shop, first, last)
+    closed = closed_pay(shop)
+    # Without the days whose pay was approved before they came (past_deciding): they are nobody's to decide or to count.
+    days = [day for day in work_out_days(shop, first, last) if not past_deciding(day, closed)]
     # Who the shop pays by the day, on each day (WAGE-1): only they are listed. Baba, the owner, never clocks in, so the
     # book keeps him absent every working day; he has no rate, so no line (Jack, ATT-10's review: A). Read on the
     # server, never through the rates route, which a manager who fixes attendance may not open: the page learns who
@@ -321,13 +324,18 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
     # The whole shop's month, as the month page asks it: the book works out every job's days at once, under one lock
     # (work_out_days), so the calendar and the month page's line never come from two different workings out. Then this
     # job's days alone. Every day the book answers, off days too, which the calendar marks with –.
-    days = [day for day in work_out_days(shop, first, last) if day.staff_id == job.pk]
+    # Nor one whose pay was approved before it came (past_deciding): its taps stay to be read, marked +, as on any day
+    # that isn't counted.
+    approved = closed_pay(shop)
+    days = [
+        day for day in work_out_days(shop, first, last) if day.staff_id == job.pk and not past_deciding(day, approved)
+    ]
     kinds = Counter(_counted_as(day) for day in days if day.status != DayStatus.OFF)
     # Never one's own day (Jack, ATT-6): by the person, as decide_day asks it, so a person hired again (PPL-11) can't
     # decide the days of either of their jobs.
     yours = viewer is not None and viewer.user_id == job.user_id
     # Whether the month's pay is approved, with everyone's or theirs alone (WAGE-3): then nothing of it may change.
-    closed = is_closed(shop, first, job.pk)
+    closed = approved.holds(job.pk, first)
     # Who decided, by nickname, in one read for the whole month, never one per day.
     deciders = dict(
         StaffMember.objects.filter(pk__in={day.decided_by_id for day in days if day.decided_by_id}).values_list(
@@ -713,8 +721,8 @@ def void_tap(tap: AttendanceEvent, *, reason: str, by: StaffMember) -> Attendanc
     `by`: who crosses it out, with attendance.manage on the whole shop, never on their own tap. A tap crossed out
     already, by this request sent twice or by someone a moment before, is answered as it was crossed out, never stamped
     again (CORE-3's Watch out). Refuses: one's own tap (tap.own); a tap of a day whose pay is approved
-    (pay.day_approved); no reason (tap.reason_missing), or on the demo a
-    reason not the ready one (demo.ready_reasons), beside the reason's box. Returns the tap as saved."""
+    (pay.day_approved); no reason (tap.reason_missing), or on the demo a reason not the ready one (demo.ready_reasons),
+    beside the reason's box. Returns the tap as saved."""
     # Who voids is a staff member of the tap's own shop (T1): the void rule in the database checks only that the stamp
     # is filled whole, so this is the check it can't make with one column (v1.58). Another shop's person here is a bug
     # in the calling code, as the route finds both in the one shop open: a server error, before anything is read.

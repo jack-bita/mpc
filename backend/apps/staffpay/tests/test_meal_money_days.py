@@ -31,7 +31,7 @@ from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
-from apps.staffpay.models import AttendanceDay, ClockKind, DayChoice, MealMoney, Payslip
+from apps.staffpay.models import AttendanceDay, ClockKind, DayChoice, MealMoney, PayRun, Payslip
 from apps.staffpay.services import (
     MealDay,
     MealMoneyDays,
@@ -366,7 +366,7 @@ def test_the_share_shown_is_the_one_still_to_pay(
 ) -> None:
     # Asha and Juma came on Monday, 1,500 each of 3,000, and Salim's day waits. Juma left and was paid, his 1,500 taken
     # (WAGE-3). Then Salim's day is decided: three ate, so each still to pay pays 1,000, which the page says, never the
-    # 1,500 Juma paid. Once everyone is paid, what they paid is shown.
+    # 1,500 Juma paid; nor once the month's approval pays them too (WAGE-3's review): 1,500 each is 4,500 of 3,000.
     salim = paid(shop_a, "Salim")
     for each in (asha, juma):
         kept_day(each, *FULL_DAY, date=MONDAY)
@@ -374,9 +374,11 @@ def test_the_share_shown_is_the_one_still_to_pay(
     typed(baba, MONDAY, "3000")
     assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].share == Decimal("1500")
 
-    def pay(staff: StaffMember) -> None:
+    def pay(staff: StaffMember, run: PayRun | None = None) -> None:
         with shop_context(shop_a):
-            slip = Payslip(shop=shop_a, staff=staff, month=NOV_1, total=Decimal("8500.00"), created_by=baba)
+            slip = Payslip(
+                shop=shop_a, staff=staff, month=NOV_1, pay_run=run, total=Decimal("8500.00"), created_by=baba
+            )
             slip.save()
             AttendanceDay.objects.filter(staff=staff, date=MONDAY).update(payslip=slip)
 
@@ -385,6 +387,36 @@ def test_the_share_shown_is_the_one_still_to_pay(
         decide_day(waits, choice=DayChoice.ON_TIME, reason="Alisahau Toka", replaces=None, by=baba)
     monday = by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY]
     assert (monday.sharers, monday.share) == (3, Decimal("1000"))
-    pay(asha)
-    pay(salim)
-    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].share == Decimal("1500")
+    with shop_context(shop_a):
+        run = PayRun(shop=shop_a, month=NOV_1, created_by=baba)
+        run.save()
+    pay(asha, run)
+    pay(salim, run)
+    monday = by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY]
+    assert (monday.sharers, monday.share) == (3, Decimal("1000"))
+
+
+def test_a_date_only_leavers_shared_shows_what_they_paid(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Asha alone ate on Monday, left, and was approved alone: her share is the date's.
+    kept_day(asha, *FULL_DAY, date=MONDAY)
+    typed(baba, MONDAY, "3000")
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].share == Decimal("3000")
+    with shop_context(shop_a):
+        slip = Payslip(shop=shop_a, staff=asha, month=NOV_1, total=Decimal("7000.00"), created_by=baba)
+        slip.save()
+        AttendanceDay.objects.filter(staff=asha, date=MONDAY).update(payslip=slip)
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].share == Decimal("3000")
+
+
+def test_nobody_waits_on_a_day_of_an_approved_pay(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Juma left, paid alone; then a laptop sends his Ingia of Monday, with no Toka (WAGE-3's review). Nobody can decide
+    # it any more, so the page doesn't say one waits. Salim's, whose pay is open, waits.
+    juma, salim = paid(shop_a, "Juma"), paid(shop_a, "Salim")
+    kept_day(asha, *FULL_DAY, date=MONDAY)
+    for each in (juma, salim):
+        kept_day(each, (ClockKind.IN, 7, 20), date=MONDAY)
+    typed(baba, MONDAY, "3000")
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].waiting == 2
+    with shop_context(shop_a):
+        Payslip(shop=shop_a, staff=juma, month=NOV_1, total=Decimal("0.00"), created_by=baba).save()
+    assert by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY].waiting == 1

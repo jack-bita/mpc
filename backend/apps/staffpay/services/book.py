@@ -64,6 +64,7 @@ from apps.staffpay.calculations import (
 )
 from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, PayRate, ReviewReason, TimeCheck
 from apps.staffpay.selectors import (
+    ClosedPay,
     day_rules_between,
     is_closed,
     meal_money_by_date,
@@ -167,6 +168,14 @@ def refuse_if_closed(shop: Shop, day: dt.date, job: uuid.UUID | None = None) -> 
     and the change never both go through."""
     if is_closed(shop, day, job):
         raise ValidationError("The pay of this day is approved.", code="pay.day_approved")
+
+
+def past_deciding(day: AttendanceDay, closed: ClosedPay) -> bool:
+    """Whether a day waits for a decision nobody can give any more, as its pay is approved. A tap a laptop sent late
+    makes one: Neema left on the 16th and was paid, and her tap of the 17th comes on the 20th (WAGE-3's review). It
+    moves no pay, and is kept to be read on her calendar; a page that listed it to decide would send a manager to a day
+    the server refuses. Never a day a payslip paid: none waits, as one that does refuses the approval."""
+    return day.status == DayStatus.NEEDS_REVIEW and not day.decided_status and closed.holds(day.staff_id, day.date)
 
 
 def lock_jobs(shop: Shop) -> list[StaffMember]:

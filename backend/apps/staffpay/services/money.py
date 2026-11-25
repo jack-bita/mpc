@@ -46,12 +46,14 @@ from apps.staffpay.models import (
     AttendanceDay,
     MealMoney,
     PayRate,
+    Payslip,
 )
-from apps.staffpay.selectors import closed_to, is_closed, rates_between
+from apps.staffpay.selectors import closed_pay, closed_to, is_closed, rates_between
 from apps.staffpay.services.book import (
     SUNDAY,
     lock_jobs,
     month_span,
+    past_deciding,
     ran_on,
     refuse_if_closed,
     who_shares,
@@ -329,9 +331,18 @@ def meal_money_days(shop: Shop, first: dt.date, last: dt.date) -> MealMoneyDays:
     # The book first, so each day's share is as it is now: the money typed a moment ago, a tap that came late, a day
     # decided. It answers every job's day up to yesterday. The rows are read after it, so money typed between the two
     # shows with the split before it, until the page asks again (as a tap does, worker_attendance).
+    # Without those whose pay was approved before they came (past_deciding), as nobody waits for them any more.
+    closed = closed_pay(shop)
     book: dict[dt.date, list[AttendanceDay]] = defaultdict(list)
     for worked_out in work_out_days(shop, first, last):
-        book[worked_out.date].append(worked_out)
+        if not past_deciding(worked_out, closed):
+            book[worked_out.date].append(worked_out)
+    # The payslips of those approved alone, whose shares of a date may differ from the others' (_meal_day).
+    alone = set(
+        Payslip.objects.filter(shop=shop, pay_run__isnull=True, month__range=(first.replace(day=1), last)).values_list(
+            "pk", flat=True
+        )
+    )
     rates = rates_between(shop, first, last)
     rows: dict[dt.date, list[MealMoney]] = defaultdict(list)
     # Who typed each and who crossed it out come in the same read. Oldest first, as they were typed; then the id, for
@@ -344,12 +355,12 @@ def meal_money_days(shop: Shop, first: dt.date, last: dt.date) -> MealMoneyDays:
         rows[row.date].append(row)
     days: list[MealDay] = []
     for date in _dates_back(first, last):
-        day = _meal_day(date, today, book[date], rows[date], rates)
+        day = _meal_day(date, today, book[date], rows[date], rates, alone)
         # A day to show: one with a row, crossed out or not; one whose meals someone ate, or may have; and today, while
         # it is a working day, as that is when its money is typed.
         if day.rows or day.sharers or day.waiting or (date == today and _works_today(shop, today)):
             days.append(day)
-    return MealMoneyDays(first, last, today, sum((day.amount for day in days), NO_MONEY), days, ready, closed_to(shop))
+    return MealMoneyDays(first, last, today, sum((day.amount for day in days), NO_MONEY), days, ready, closed.to)
 
 
 def _dates_back(first: dt.date, last: dt.date) -> list[dt.date]:
@@ -364,16 +375,17 @@ def _meal_day(
     worked_out: list[AttendanceDay],
     rows: list[MealMoney],
     rates: dict[tuple[uuid.UUID, dt.date], PayRate],
+    alone: set[uuid.UUID],
 ) -> MealDay:
     # One date of Hela ya chakula, from its jobs' days as the book answered them, its rows, and the rates in force.
     sharing = who_shares([(day, day.decided_status) for day in worked_out], rates)
     # The share as the book kept it, the same for everyone who shares the date's meals: never worked out a second time
-    # here, so the page and the pay can't differ (WAGE-2). Of those still to pay, where there are any: one who left and
-    # was paid keeps the share they paid, though the date was split again among more since (WAGE-3). The most of them,
-    # as a rate typed between the book's read and this one's adds someone whose kept share is still 0, until the page
-    # asks again.
-    to_pay = [day for day in sharing.days if day.payslip_id is None]
-    share = max((day.meal_share for day in to_pay or sharing.days), default=NO_MEAL_SHARE)
+    # here, so the page and the pay can't differ (WAGE-2). Not of those approved alone, where there are others: one who
+    # left and was paid keeps the share they paid, though the date was split again among more since (WAGE-3); the others
+    # all pay one share, to pay still or on the month's payslips. The most of them, as a rate typed between the book's
+    # read and this one's adds someone whose kept share is still 0, until the page asks again.
+    together = [day for day in sharing.days if day.payslip_id not in alone]
+    share = max((day.meal_share for day in together or sharing.days), default=NO_MEAL_SHARE)
     return MealDay(
         date=date,
         amount=sum((row.amount for row in rows if row.voided_at is None), NO_MONEY),

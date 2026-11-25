@@ -46,6 +46,7 @@ from apps.staffpay.services import (
     add_tap,
     approve_leaver,
     approve_month,
+    attendance_month,
     decide_day,
     pay_month,
     record_advance,
@@ -118,8 +119,9 @@ def decide(shop: Shop, staff: StaffMember, by: StaffMember, day: dt.date) -> Any
 
 
 def add(shop: Shop, staff: StaffMember, by: StaffMember, day: dt.date) -> Any:
+    # A Toka at 13:10, before her 18:45: half a day.
     return add_tap(
-        staff, tap_id=uuid.uuid7(), kind=ClockKind.OUT, date=day, minute=dt.time(18, 50), reason="Alisahau", by=by
+        staff, tap_id=uuid.uuid7(), kind=ClockKind.OUT, date=day, minute=dt.time(13, 10), reason="Alisahau", by=by
     )
 
 
@@ -393,23 +395,103 @@ def test_an_approved_day_offers_no_decision_and_reads_no_rules(
     assert [day.status for day in after.days] == [day.status for day in before.days]
 
 
+def to_decide(shop: Shop) -> list[tuple[str, dt.date]]:
+    """Zinahitaji uamuzi of November, and who is counted as having one."""
+    with shop_context(shop):
+        answer = attendance_month(shop, NOVEMBER)
+    assert sum(line.needs_review for line in answer.workers) == len(answer.to_decide)
+    return [(day.staff.display_name, day.date) for day in answer.to_decide]
+
+
+def test_a_tap_that_came_after_the_approval_is_nobodys_to_decide(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, neema: StaffMember
+) -> None:
+    # Neema left on the 16th and was paid alone; then a laptop sends her Ingia of the 17th. The server takes no decision
+    # on it, so no page asks for one (WAGE-3's review): on her calendar it is a tap that isn't counted. Asha's open
+    # day waits, and stays to decide.
+    for staff in (asha, neema):
+        tapped(staff, (ClockKind.IN, 7, 20), date=TUE)
+    assert to_decide(shop_a) == [("Asha", TUE)]
+    with shop_context(shop_a):
+        hers = worker_attendance(shop_a, neema, NOVEMBER, viewer=baba)
+        ashas = worker_attendance(shop_a, asha, NOVEMBER, viewer=baba)
+    assert TUE not in {day.date for day in hers.days}
+    assert [tap.date for tap in hers.taps if tap.date == TUE] == [TUE]
+    assert (hers.worker.needs_review, hers.closed, ashas.worker.needs_review, ashas.closed) == (0, True, 1, False)
+    # Her days that were paid are still there.
+    assert MON in {day.date for day in hers.days}
+
+
+def test_nor_is_one_that_came_after_the_whole_months(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Asha left on the 16th, November was approved for everyone, and then her Ingia of the 17th comes.
+    with shop_context(shop_a):
+        mark_left(asha, left_on=MON, by=baba, reason="Amehama")
+    approve(shop_a, baba)
+    tapped(asha, (ClockKind.IN, 7, 20), date=TUE)
+    assert to_decide(shop_a) == []
+
+
+def test_the_other_days_of_an_approved_month_stay_on_the_calendar(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember
+) -> None:
+    # Zawadi has no daily pay, so no payslip marks her days: the month is closed for her too, and her calendar says what
+    # each was. And Asha's Tuesday, with no Toka, which Baba decided before he approved it: the book still says it needs
+    # a person, beside his decision (A2), and it was paid.
+    zawadi = job(shop_a, "Zawadi")
+    kept_day(zawadi, *FULL, date=MON)
+    waited = kept_day(asha, (ClockKind.IN, 7, 20), date=TUE)
+    with shop_context(shop_a):
+        decide_day(waited, choice=DayChoice.ON_TIME, reason="Alisahau Toka", replaces=None, by=baba)
+    approve(shop_a, baba)
+    with shop_context(shop_a):
+        hers = worker_attendance(shop_a, zawadi, NOVEMBER, viewer=baba)
+        ashas = worker_attendance(shop_a, asha, NOVEMBER, viewer=baba)
+        listed = attendance_month(shop_a, NOVEMBER)
+    assert (hers.closed, hers.worker.on_time) == (True, 1)
+    assert {day.status for day in hers.days} == {"on_time", "absent", "off"}
+    assert TUE in {day.date for day in ashas.days}
+    assert ashas.worker.on_time == 2
+    assert [line.on_time for line in listed.workers if line.display_name == "Asha"] == [2]
+
+
 # Two at once: the write waits for the approval, and then finds the day approved.
 
 
+def cross_out_meals(shop: Shop, staff: StaffMember, by: StaffMember, day: dt.date) -> Any:
+    return void_meal_money(MealMoney.objects.get(date=day), reason="Kosa", by=by)
+
+
+def cross_out_advance(shop: Shop, staff: StaffMember, by: StaffMember, day: dt.date) -> Any:
+    return void_advance(Advance.objects.get(staff=staff, date=day), reason="Kosa", by=by)
+
+
+# The eight services, each a write that waits for the approval's lock. The two that cross money out need some there.
+ALL_WRITES = WRITES | {"cross_out_meals": cross_out_meals, "cross_out_advance": cross_out_advance}
+
+
+def with_money_to_cross_out(shop: Shop, staff: StaffMember, by: StaffMember, name: str) -> None:
+    with shop_context(shop):
+        if name == "cross_out_meals":
+            meals(shop, staff, by, MON)
+        elif name == "cross_out_advance":
+            advance(shop, staff, by, MON)
+
+
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("name", WRITES)
+@pytest.mark.parametrize("name", ALL_WRITES)
 def test_a_write_beside_an_approval_waits_and_is_refused(
     shop_a: Shop, baba: StaffMember, asha: StaffMember, name: str
 ) -> None:
     # Baba approves while Meneja's write is on its way: the approval holds its lock, so the write never slips between
     # what Baba read and what is kept.
+    with_money_to_cross_out(shop_a, asha, baba, name)
     with shop_context(shop_a):
         seen = {line.staff_id: line.total for line in pay_month(shop_a, NOVEMBER).workers}
 
     def write() -> str:
         with shop_context(shop_a):
             try:
-                WRITES[name](shop_a, asha, baba, MON)
+                ALL_WRITES[name](shop_a, asha, baba, MON)
             except ValidationError as refusal:
                 return ",".join(codes(refusal))
         return "written"
@@ -423,12 +505,13 @@ def test_a_write_beside_an_approval_waits_and_is_refused(
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("name", ["meals", "advance"])
+@pytest.mark.parametrize("name", ALL_WRITES)
 def test_an_approval_beside_a_write_waits_and_sees_it(
     shop_a: Shop, baba: StaffMember, asha: StaffMember, name: str
 ) -> None:
-    # The other way round: money typed first, not committed yet, and Baba approves the total he read before it. He waits
-    # for it, and is refused, as a total has moved.
+    # The other way round: the write first, not committed yet, and Baba approves the total he read before it. He waits
+    # for it, and is refused: a total has moved, or, with a tap of hers crossed out, a day waits for a decision.
+    with_money_to_cross_out(shop_a, asha, baba, name)
     with shop_context(shop_a):
         seen = {line.staff_id: line.total for line in pay_month(shop_a, NOVEMBER).workers}
 
@@ -441,10 +524,10 @@ def test_an_approval_beside_a_write_waits_and_sees_it(
         return "approved"
 
     with shop_context(shop_a), transaction.atomic():
-        WRITES[name](shop_a, asha, baba, MON)
+        ALL_WRITES[name](shop_a, asha, baba, MON)
         thread, ended = in_another_transaction(late_approval)
         wait_until_someone_waits_for_me()
     thread.join()
-    assert ended == ["pay_run.totals_moved"]
+    assert ended == ["pay_run.days_waiting" if name == "cross_out" else "pay_run.totals_moved"]
     with shop_context(shop_a):
         assert not Payslip.objects.exists()

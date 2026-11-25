@@ -245,7 +245,35 @@ def closed_to(shop: Shop) -> date | None:
     """The last day of the last month approved, or None while none is (WAGE-3): up to it, the shop's own pay is closed
     (is_closed), so the meal money's page offers no change of those days."""
     month = PayRun.objects.filter(shop=shop).aggregate(last=Max("month"))["last"]
-    return None if month is None else month.replace(day=monthrange(month.year, month.month)[1])
+    return None if month is None else _months_end(month)
+
+
+@dataclass(frozen=True)
+class ClosedPay:
+    # What of the shop's pay is approved, read once for a page of many days (is_closed asks of one): up to `to`, the
+    # last day of the last month approved, for everyone; and each job approved alone, up to the last day of its month.
+    to: date | None
+    alone: dict[uuid.UUID, date]
+
+    def holds(self, job: uuid.UUID, day: date) -> bool:
+        return (self.to is not None and day <= self.to) or day <= self.alone.get(job, date.min)
+
+
+def closed_pay(shop: Shop) -> ClosedPay:
+    """What of the shop's pay is approved (WAGE-3), in two reads: the last month approved for everyone, and the last one
+    each job was approved alone in. The same rule as is_closed, for a page that asks it of every day it shows."""
+    alone = (
+        Payslip.objects.filter(shop=shop, pay_run__isnull=True)
+        .order_by()
+        .values("staff_id")
+        .annotate(last=Max("month"))
+        .values_list("staff_id", "last")
+    )
+    return ClosedPay(to=closed_to(shop), alone={job: _months_end(month) for job, month in alone})
+
+
+def _months_end(month: date) -> date:
+    return month.replace(day=monthrange(month.year, month.month)[1])
 
 
 @dataclass(frozen=True)
