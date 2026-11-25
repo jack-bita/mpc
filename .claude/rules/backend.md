@@ -26,7 +26,7 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 
 ## Inside an app
 
-`models.py` tables and every rule the database can enforce · `services.py` every write, one function per action, each in a transaction · `selectors.py` every read the API and reports use · `calculations.py` pure functions, mirrored in TypeScript · `documents.py` handlers for offline document types · `permissions.py` · `tasks.py` background tasks, which with management commands are the only code that may open every shop (03 §5.11) · `api/` thin serializers, views and urls · `admin.py` · `tests/`
+`models.py` tables and every rule the database can enforce · `services.py` every write, one function per action, each in a transaction (grown too long to read in one sitting, a package `services/` whose `__init__.py` names what the rest of the code may take, as `staffpay`'s, WAGE-3) · `selectors.py` every read the API and reports use · `calculations.py` pure functions, mirrored in TypeScript · `documents.py` handlers for offline document types · `permissions.py` · `tasks.py` background tasks, which with management commands are the only code that may open every shop (03 §5.11) · `api/` thin serializers, views and urls · `admin.py` · `tests/`
 
 ## Writing services
 

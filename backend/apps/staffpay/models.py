@@ -106,7 +106,7 @@ class DayStatus(models.TextChoices):
 class ReviewReason(models.TextChoices):
     # Why a day needs a person's decision (ATT-5): the one line the month page shows beside it, "Juma · Alhamisi 12/11 ·
     # hakuna Toka", so the owner knows what to look at before he opens the day. One reason a day: the first that holds,
-    # in this order. The book's own first (apps/staffpay/services.py), as each asks whether the day is paid at all,
+    # in this order. The book's own first (apps/staffpay/services/book.py), as each asks whether the day is paid at all,
     # whatever its times say; then the rule's (apps/staffpay/calculations.py), in the order the rule reads a day.
     OUTSIDE_JOB = "outside_job", "Outside the job's days"  # a tap before the first day or after the last (ATT-11)
     CLOSED_DAY = "closed_day", "The shop was closed"  # a tap on a day the shop closed, a funeral (ATT-10)
@@ -352,8 +352,8 @@ class AttendanceDay(ShopScoped):
     # the day her Toka arrived from a laptop that had been offline. The trigger writes nothing when a day comes out the
     # same.
     # A manager's decision (ATT-6) sits in columns of its own, beside what the book worked out, and the book never
-    # writes them (it writes only WORKED_OUT, apps/staffpay/services.py), so what the system said stays visible (A2):
-    # "Siku kamili, uamuzi wa Baba · Mfumo ulisema: inahitaji uamuzi". Not Editable all the same: a version of the
+    # writes them (it writes only WORKED_OUT, apps/staffpay/services/book.py), so what the system said stays visible
+    # (A2): "Siku kamili, uamuzi wa Baba · Mfumo ulisema: inahitaji uamuzi". Not Editable all the same: a version of the
     # whole row would move each time the book worked the day out again, and refuse a manager's decision for a change
     # he never saw. Two managers deciding at once are kept apart by the decision each saw (decide_day).
     # Never deleted (rule 7): nothing links to a day yet, so PROTECT can't keep it, and a trigger in the same migration
@@ -394,7 +394,7 @@ class AttendanceDay(ShopScoped):
     # to any day are a sum of days already worked out, and one who leaves on the 15th is paid at once. One of the book's
     # answers (WORKED_OUT): it moves when money is typed or crossed out, when any worker's day of the date is decided or
     # its taps fixed, and when a pay rate is typed, as the date is then split again. 0 on every day with nothing to
-    # share, and on all but one of a person's days of one date (_sharing, apps/staffpay/services.py). Money, so
+    # share, and on all but one of a person's days of one date (who_shares, apps/staffpay/services/book.py). Money, so
     # numeric(14,2) (rule 3).
     meal_share = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
 
@@ -535,8 +535,8 @@ class PayRate(AppendOnly):
     # typed wrong is mended by a new row for the same day: of two rows on one day the one written last counts, as for a
     # setting (02 §4), and the slip stays in the history. Who set it is the row's `created_by` (ShopScoped).
     # Never on a laptop: a worker's pay never sits on a shared device (03 §6.1), so the service writes no line in the
-    # change log, and no sync answer carries one. Written only by set_pay_rate (apps/staffpay/services.py), which asks
-    # who may; read for a span by rates_between (apps/staffpay/selectors.py).
+    # change log, and no sync answer carries one. Written only by set_pay_rate (apps/staffpay/services/money.py), which
+    # asks who may; read for a span by rates_between (apps/staffpay/selectors.py).
 
     # Whose rate: a job, not a person, as a day's `staff` is: a person who left and was hired again has a new job, and
     # its rates start afresh (PPL-11). PROTECT: nothing is deleted. No index of its own: the lookup below leads with
@@ -605,7 +605,7 @@ class MealMoney(AppendOnly):
     # (ADR-0021), all but the void stamp, filled once: a wrong amount is voided, with who, when and why, and the right
     # one typed. Never on a laptop: what a worker pays for meals is part of their pay, and pay never sits on a shared
     # device (03 §6.1), so the services write no line in the change log, and no sync answer carries one. Written only by
-    # record_meal_money and void_meal_money (apps/staffpay/services.py), which ask who may.
+    # record_meal_money and void_meal_money (apps/staffpay/services/money.py), which ask who may.
 
     # The day of the meals, on the shop's own calendar: a business date, not a moment (02 §1). Today's or an earlier
     # working day's, which the service checks: a forgotten day is typed later.
@@ -685,7 +685,7 @@ MOST_ADVANCE = Decimal("10000000.00")
 class Advance(AppendOnly):
     # Money given to a worker before payday (WAGE-8, 02 §12), whether they call it mid-month money or asked the owner
     # for it (Jack, WAGE-1). Juma's 20,000 of 10 Nov comes off Juma's November pay (pay_month,
-    # apps/staffpay/services.py). Typed on the day it is given, by whoever holds money.advance, the owner and the
+    # apps/staffpay/services/pay.py). Typed on the day it is given, by whoever holds money.advance, the owner and the
     # managers (Jack: A); never their own (Jack: A), as nobody gives themself the shop's money, or erases what they
     # took, on their own word. Who typed it is the row's `created_by` (ShopScoped). Money, so a ledger (rule 2, T2):
     # written once, never changed or deleted. AppendOnly (CORE-3) refuses a second save() and any delete() in Python,
@@ -693,7 +693,7 @@ class Advance(AppendOnly):
     # filled once: a wrong one is voided, with who, when and why, and the right one typed. Never on a laptop: what a
     # worker owes is part of their pay, and pay never sits on a shared device (03 §6.1), so the services write no line
     # in the change log, and no sync answer carries one. Written only by record_advance and void_advance
-    # (apps/staffpay/services.py), which ask who may.
+    # (apps/staffpay/services/money.py), which ask who may.
 
     # Whose: a job, not a person, as a day's and a rate's are: a person hired again (PPL-11) has a new job, and the old
     # job's advance stays on the old job's pay. PROTECT: nothing is deleted. No index of its own: every read starts from

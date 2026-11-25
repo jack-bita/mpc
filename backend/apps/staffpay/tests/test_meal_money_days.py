@@ -1,5 +1,5 @@
 """apps/staffpay/tests/test_meal_money_days.py — the meal money of any days, as Hela ya chakula shows it (WAGE-7;
-02 §12): meal_money_days (apps/staffpay/services.py).
+02 §12): meal_money_days (apps/staffpay/services/money.py).
 
 Today is Tuesday 24 November 2026 at MPC, at 10:00:
 
@@ -31,7 +31,6 @@ from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
-from apps.staffpay import services
 from apps.staffpay.models import AttendanceDay, ClockKind, DayChoice, MealMoney
 from apps.staffpay.services import (
     MealDay,
@@ -41,7 +40,9 @@ from apps.staffpay.services import (
     record_meal_money,
     set_pay_rate,
     void_meal_money,
+    work_out_days,
 )
+from apps.staffpay.services import money as money_services
 from apps.staffpay.tests.days import JAN_1, job, kept_day, rule, switch_on
 
 pytestmark = pytest.mark.django_db
@@ -268,7 +269,7 @@ def test_the_calendars_first_day_is_no_mistake(shop_a: Shop) -> None:
     # The service steps from day to day, and never past the first one Python knows (WAGE-7's review). The route takes no
     # day before 2000; the book is asked here for no working day, as attendance is off all along.
     with shop_context(shop_a):
-        assert services._dates_back(dt.date.min, dt.date(1, 1, 3)) == [
+        assert money_services._dates_back(dt.date.min, dt.date(1, 1, 3)) == [
             dt.date(1, 1, 3),
             dt.date(1, 1, 2),
             dt.date.min,
@@ -285,12 +286,12 @@ def test_a_rate_typed_between_the_two_reads_never_shows_nothing_each(
         kept_day(each, *FULL_DAY, date=MONDAY)
     typed(baba, MONDAY, "2000")
     with shop_context(shop_a):
-        before = services.work_out_days(shop_a, MONDAY, MONDAY)
+        before = work_out_days(shop_a, MONDAY, MONDAY)
         AttendanceDay.objects.filter(date=MONDAY, staff=asha).update(meal_share=Decimal("0"))
         for day in before:
             if day.staff_id == asha.pk:
                 day.meal_share = Decimal("0")
-    monkeypatch.setattr(services, "work_out_days", lambda *_args: before)
+    monkeypatch.setattr(money_services, "work_out_days", lambda *_args: before)
     monday = by_date(days_of(shop_a, MONDAY, MONDAY))[MONDAY]
     assert (monday.sharers, monday.share) == (2, Decimal("1000"))
 

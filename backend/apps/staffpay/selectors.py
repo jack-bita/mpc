@@ -5,7 +5,7 @@ a day's own copy for a day decided late (ATT-6).
     on 1 Dec:  late_fine 500.00, closing 18:40    so 30 Nov keeps its rules, and 1 Dec gets the new one
 
 A day is judged by the rules of its own date (A1): each of the nine is a dated setting of the whole shop (02 §12), read
-as get_setting answers it on that date. The book of days (apps/staffpay/services.py) reads a span's in one go
+as get_setting answers it on that date. The book of days (apps/staffpay/services/book.py) reads a span's in one go
 (day_rules_between), hands each day's to the day's rule (work_out_day), and keeps a copy of them with the day (T4), as
 text.
 

@@ -36,7 +36,7 @@ from apps.people.services import grant_permission, hire_again, mark_left, suspen
 from apps.shops.models import Closure, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import AttendanceEvent, ClockKind, DayStatus, NoPhoto, ReviewReason, TimeCheck
-from apps.staffpay.services import _where_it_falls, add_tap, void_tap, work_out_days
+from apps.staffpay.services import add_tap, void_tap, where_it_falls, work_out_days
 from apps.staffpay.tests.days import ARUSHA, FIRST_FINE, MONDAY, SUNDAY, absent_day, job, kept_day, rule, switch_on
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
@@ -558,4 +558,4 @@ def test_a_tap_with_neither_time_is_a_bug() -> None:
     # Every tap has its trusted time or the laptop's, as the table's rule holds (from_a_laptop_or_the_office): a line
     # with neither, from a bug or a rule taken away, fails loudly where the book places it, never on a made-up day.
     with pytest.raises(ValueError, match="neither a trusted time nor a laptop's"):
-        _where_it_falls(None, None, ARUSHA)
+        where_it_falls(None, None, ARUSHA)

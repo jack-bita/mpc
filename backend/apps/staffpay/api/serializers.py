@@ -1,18 +1,19 @@
 """apps/staffpay/api/serializers.py — how a worker's pay rates, a month of attendance and a worker's own month look in
 the API (WAGE-1, ATT-5, ATT-12; 03 §5.10).
 
-Thin: they describe fields and check their shape. A rate is set through set_pay_rate (apps/staffpay/services.py), which
-asks who may and checks the amount and the day; the rates in force are read by the selectors (ADR-0015). The route
-answers a rate (PayRateSerializer), takes a new one (PayRateCreateSerializer), and lists a worker's, with the one in
-force today (PayRatesAnswer), for the worker named in the address (PayRatesQuery). Money travels as strings (rule 3).
+Thin: they describe fields and check their shape. A rate is set through set_pay_rate
+(apps/staffpay/services/money.py), which asks who may and checks the amount and the day; the rates in force are read by
+the selectors (ADR-0015). The route answers a rate (PayRateSerializer), takes a new one (PayRateCreateSerializer), and
+lists a worker's, with the one in force today (PayRatesAnswer), for the worker named in the address (PayRatesQuery).
+Money travels as strings (rule 3).
 
 And the month page's month (AttendanceMonthAnswer, ATT-5), worked out by attendance_month
-(apps/staffpay/services.py), for the month named in the address (AttendanceMonthQuery). And a worker's own month, their
-calendar's days and each tap (WorkerAttendanceAnswer, ATT-12), worked out by worker_attendance, for the same month,
-each day with its decision and what it may be decided as (ATT-6). And a decision on a day (DecideDaySerializer, ATT-6),
-which decide_day checks and keeps, answered as the day shows it (DayDecisionSerializer). And a manager's fixes to the
-taps (ATT-13): a tap added (AddTapSerializer) and a tap crossed out (VoidTapSerializer), which add_tap and void_tap
-check and keep, each answered as the day shows the tap (TapAnswer).
+(apps/staffpay/services/attendance.py), for the month named in the address (AttendanceMonthQuery). And a worker's own
+month, their calendar's days and each tap (WorkerAttendanceAnswer, ATT-12), worked out by worker_attendance, for the
+same month, each day with its decision and what it may be decided as (ATT-6). And a decision on a day
+(DecideDaySerializer, ATT-6), which decide_day checks and keeps, answered as the day shows it (DayDecisionSerializer).
+And a manager's fixes to the taps (ATT-13): a tap added (AddTapSerializer) and a tap crossed out (VoidTapSerializer),
+which add_tap and void_tap check and keep, each answered as the day shows the tap (TapAnswer).
 
 And the day's meal money (WAGE-7): the days of a span, with their total (MealMoneyDaysAnswer), worked out by
 meal_money_days, for the span in the address (MealMoneyQuery); and a row typed (RecordMealMoneySerializer) or crossed

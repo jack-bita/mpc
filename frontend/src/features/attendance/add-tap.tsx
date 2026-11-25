@@ -12,8 +12,8 @@
 //
 // The tap is the attendance book's like a laptop's, with no laptop: the minute typed is on the shop's clock, trusted,
 // so an Ingia added at 07:50 takes the late fine, as a real tap would, and the day is worked out again with it (add_tap,
-// apps/staffpay/services.py). Toka is picked when the day has an Ingia, Ingia when it has none, as the one most
-// likely forgotten. The tap's id is made as the sheet opens, once, so a second tap on Ongeza after an answer lost on
+// apps/staffpay/services/attendance.py). Toka is picked when the day has an Ingia, Ingia when it has none, as the one
+// most likely forgotten. The tap's id is made as the sheet opens, once, so a second tap on Ongeza after an answer lost on
 // the way adds one tap, not two (ADR-0007). On the demo, the reason is the ready one to tap (the answer's
 // ready_add_reasons, as ATT-6's ready reasons, Jack: A). The server's refusals show beside their box, a minute still to
 // come beside the time, or above the buttons: one's own tap, a day that isn't one of the job's, no network.

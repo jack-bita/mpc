@@ -7,12 +7,12 @@
     Asha     ✓ 1   Ch 1   ½ 1   H 23   ! 1
     Baraka   ...
 
-attendance_month (apps/staffpay/services.py) asks the book for the month (work_out_days), and answers a line per worker
-with a daily pay rate, with the month's counts, and the days a person must decide, each with why; a day someone
-decided (ATT-6) counts as decided, and waits no more. What a day was is the
-book's and the rule's, tested in test_attendance_book.py and test_attendance_day.py; here, only what the month makes of
-them. October 2026 starts on a Thursday, and its Sundays are the 4th, 11th, 18th and 25th, so it has 27 working days.
-Times are Arusha's. Fake data only: the repo is public, and the amounts are made up (rule 10).
+attendance_month (apps/staffpay/services/attendance.py) asks the book for the month (work_out_days), and answers a line
+per worker with a daily pay rate, with the month's counts, and the days a person must decide, each with why; a day
+someone decided (ATT-6) counts as decided, and waits no more. What a day was is the book's and the rule's, tested in
+test_attendance_book.py and test_attendance_day.py; here, only what the month makes of them. October 2026 starts on a
+Thursday, and its Sundays are the 4th, 11th, 18th and 25th, so it has 27 working days. Times are Arusha's. Fake data
+only: the repo is public, and the amounts are made up (rule 10).
 """
 
 import datetime as dt

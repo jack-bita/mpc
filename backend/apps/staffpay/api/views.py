@@ -6,9 +6,9 @@ of their days, sent from the sheet under the calendar (ATT-6); a manager's fixes
 crossed out, each sent from its sheet under the calendar (ATT-13); the day's meal money, read, typed and crossed out on
 Hela ya chakula (WAGE-7); money given before payday, read, typed and crossed out on Advansi (WAGE-8); and the month's
 pay, everyone's on Mishahara and one worker's on their page, read alone (WAGE-2). Thin, as every route is (ADR-0015):
-who may set a rate, and what it may be, are set_pay_rate's (apps/staffpay/services.py); which rate is in force, the
-selectors'; what a month holds, attendance_month's; what a worker's month holds, worker_attendance's; who may decide a
-day, and how, decide_day's; who may fix a tap, and how, add_tap's and void_tap's; the meal money of any days,
+who may set a rate, and what it may be, are set_pay_rate's (apps/staffpay/services/money.py); which rate is in force,
+the selectors'; what a month holds, attendance_month's; what a worker's month holds, worker_attendance's; who may decide
+a day, and how, decide_day's; who may fix a tap, and how, add_tap's and void_tap's; the meal money of any days,
 meal_money_days'; who may type it, and cross it out, and how, record_meal_money's and void_meal_money's; the advances of
 a month, advances_month's; who may type one, and cross it out, and how, record_advance's and void_advance's; what the
 month pays, pay_month's and worker_pay's.

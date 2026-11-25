@@ -16,10 +16,10 @@
 // starts on today when the page shows this month, and on no day for a month gone by, as today isn't in it. While a month
 // is on its way the button waits where it is, and a sheet already open keeps what is typed in it: neither hangs on the
 // list's wait (the review). Who may, and
-// what an advance takes, are the server's (record_advance, apps/staffpay/services.py); what the sheet can see itself is
-// said at once, beside its box, in the server's own sentences: nobody picked, an empty day or one to come, an amount that
-// isn't whole shillings above 0. A Sunday is taken: money is asked for on any day. On the demo a note isn't kept
-// (demo.no_note), said beside its box.
+// what an advance takes, are the server's (record_advance, apps/staffpay/services/money.py); what the sheet can see
+// itself is said at once, beside its box, in the server's own sentences: nobody picked, an empty day or one to come, an
+// amount that isn't whole shillings above 0. A Sunday is taken: money is asked for on any day. On the demo a note isn't
+// kept (demo.no_note), said beside its box.
 //
 // The id is made here and sent again with every try of the same money (ADR-0007): a save whose answer the network lost,
 // tried again, gets the row the first made, never a second. Anything changed is another row, under a new id, as the

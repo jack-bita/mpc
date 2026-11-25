@@ -6,11 +6,11 @@ rule from that day's taps and that day's rules, and kept (ATT-10; 02 §12).
     Asha   Sun 22 Nov  off           0.00    —      —
 
 First the rules the database keeps on a day (AttendanceDay, apps/staffpay/models.py): one per job and date, a day that
-fits its status, and never a delete. Then the book (work_out_days, apps/staffpay/services.py): which taps a day reads,
-on which date, with which rules, and how a day worked out again is kept. Then the taps in doubt (ATT-11), each sending
-its day to review. Then why a day needs a decision (ATT-5): each day to decide keeps its one reason. Last, each day's
-share of its date's meal money (WAGE-7). What a day was, from its taps, is the rule's, in test_attendance_day.py; who
-shares the meals, and how much each, the sum's, in test_meal_share.py. Times are Arusha's, three hours ahead of UTC.
+fits its status, and never a delete. Then the book (work_out_days, apps/staffpay/services/book.py): which taps a day
+reads, on which date, with which rules, and how a day worked out again is kept. Then the taps in doubt (ATT-11), each
+sending its day to review. Then why a day needs a decision (ATT-5): each day to decide keeps its one reason. Last, each
+day's share of its date's meal money (WAGE-7). What a day was, from its taps, is the rule's, in test_attendance_day.py;
+who shares the meals, and how much each, the sum's, in test_meal_share.py. Times are Arusha's, three hours ahead of UTC.
 The fines are the demo's made-up 500 and 1,500 (rule 10). Fake data only: the repo is public.
 """
 
