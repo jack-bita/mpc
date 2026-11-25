@@ -311,9 +311,11 @@ def test_seed_demo_is_repeatable(three_weeks: None) -> None:
                 "staff": False,
                 "roles": [("manager", "every side")],
                 # The owner's key to the shop's rules, so a visitor can try Badilisha (SHOP-5); to its workers, so a
-                # visitor can try Wafanyakazi (PPL-4); and to the meal money, so one can try Hela ya chakula (WAGE-7).
+                # visitor can try Wafanyakazi (PPL-4); to the meal money, so one can try Hela ya chakula (WAGE-7); and
+                # to the pay's approval, so one can try Idhinisha (WAGE-3).
                 "keys": [
                     ("meals.record", "every side"),
+                    ("pay.approve", "every side"),
                     ("settings.manage", "every side"),
                     ("staff.manage", "every side"),
                 ],
@@ -393,8 +395,8 @@ def test_seed_demo_makes_todays_shop_again_without_its_peoples_keys(monkeypatch:
     seed_demo(fresh=True)
     made = the_demo_shop()
     meneja = next(person for person in services.PEOPLE if person.keys)
-    # One of the owner's own, which no role of the demo holds: only the seed's grant can give it.
-    more = replace(meneja, keys=(*meneja.keys, Permission.PAY_APPROVE))
+    # One of the owner's own, which neither a role of the demo nor the seed gives: only the grant added here can.
+    more = replace(meneja, keys=(*meneja.keys, Permission.DRAWER_APPROVE))
     monkeypatch.setattr(services, "PEOPLE", tuple(more if person is meneja else person for person in services.PEOPLE))
 
     assert seed_demo() == Seeded.MADE
@@ -403,7 +405,7 @@ def test_seed_demo_makes_todays_shop_again_without_its_peoples_keys(monkeypatch:
     with shop_context(shop):
         staff = StaffMember.objects.get(display_name=meneja.display_name)
         assert PermissionGrant.objects.filter(
-            staff=staff, permission=Permission.PAY_APPROVE, side__isnull=True
+            staff=staff, permission=Permission.DRAWER_APPROVE, side__isnull=True
         ).exists()
     # Then kept, as its people hold them all now.
     assert seed_demo() == Seeded.KEPT

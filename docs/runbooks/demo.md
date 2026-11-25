@@ -40,7 +40,7 @@ The demo seed (`manage.py seed_demo`, DATA-1) makes one made-up shop, *Duka la M
 
 | Who | Logs in with | Where |
 |---|---|---|
-| Meneja, the manager, on every side, who may also change the shop's rules (SHOP-5) and type the workers' meal money (WAGE-7) | `meneja@example.com` and the password `jaribu-demo` | his tile on a laptop tapped in with *Jaribu demo*, which opens `/login/` with both filled (OPS-13); or `/login/`, on a phone or a second browser |
+| Meneja, the manager, on every side, who may also change the shop's rules (SHOP-5), type the workers' meal money (WAGE-7) and approve the month's pay (WAGE-3) | `meneja@example.com` and the password `jaribu-demo` | his tile on a laptop tapped in with *Jaribu demo*, which opens `/login/` with both filled (OPS-13); or `/login/`, on a phone or a second browser |
 | Asha, a seller on Dawa | PIN `2580` | a laptop's PIN screen: one tapped in with *Jaribu demo* shows it on her tile (OPS-3), or one the manager registered |
 | Baraka, a seller on Vyakula | PIN `1470` | the same, on his tile |
 
@@ -56,7 +56,9 @@ None of them can open the admin: nobody the seed makes is `is_staff`. And nobody
 
 **Advances** (WAGE-8). Meneja holds `money.advance`, as every manager does, so *Advansi* on the office home shows two made-up ones of those same weeks: Baraka's 30,000 of the latest working day and Asha's 20,000 of the eighth back, each in the month of its own day and off that month's pay. A visitor types one for Asha, Baraka or a worker they added with a daily pay, never for Meneja, with no *Maelezo* (`demo.no_note`), and crosses out any of them with the one ready reason, *Kiasi kimekosewa* (`demo.ready_reasons`), until the next reset. Asha and Baraka lack the key.
 
-**The month's pay** (WAGE-2). Meneja holds the two keys of pay, so *Mishahara* on the office home shows the same weeks' pay: a total for Asha, Baraka and himself, and the total of all; a name opens that worker's lines, and a worker's own page shows them too, in *Malipo ya mwezi*. Nothing of it is kept: it follows whatever a visitor decides, types or crosses out, and a visitor who taps *Ingia* and *Toka* on a laptop adds *Leo*, which mostly waits for a decision, as the two taps come minutes apart. On a month's first days most of the weeks are in the month before, one ‹ away.
+**The month's pay** (WAGE-2). Meneja holds the two keys of pay, so *Mishahara* on the office home shows the same weeks' pay: a total for Asha, Baraka and himself, and the total of all; a name opens that worker's lines, and a worker's own page shows them too, in *Malipo ya mwezi*. Nothing of an open month's is kept: it follows whatever a visitor decides, types or crosses out, and a visitor who taps *Ingia* and *Toka* on a laptop adds *Leo*, which mostly waits for a decision, as the two taps come minutes apart. On a month's first days most of the weeks are in the month before, one ‹ away.
+
+**Approving the pay** (WAGE-3). Meneja holds `pay.approve`, the owner's own key, so a visitor can try *Idhinisha* both ways. *One who left*, on any day: on *Wafanyakazi* add a worker with a first day a day or more back and a daily pay, then mark them left (*Ameondoka*); their name on *Mishahara* opens their pay, which offers *Idhinisha malipo ya …*. *A whole month*: once one of the weeks' months is over, so on a month's first days, *Mishahara* of the month before offers *Idhinisha*, after the days that wait are decided (*Zinahitaji uamuzi*). The seed approves nothing itself. What a visitor approves stays closed until the next reset, for every visitor: no decision, tap, rate, meal money or advance of it can be added or crossed out.
 
 **When it is made again.** The seed runs on every start of the demo, after the migrations:
 - on a new database (the first setup, or every 30 days) it makes the shop;
