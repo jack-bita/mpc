@@ -236,15 +236,21 @@ describe("the buttons on a worker's page", () => {
   it.each([
     ["Ameondoka", "saved"],
     ["Ghairi", "its answer lost"],
+    ["a refusal", "someone else marked her left first"],
   ])(
     "asks the pay again after %s, as a last day ends it: %s (WAGE-2)",
     async (ends) => {
-      // One who left is paid up to their last day: the pay under these buttons must say so at once, and after a send whose
-      // answer was lost too.
+      // One who left is paid up to their last day: the pay under these buttons must say so at once, after a send whose
+      // answer was lost too, and when someone else marked her left first (the review).
       theServerHas(ASHA);
       const left = { ...ASHA, status: "left" as const, left_on: "2026-11-18" };
       answer("POST", route("leave"), () => {
         if (ends === "Ghairi") throw new TypeError("Failed to fetch");
+        if (ends === "a refusal")
+          return Response.json(
+            { code: "staff.left", message: "", fields: {}, params: {} },
+            { status: 400 },
+          );
         return Response.json(left);
       });
       const asked = payIsAnswered();

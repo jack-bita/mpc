@@ -186,6 +186,23 @@ describe("Ongeza Ingia au Toka", () => {
     await waitFor(() => expect([asked(), payAsked()]).toEqual([2, [2, 2]]));
   });
 
+  it("asks the pay again when its answer was lost, as the tap may have been added (WAGE-2)", async () => {
+    answer("POST", TAPS, refusal(503, "unavailable"));
+    const payAsked = payIsAnswered();
+    render(
+      <>
+        <PayAsked />
+        <AddTap day={THURSDAY} answer={month()} onClose={vi.fn()} />
+      </>,
+    );
+    await waitFor(() => expect(payAsked()).toEqual([1, 1]));
+
+    fill("18:45", "Alisahau kubonyeza Toka");
+    fireEvent.click(add());
+
+    await waitFor(() => expect(payAsked()).toEqual([2, 2]));
+  });
+
   it("sends the same id on a try again, so the tap is added once", async () => {
     // The first answer is lost on the way: the person taps Ongeza again, and the server answers the tap it made.
     answer("POST", TAPS, refusal(503, "unavailable"));

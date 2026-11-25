@@ -253,8 +253,12 @@ describe("Amua siku hii", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("asks the pay again when someone decided it meanwhile, as their decision moved it (WAGE-2)", async () => {
-    answer("POST", DECIDE, refusal(409, "version_conflict"));
+  it.each([
+    ["someone decided it meanwhile", refusal(409, "version_conflict")],
+    ["its answer was lost", refusal(503, "server_error")],
+  ])("asks the pay again when %s (WAGE-2)", async (_how, reply) => {
+    // Theirs moved it; or the server saved this one and its answer never came.
+    answer("POST", DECIDE, reply);
     const asked = payIsAnswered();
     render(
       <>

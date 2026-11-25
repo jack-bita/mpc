@@ -157,6 +157,8 @@ export function DetailsForm({
         CHANGED_MEANWHILE.has(error.body.code)
       ) {
         void store.invalidateQueries({ queryKey: WORKERS });
+        // And their pay, whose days or name someone else moved (the review).
+        void store.invalidateQueries({ queryKey: PAY });
         onChangedMeanwhile(
           error.body.code === "version_conflict"
             ? t("actions.changedMeanwhile", { name: worker.display_name })

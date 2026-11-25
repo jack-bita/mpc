@@ -106,11 +106,14 @@ export function AddTap({
       );
       void store.invalidateQueries({ queryKey: WORKER_MONTHS });
       void store.invalidateQueries({ queryKey: ATTENDANCE_MONTHS });
-      // And the meal money: who came shares it, so the date is split again (WAGE-7). And the pay, which moves with both
-      // (WAGE-2): an old total on the screen is money paid wrong.
+      // And the meal money: who came shares it, so the date is split again (WAGE-7).
       void store.invalidateQueries({ queryKey: MEAL_MONEY });
-      void store.invalidateQueries({ queryKey: PAY });
       onClose();
+    },
+    onSettled: () => {
+      // The pay, whatever the answer (WAGE-2): with none, or one the server failed at, it may have been saved all the
+      // same, and an old total on the screen is money paid wrong (the review).
+      void store.invalidateQueries({ queryKey: PAY });
     },
   });
 

@@ -159,6 +159,28 @@ describe("Batilisha", () => {
     await waitFor(() => expect([asked(), payAsked()]).toEqual([2, [2, 2]]));
   });
 
+  it("asks the pay again when its answer was lost, as the tap may have been crossed out (WAGE-2)", async () => {
+    answer("POST", VOID, refusal(503, "unavailable"));
+    const payAsked = payIsAnswered();
+    render(
+      <>
+        <PayAsked />
+        <VoidTap
+          tap={TEN_OCLOCK}
+          said={{ kind: "Toka", time: "10:00 asubuhi" }}
+          answer={month()}
+          onClose={vi.fn()}
+        />
+      </>,
+    );
+    await waitFor(() => expect(payAsked()).toEqual([1, 1]));
+
+    fireEvent.change(reasonBox(), { target: { value: "Kwa makosa" } });
+    fireEvent.click(crossOut());
+
+    await waitFor(() => expect(payAsked()).toEqual([2, 2]));
+  });
+
   it("says an empty reason at once, and sends nothing", async () => {
     const { onClose } = openOn();
 

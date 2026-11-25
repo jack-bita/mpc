@@ -355,6 +355,8 @@ function ActionSheet({
         CHANGED_MEANWHILE.has(error.body.code)
       ) {
         void store.invalidateQueries({ queryKey: WORKERS });
+        // And the pay under the buttons: theirs ended, or goes on (the review).
+        void store.invalidateQueries({ queryKey: PAY });
         onChangedMeanwhile(codeMessage(codes, error.body.code));
       }
     },
