@@ -51,7 +51,7 @@ from apps.staffpay.services import (
     void_tap,
     worker_pay,
 )
-from apps.staffpay.tests.days import JAN_1, absent_day, job, kept_day, rule, switch_on, tapped
+from apps.staffpay.tests.days import JAN_1, absent_day, doubted_tap, job, kept_day, rule, switch_on, tapped
 
 pytestmark = pytest.mark.django_db
 
@@ -466,6 +466,30 @@ def test_a_toka_the_rule_cant_judge_waits(shop_a: Shop, asha: StaffMember, eveni
     assert (todays(worker).waiting, todays(worker).total, worker.total) == (1, NOTHING, Decimal("10000.00"))
     # Apart from the days that are over: none of those waits.
     assert worker.pay.waiting == 0
+
+
+def test_a_toka_whose_time_isnt_trusted_waits_tonight(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, evening: None
+) -> None:
+    # The laptop's clock moved, so her Toka has no time the server trusts, and the rule reads no end to her day. She did
+    # tap Toka, and she leaves for good tonight: her page says that today waits, never nothing, or Baba would pay her
+    # without it and not know (WAGE-2's review). She ate, so the meals' split counts her.
+    juma = paid(shop_a, "Juma")
+    kept_day(asha, *FULL, date=YESTERDAY)
+    tapped(asha, (ClockKind.IN, 7, 20), date=TODAY)
+    doubted_tap(asha, 18, 45, TODAY, kind=ClockKind.OUT)
+    tapped(juma, *FULL, date=TODAY)
+    typed(baba, TODAY, "8000")
+    answer = month(shop_a)
+    worker = line_of(answer, "Asha")
+    assert (todays(worker).waiting, todays(worker).total, worker.total) == (1, NOTHING, Decimal("10000.00"))
+    assert todays(line_of(answer, "Juma")).meals == Decimal("4000.00")
+
+
+def test_an_untrusted_ingia_waits_before_any_toka(shop_a: Shop, asha: StaffMember, evening: None) -> None:
+    # Her Ingia this morning has no trusted time: whatever she taps later, today waits for a decision, so it says so.
+    doubted_tap(asha, 7, 20, TODAY)
+    assert todays(line_of(month(shop_a), "Asha")).waiting == 1
 
 
 def test_no_toka_yet_counts_nothing_of_today(shop_a: Shop, asha: StaffMember, evening: None) -> None:

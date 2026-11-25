@@ -1634,9 +1634,13 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
     lines = []
     for job, staff in workers.items():
         # Today only once a Toka has ended it (first_out, ATT-4): until then it is still theirs to work, and the rule
-        # would send it to a person for want of one. A Toka the rule can't judge, at 16:00, ended it too, and waits.
+        # would send it to a person for want of one. A Toka the rule can't judge, at 16:00, ended it too, and waits. And
+        # a day with a tap whose time nobody trusts, as the laptop's clock moved: a Toka among them has no minute, so it
+        # ends nothing the rule can read, and whatever is tapped after, the day waits. Said tonight: one who leaves with
+        # it unsaid would be paid without today, and nobody would know (WAGE-2's review).
         tonight = todays.get(job)
-        ended = [] if tonight is None or tonight.first_out is None else [tonight]
+        waits = tonight is not None and tonight.review_reason == ReviewReason.TIME_UNKNOWN
+        ended = [tonight] if tonight is not None and (tonight.first_out is not None or waits) else []
         lines.append(_worker_pay(staff, paid(over[job]), paid(ended) if ended else None))
     # By name, as the month page lists them; "asha" beside "Asha"; then the job's id, so two jobs of one name always
     # come in the same order, the one had first before the other (UUIDv7).
