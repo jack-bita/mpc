@@ -121,6 +121,8 @@ def test_the_month_as_the_page_reads_it(
             {"staff": str(asha.pk), "display_name": "Asha", "left_on": None},
             {"staff": str(juma.pk), "display_name": "Juma", "left_on": None},
         ],
+        # Its pay isn't approved yet (WAGE-3).
+        "closed": False,
     }
     assert [row["id"] for row in rows] == [hers["id"], wrong["id"], first["id"]]
     assert rows[0] == hers
@@ -216,7 +218,7 @@ def test_the_person_is_never_offered_their_other_job(shop_a: Shop) -> None:
 def test_the_month_is_read_in_a_few_queries(
     shop_a: Shop, staff_client_a: APIClient, staff_a: StaffMember, juma: StaffMember
 ) -> None:
-    # However many advances: the names come in the rows' own read.
+    # However many advances: the names come in the rows' own read; and whether the month is closed, in one (WAGE-3).
     asha = paid(shop_a, "Asha")
     for staff in (juma, asha):
         for day in range(1, 11):
@@ -224,7 +226,7 @@ def test_the_month_is_read_in_a_few_queries(
     with shop_context(shop_a), CaptureQueriesContext(connection) as queries:
         answer = advances_month(shop_a, dt.date(2026, 11, 1), viewer=staff_a)
     assert len(answer.rows) == 20
-    assert len(queries) <= 2
+    assert len(queries) <= 3
 
 
 def test_another_shop_is_refused(shop_a: Shop, shop_b: Shop, staff_a: StaffMember) -> None:
@@ -246,7 +248,7 @@ def test_one_as_its_own_page_reads_it(
     made = staff_client_a.post(ADVANCES, sheet(juma), format="json").json()
     reply = staff_client_a.get(f"{ADVANCES}{made['id']}/")
     assert reply.status_code == 200
-    assert reply.json() == {"advance": made, "own": False, "ready_void_reasons": []}
+    assert reply.json() == {"advance": made, "own": False, "closed": False, "ready_void_reasons": []}
 
 
 def test_ones_own_says_so(shop_a: Shop, staff_client_a: APIClient, staff_a: StaffMember, staff_a2: StaffMember) -> None:

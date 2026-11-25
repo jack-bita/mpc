@@ -807,9 +807,9 @@ class PayRun(AppendOnly):
     # `created_at`); it has no status, as whether everyone is paid is read from the payslips (WAGE-9), never kept beside
     # them, where the two could disagree. A ledger (rule 2, T2): written once, never changed or deleted, and never
     # undone (A3), as a worker may already have been paid from it; a mistake is an adjustment in a later month (WAGE-9).
-    # Written only by approve_month (apps/staffpay/services/pay.py), in one transaction with its payslips, their lines
-    # and the days they paid. Never on a laptop, as pay never sits on a shared device (03 §6.1): no line in the change
-    # log.
+    # Written only by approve_month (apps/staffpay/services/approval.py), in one transaction with its payslips, their
+    # lines and the days they paid. Never on a laptop, as pay never sits on a shared device (03 §6.1): no line in the
+    # change log.
 
     # The month, as its first day on the shop's own calendar: 2026-11-01 is November.
     month = models.DateField()

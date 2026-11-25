@@ -217,6 +217,35 @@ def test_a_worker_of_another_shop_is_not_found(
     assert answers == [(400, ["does_not_exist"]), (400, ["does_not_exist"])]
 
 
+def test_an_id_another_shop_holds_is_taken(
+    staff_client_a: APIClient, shop_a: Shop, shop_b: Shop, staff_b: StaffMember, asha: StaffMember
+) -> None:
+    # Shop B's run and payslip, each one's id sent as a new one's from shop A: in use, and nothing of either is said,
+    # nor anything kept (03 §5.4).
+    with shop_context(shop_b):
+        run = PayRun(shop=shop_b, month=dt.date(2026, 11, 1), created_by=staff_b)
+        run.save()
+        slip = Payslip(
+            shop=shop_b,
+            staff=staff_b,
+            month=dt.date(2026, 11, 1),
+            pay_run=run,
+            total=Decimal("0.00"),
+            created_by=staff_b,
+        )
+        slip.save()
+    reply = approve(staff_client_a, seen((asha, "20000.00")), id=str(run.pk))
+    assert (reply.status_code, reply.json()["fields"]) == (400, {"id": ["id.taken"]})
+    with shop_context(shop_a):
+        mark_left(asha, left_on=TUE, by=None, reason="Amehama")
+    sent = {"id": str(slip.pk), "staff": str(asha.pk), "month": "2026-11", "seen": "20000.00"}
+    reply = staff_client_a.post(SLIPS, sent, format="json")
+    assert (reply.status_code, reply.json()["fields"]) == (400, {"id": ["id.taken"]})
+    with shop_context(shop_a):
+        assert not PayRun.objects.exists()
+        assert not Payslip.objects.exists()
+
+
 def test_another_shops_total_is_not_this_shops(
     staff_client_a: APIClient, staff_b: StaffMember, asha: StaffMember
 ) -> None:
