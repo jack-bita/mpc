@@ -1047,6 +1047,7 @@
     "systemSaid": "Mfumo ulisema: {said}",
     "systemSaidWhy": "Mfumo ulisema: {said} · {why}",
     "yours": "Huwezi kuamua siku zako mwenyewe.",
+    "closed": "Malipo ya mwezi huu yameidhinishwa, kwa hiyo siku hii haibadiliki tena.",
     "sheetTitle": "Amua siku ya {name}",
     "sheetAbout": "{weekday} {date}",
     "sheetAboutIn": "{weekday} {date} · Ingia {time}",

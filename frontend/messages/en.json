@@ -1047,6 +1047,7 @@
     "systemSaid": "The system said: {said}",
     "systemSaidWhy": "The system said: {said} · {why}",
     "yours": "You can't decide your own days.",
+    "closed": "This month's pay is approved, so this day doesn't change any more.",
     "sheetTitle": "Decide {name}'s day",
     "sheetAbout": "{weekday} {date}",
     "sheetAboutIn": "{weekday} {date} · Clock-in {time}",
