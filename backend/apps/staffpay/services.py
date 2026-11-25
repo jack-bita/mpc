@@ -109,6 +109,7 @@ from apps.staffpay.calculations import (
 )
 from apps.staffpay.models import (
     DECISION_OF,
+    MOST_DAILY_RATE,
     MOST_MEAL_MONEY,
     AbsenceType,
     AttendanceDay,
@@ -1243,8 +1244,8 @@ def set_pay_rate(
     `shares_meals`: False for the cook, who pays no share of the meals (WAGE-7). `rate_id`: the id the client made for
     the row (ADR-0007), if it made one. `by`: who sets it, under the PIN's rule and with settings.manage on the whole
     shop; None for the system or the superuser. Refuses, all together, each beside its box: an amount of 0 or less, or
-    with cents (pay_rate.amount_invalid); a day before the job's first (pay_rate.before_first_day); and on the demo, a
-    person's note (demo.no_note). Returns the rate as saved."""
+    with cents (pay_rate.amount_invalid), or over ten million (pay_rate.amount_too_big); a day before the job's first
+    (pay_rate.before_first_day); and on the demo, a person's note (demo.no_note). Returns the rate as saved."""
     # Spaces around a note say nothing, and "  " is no note.
     note = note.strip()
     # One transaction: the lock below holds until the rate is saved, so who may is asked of the jobs as they are when it
@@ -1274,6 +1275,11 @@ def set_pay_rate(
         if daily_rate <= 0 or daily_rate != daily_rate.to_integral_value():
             errors["daily_rate"] = [
                 ValidationError("A day's pay is a whole amount above 0.", code="pay_rate.amount_invalid")
+            ]
+        # A slip of the zeros, as for a row of meal money (MOST_DAILY_RATE).
+        elif daily_rate > MOST_DAILY_RATE:
+            errors["daily_rate"] = [
+                ValidationError("A day's pay is at most ten million.", code="pay_rate.amount_too_big")
             ]
         # Any day of the job, gone by or to come: Juma started on 10 Nov and Baba types his rate on the 19th, from the
         # 10th, so those days are paid. Never before the job's first day, read under the lock: a day before it is not a

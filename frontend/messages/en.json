@@ -1444,6 +1444,7 @@
     },
     "pay_rate": {
       "amount_invalid": "Type a whole number of shillings, above 0.",
+      "amount_too_big": "This amount is too big. Check its zeros.",
       "before_first_day": "A rate can't start before this worker's first day."
     },
     "day": {

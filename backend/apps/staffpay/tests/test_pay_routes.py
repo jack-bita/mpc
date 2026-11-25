@@ -20,7 +20,7 @@ from rest_framework.test import APIClient
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
 from apps.shops.models import Shop
-from apps.staffpay.models import ClockKind
+from apps.staffpay.models import MOST_DAILY_RATE, ClockKind
 from apps.staffpay.services import record_meal_money, set_pay_rate
 from apps.staffpay.tests.days import JAN_1, job, kept_day, switch_on, tapped
 
@@ -129,6 +129,21 @@ def test_a_past_month_and_one_to_come(staff_client_a: APIClient, asha: StaffMemb
         assert reply.status_code == 200
         assert (reply.json()["counted_to"], reply.json()["workers"]) == (None, [])
         assert staff_client_a.get(f"{PAY}{asha.pk}/", {"month": month}).json()["paid_by_day"] is False
+
+
+def test_the_biggest_rate_still_opens_the_month(staff_client_a: APIClient, shop_a: Shop, asha: StaffMember) -> None:
+    # The most a day's pay may be, for a whole month and beside everyone else's: what it comes to still fits what an
+    # amount may be, so the page opens (WAGE-2's review).
+    juma = job(shop_a, "Juma")
+    with shop_context(shop_a):
+        set_pay_rate(juma, daily_rate=MOST_DAILY_RATE, effective_from=JAN_1, by=None)
+    for day in (16, 17, 18, 19, 20, 21):
+        kept_day(juma, *FULL, date=dt.date(2026, 11, day))
+    reply = staff_client_a.get(PAY, NOVEMBER)
+    assert reply.status_code == 200
+    assert reply.json()["total"] == "60033500.00"
+    # Six days, less his half of Monday's 1,000 of meals.
+    assert staff_client_a.get(f"{PAY}{juma.pk}/", NOVEMBER).json()["worker"]["total"] == "59999500.00"
 
 
 @pytest.mark.parametrize("month", [None, "", "2026-13", "2026-1", "2026-11-01", "1999-12", "novemba"])

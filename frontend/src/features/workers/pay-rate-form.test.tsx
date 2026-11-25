@@ -347,6 +347,25 @@ describe("what the form says itself", () => {
 });
 
 describe("the server's refusals", () => {
+  it("shows a rate with zeros too many beside its box (WAGE-2's review)", async () => {
+    theServerHas(payRates([], null));
+    answer(
+      "POST",
+      PAY_RATES_ROUTE,
+      refusal(400, "invalid", {}, { daily_rate: ["pay_rate.amount_too_big"] }),
+    );
+    await openTheForm("Weka malipo");
+
+    typeInto(box("Kiasi kwa siku"), "999999999999");
+    fireEvent.click(sheetButton("Hifadhi malipo"));
+
+    await waitFor(() =>
+      expect(errorOf(box("Kiasi kwa siku"))).toBe(
+        "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
+      ),
+    );
+  });
+
   it("shows a box's refusal beside it, as the demo's note", async () => {
     theServerHas(payRates([], null));
     answer(
