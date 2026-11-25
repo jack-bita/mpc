@@ -264,7 +264,10 @@ function Row({
             setCrossing(false);
           }}
           onClose={() => setCrossing(false)}
-          finalFocus={() => (afterVoid.current ? line.current : button.current)}
+          // Or the row itself, when its button went while the sheet was open: crossed out, its answer lost.
+          finalFocus={() =>
+            afterVoid.current ? line.current : (button.current ?? line.current)
+          }
         />
       ) : null}
     </>

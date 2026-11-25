@@ -6,7 +6,14 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { answer, refusal, sent } from "@/test/fake-server";
-import { row, TODAY } from "@/test/meals";
+import {
+  MealMoneyAsked,
+  mealMoneyIsAnswered,
+  MonthsAsked,
+  monthsAreAnswered,
+  row,
+  TODAY,
+} from "@/test/meals";
 import { render } from "@/test/render";
 
 import { RecordMealMoney } from "./record-meal-money";
@@ -88,6 +95,36 @@ describe("Andika hela ya chakula", () => {
       expect(document.activeElement?.contains(said)).toBe(true),
     );
   });
+
+  it.each([
+    ["saved", 201],
+    ["no answer", 503],
+  ])(
+    "asks the days and the workers' months again, as each share moves: %s",
+    async (_how, status) => {
+      const meals = mealMoneyIsAnswered();
+      answer("POST", MEAL_MONEY, {
+        status,
+        body: row({ date: TODAY, amount: "9000.00" }),
+      });
+      const months = monthsAreAnswered();
+      render(
+        <>
+          <MealMoneyAsked />
+          <MonthsAsked />
+          <RecordMealMoney day={TODAY} today={TODAY} />
+        </>,
+      );
+      await waitFor(() => expect([meals(), months().worker]).toEqual([1, 1]));
+      fireEvent.click(button());
+
+      type("Kiasi (TSh)", "9000");
+      fireEvent.click(save());
+
+      // The POST goes to the list's own address, so it is counted too.
+      await waitFor(() => expect([meals(), months().worker]).toEqual([3, 2]));
+    },
+  );
 
   it("starts on the day it was opened for, and offers no day to come", () => {
     openSheet("2026-11-21");

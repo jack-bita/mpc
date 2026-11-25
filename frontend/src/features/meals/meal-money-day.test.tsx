@@ -167,6 +167,55 @@ describe("one day's meal money", () => {
     );
   });
 
+  it("shows a row crossed out whose answer was lost, and gives the keyboard to it on Ghairi", async () => {
+    // The server crossed it out and the network dropped: the sheet says so, the day behind it is read again, and Ghairi
+    // finds no button to go back to (WAGE-7's review).
+    theDayIs(MONDAYS);
+    render(<MealMoneyDayScreen date={MONDAY} />);
+    await rows();
+    answer(
+      "POST",
+      `${MEAL_MONEY}${MEAT.id}/void/`,
+      refusal(503, "server_error"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /TSh\s3,000/ }));
+    const sheet = screen.getByRole("dialog");
+    fireEvent.change(within(sheet).getByLabelText("Sababu"), {
+      target: { value: "Siku nyingine" },
+    });
+    theDayIs(
+      mealDays(
+        [
+          mealDay({
+            amount: "5000.00",
+            rows: [
+              FLOUR,
+              SLIP,
+              {
+                ...MEAT,
+                voided: {
+                  by: "Meneja",
+                  at: "2026-11-24T09:00:00Z",
+                  reason: "Siku nyingine",
+                },
+              },
+            ],
+          }),
+        ],
+        { first: MONDAY, last: MONDAY, total: "5000.00" },
+      ),
+    );
+    fireEvent.click(within(sheet).getByRole("button", { name: "Batilisha" }));
+    await within(sheet).findByRole("alert");
+    await waitFor(() => expect(document.querySelectorAll("s")).toHaveLength(2));
+
+    fireEvent.click(within(sheet).getByRole("button", { name: "Ghairi" }));
+
+    await waitFor(() =>
+      expect(wordsOf(document.activeElement)).toBe("TSh 3,000 · Nyama"),
+    );
+  });
+
   it("gives the keyboard back to Batilisha on Ghairi", async () => {
     theDayIs(MONDAYS);
     render(<MealMoneyDayScreen date={MONDAY} />);

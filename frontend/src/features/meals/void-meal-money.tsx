@@ -83,6 +83,12 @@ export function VoidMealMoney({
       await store.invalidateQueries({ queryKey: MEAL_MONEY });
       onDone();
     },
+    onError: () => {
+      // Asked again too: with no answer, the row may have been crossed out all the same, and the day behind the sheet
+      // must not go on counting it (WAGE-7's review).
+      void store.invalidateQueries({ queryKey: WORKER_MONTHS });
+      void store.invalidateQueries({ queryKey: MEAL_MONEY });
+    },
   });
 
   function send() {
