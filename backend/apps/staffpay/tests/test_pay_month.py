@@ -543,14 +543,15 @@ def test_an_advance_is_taken_once_with_leo(
 
 
 def test_an_advance_bigger_than_the_pay_leaves_a_minus(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
-    # The money was given, so the pay says so: 10,000 earned, 25,000 taken. And the whole takes it off too.
+    # The money was given, so the pay says so: 10,000 earned, 25,000 taken. The whole counts her as 0 (WAGE-3, Jack: A):
+    # it is the cash to prepare, and Juma is owed his 10,000 whatever Asha owes.
     juma = paid(shop_a, "Juma")
     for staff in (asha, juma):
         kept_day(staff, *FULL, date=MON)
     give(asha, baba, MON, "25000")
     answer = month(shop_a)
     assert line_of(answer, "Asha").total == Decimal("-15000.00")
-    assert answer.total == Decimal("-5000.00")
+    assert (line_of(answer, "Juma").total, answer.total) == (Decimal("10000.00"), Decimal("10000.00"))
 
 
 def test_an_advance_comes_off_its_own_month(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:

@@ -37,6 +37,11 @@ What a day pays (WAGE-2, 02 §15, 8), each day alone, with its own rate, fine an
 A worker's pay (WAGE-2, spec §8.1): the days added up, grouped by what they pay, so a raise makes two lines:
 
     14 full × 10,000   6 full × 12,000   2 half × 5,000   less the fines, the meals, the advances
+
+What a pay hands over (WAGE-3, Jack: A): never less than nothing. What is below 0 is owed, and comes off the next pay:
+
+    November  10,000 earned, 28,000 given early   → −18,000: 0 to hand over, a debt of 18,000
+    December  152,000 earned, less that debt      → 134,000 to hand over, no debt
 """
 
 import datetime as dt
@@ -490,27 +495,43 @@ class PayLine:
 @dataclass(frozen=True)
 class Pay:
     # A worker's pay over some days (02 §15, 8): the lines, the full days first, then the half ones, each in the days'
-    # order; the fines taken, and on how many days; the meals, and how many days ate; the advances; how many days wait
-    # for a decision, and how many paid days have no rate, neither of them paid; and what is left to pay, which may be
-    # below 0, as the meals and the advances can be more than the days.
+    # order; the fines taken, and on how many days; the meals, and how many days ate; the advances; a debt carried from
+    # an earlier month (WAGE-3); how many days wait for a decision, and how many paid days have no rate, neither of them
+    # paid; and what is left to pay, which may be below 0, as the meals, the advances and a debt can be more than the
+    # days: cash_to_pay says what is handed over, and debt_left what the next month takes.
     lines: tuple[PayLine, ...]
     fined_days: int
     fines: Decimal
     meal_days: int
     meals: Decimal
     advances: Decimal
+    carried: Decimal
     waiting: int
     no_rate: int
     total: Decimal
 
 
-def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY) -> Pay:
+def cash_to_pay(total: Decimal) -> Decimal:
+    """What is handed over for a pay that came to `total` (WAGE-3, Jack: A): all of it, or nothing when it is below 0,
+    as nobody pays to have worked."""
+    return total if total > 0 else NO_PAY
+
+
+def debt_left(total: Decimal) -> Decimal:
+    """What a worker still owes after a pay that came to `total` (WAGE-3, Jack: A): nothing, or what it is below 0,
+    which their next pay takes off (`carried`)."""
+    # copy_negate, never a minus: a minus rounds to the digits the thread keeps, which other code may have lowered.
+    return total.copy_negate() if total < 0 else NO_PAY
+
+
+def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY, carried: Decimal = NO_PAY) -> Pay:
     """A worker's pay over `days`, in their order (WAGE-2; spec §8.1, 02 §15, 8): each paid alone (pay_day), then added
-    up and grouped by what they pay. `advances`: money given before payday (WAGE-8), which comes off it. The sum reads
-    nothing itself, so any days are paid by it: a month's, a leaver's, or today alone."""
-    if advances < 0:
+    up and grouped by what they pay. `advances`: money given before payday (WAGE-8), which comes off it. `carried`: what
+    an earlier month's pay left owed (debt_left, WAGE-3), which comes off it too. The sum reads nothing itself, so any
+    days are paid by it: a month's, a leaver's, or today alone."""
+    if advances < 0 or carried < 0:
         # Money the worker already took: below 0 it would pay them a second time, so a bug in our code.
-        raise ValueError(f"Advances of {advances}: an advance is never below 0.")
+        raise ValueError(f"Advances of {advances}, a debt of {carried}: neither is ever below 0.")
     # How many days pay each amount, full days and half ones apart: half of 20,000 is as much as a full day at 10,000,
     # and the page says which is which. In the order each first comes, so the rate before a raise stays above the one
     # after it. A day that pays nothing is counted too, and no line below reads it.
@@ -543,7 +564,7 @@ def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY) -> Pay
             if paid_as is kind
         )
         fined, eaten = add_up(fines), add_up(meals)
-        total = add_up(line.amount for line in lines) - fined - eaten - advances
+        total = add_up(line.amount for line in lines) - fined - eaten - advances - carried
     return Pay(
         lines=lines,
         fined_days=len(fines),
@@ -551,6 +572,7 @@ def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY) -> Pay
         meal_days=len(meals),
         meals=eaten,
         advances=advances,
+        carried=carried,
         waiting=waiting,
         no_rate=no_rate,
         total=total,

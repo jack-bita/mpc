@@ -23,7 +23,7 @@ from apps.core.tenancy import ShopMismatch
 from apps.people.models import StaffMember
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_settings_between, shop_today
-from apps.staffpay.calculations import NO_PAY, DayToPay, Pay, add_up, meal_share, work_out_pay
+from apps.staffpay.calculations import NO_PAY, DayToPay, Pay, add_up, cash_to_pay, meal_share, work_out_pay
 from apps.staffpay.models import AttendanceDay, DayStatus, PayRate, ReviewReason
 from apps.staffpay.selectors import advances_between, meal_money_by_date, rates_between
 from apps.staffpay.services.book import answer_days, month_span, who_shares, work_out_days
@@ -48,8 +48,8 @@ class WorkerPay:
 class PayMonth:
     # Mishahara's answer (WAGE-2): the month, as its first day; the shop's today; the last day counted, or None when no
     # day of the month is over; a line per worker paid by the day, or given money before payday in it (WAGE-8), by name;
-    # the whole of it; and the jobs with a working day in it, over or today's, which says whether there is anything to
-    # pay yet.
+    # the whole of it, each who owes as 0 (cash_to_pay); and the jobs with a working day in it, over or today's, which
+    # says whether there is anything to pay yet.
     month: dt.date
     today: dt.date
     counted_to: dt.date | None
@@ -162,7 +162,9 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
         # Up to yesterday, or the end of a month gone by; none on the 1st.
         counted_to=min(last, today - dt.timedelta(days=1)) if first < today else None,
         workers=lines,
-        total=add_up(line.total for line in lines),
+        # The cash to prepare (WAGE-3, Jack: A): one who owes is handed nothing, so they count as 0. Their minus would
+        # make the whole less than what the others are owed, and Baba would come short at the counter.
+        total=add_up(cash_to_pay(line.total) for line in lines),
         worked=frozenset(day.staff_id for day in working),
     )
 
