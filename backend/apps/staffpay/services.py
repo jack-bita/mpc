@@ -137,6 +137,9 @@ class _TheBook:
 # the date's meal money (WAGE-7), which money typed later, another worker's day decided, or a pay rate typed, moves.
 WORKED_OUT = ["status", "fine", "first_in", "first_out", "rules_used", "review_reason", "meal_share"]
 
+# How many changed days one UPDATE of the book's names (_keep).
+MOST_DAYS_A_STATEMENT = 300
+
 # A person's decision on a day (ATT-6), which only decide_day writes, and the book never: what the book works out above
 # and what a manager decided are two lists with no column in common, so neither ever writes over the other (A2).
 DECISION = ["decided_status", "absence_type", "decided_fine", "decided_by", "decided_at", "decision_reason"]
@@ -488,6 +491,8 @@ def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], A
     # a month asked for twice writes nothing the second time.
     rows: list[AttendanceDay] = []
     changed: list[AttendanceDay] = []
+    # The days on which the share of the meals alone moved, by the share they now have.
+    moved: dict[Decimal, list[uuid.UUID]] = defaultdict(list)
     new: list[AttendanceDay] = []
     for day in answered:
         old = kept.get((day.staff_id, day.date))
@@ -495,16 +500,24 @@ def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], A
             new.append(day)
             rows.append(day)
             continue
-        if any(getattr(old, part) != getattr(day, part) for part in WORKED_OUT):
-            # Changed: the kept row takes the new answer, so it keeps its id and the day it was first kept.
-            for part in WORKED_OUT:
-                setattr(old, part, getattr(day, part))
+        differs = [part for part in WORKED_OUT if getattr(old, part) != getattr(day, part)]
+        # Changed: the kept row takes the new answer, so it keeps its id and the day it was first kept.
+        for part in differs:
+            setattr(old, part, getattr(day, part))
+        if differs == ["meal_share"]:
+            moved[old.meal_share].append(old.pk)
+        elif differs:
             changed.append(old)
         rows.append(old)
     # A day kept before: an UPDATE by its id, which the edit history's trigger writes down (ADR-0036), Asha's Monday
-    # from needs review to on time.
+    # from needs review to on time. A few hundred days a statement: each names every part of every row, so one
+    # statement for a whole year of them grows too long to be quick, with the jobs locked meanwhile.
     if changed:
-        AttendanceDay.objects.bulk_update(changed, WORKED_OUT)
+        AttendanceDay.objects.bulk_update(changed, WORKED_OUT, batch_size=MOST_DAYS_A_STATEMENT)
+    # A share moved alone, the same on every day that now has it: one UPDATE a share. Every worker's share of a date
+    # moves at once, and a rate mended from January moves a year of them (WAGE-7's review).
+    for share, days in moved.items():
+        AttendanceDay.objects.filter(pk__in=days).update(meal_share=share)
     # A day kept for the first time: an INSERT. No other run of the book can keep the same day meanwhile, as the jobs'
     # lock lets one run per shop at a time (work_out_days). Should a bug write a day twice all the same, the rule of
     # one day per job and date refuses the second, loudly, a server error, never a second row.

@@ -1449,6 +1449,57 @@ def test_money_on_a_day_the_shop_was_shut_is_nobodys(shop_a: Shop, device_a: Dev
     assert {days[("Asha", day)].meal_share for day in (FRIDAY, SUNDAY)} == {Decimal("0.00")}
 
 
+def test_moved_shares_alone_are_written_one_update_a_share(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Neema came all week, and her rate is typed later, from January: every share of the week moves, hers, Asha's and
+    # Juma's, and nothing else of any day. Each share is one UPDATE, whatever the days it is on: a rate mended from
+    # January moves a year of them, and written row by row in one long statement they held every worker's job for many
+    # seconds (WAGE-7's review). The history still keeps a line for each day moved (ADR-0036).
+    neema = _worker(shop_a, "Neema")
+    week = [MONDAY - dt.timedelta(days=n) for n in (7, 6, 5, 4, 3)]
+    for each in (asha, juma):
+        rate(each)
+    for day in week:
+        for each in (asha, juma, neema):
+            came(device_a, each, day)
+        meal(shop_a, "4000.00" if day == week[-1] else "2000.00", asha, day)
+    _days(shop_a, week[0], week[-1])
+    rate(neema)
+
+    with CaptureQueriesContext(connection) as queries:
+        days = _days(shop_a, week[0], week[-1])
+
+    updates = [query["sql"] for query in queries if query["sql"].startswith('UPDATE "staffpay_attendanceday"')]
+    # Two amounts, so two shares: 667 on four days, 1,333 on the fifth; each the one value, no row named beside it.
+    assert len(updates) == 2
+    assert not any("CASE" in sql for sql in updates)
+    shares = {day: {row.meal_share for (_, on), row in days.items() if on == day} for day in week}
+    assert shares == {day: {Decimal("1333.00") if day == week[-1] else Decimal("667.00")} for day in week}
+    with shop_context(shop_a):
+        kept = AttendanceDay.objects.filter(date__in=week)
+        assert {(row.date, row.meal_share) for row in kept} == {(day, share) for day in week for share in shares[day]}
+        edits = EditEvent.objects.filter(subject_type="attendance_day", subject_id__in=kept.values("pk"))
+        assert sorted(edits.values_list("subject_id", flat=True)) == sorted(kept.values_list("pk", flat=True))
+        assert {tuple(edit.after) for edit in edits} == {("meal_share",)}
+
+
+def test_a_day_changed_and_its_share_moved_is_written_whole(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha's Toka comes late: her Monday goes from waiting to on time, and takes the 1,000 it had no share of. Both are
+    # kept, in one line of its history.
+    rate(asha)
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    meal(shop_a, "1000.00", asha)
+    before = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    _days(shop_a, MONDAY, MONDAY)
+    with shop_context(shop_a):
+        kept = AttendanceDay.objects.get(pk=before.pk)
+        edit = EditEvent.objects.get(subject_type="attendance_day", subject_id=before.pk)
+    assert (kept.status, kept.meal_share) == (DayStatus.ON_TIME, Decimal("1000.00"))
+    assert (edit.after["status"], edit.after["meal_share"]) == ("on_time", "1000.00")
+
+
 def _shares_in_another_run(shop: Shop, day: dt.date) -> dict[str, Decimal]:
     # The book run in its own transaction, on its own connection (_statuses_in_another_run): each worker's share, as it
     # worked it out, plain values the test reads once the thread has ended.
