@@ -226,8 +226,9 @@ function Row({
           kind="second"
           size="normal"
           className="justify-self-start"
-          // By its amount too, as a day has several rows, each with a Batilisha; its visible word first (WCAG 2.5.3).
-          aria-label={t("void.title", { amount })}
+          // By its row too, the amount and the note: a day has several, each with a Batilisha, and two may be of one
+          // amount. Its visible word first (WCAG 2.5.3).
+          aria-label={t("void.title", { amount: said })}
           onClick={() => {
             afterVoid.current = false;
             setCrossing(true);

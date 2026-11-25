@@ -142,9 +142,8 @@ describe("one day's meal money", () => {
       ),
     );
 
-    // Named by its amount, as a day has several, each with a Batilisha.
     fireEvent.click(
-      screen.getByRole("button", { name: /^Batilisha TSh\s3,000$/ }),
+      screen.getByRole("button", { name: /^Batilisha TSh\s3,000 · Nyama$/ }),
     );
     const sheet = screen.getByRole("dialog", {
       name: /^Batilisha TSh\s3,000$/,
@@ -221,7 +220,7 @@ describe("one day's meal money", () => {
     render(<MealMoneyDayScreen date={MONDAY} />);
     await rows();
     const button = screen.getByRole("button", {
-      name: /^Batilisha TSh\s5,000$/,
+      name: /^Batilisha TSh\s5,000 · Unga na maharage$/,
     });
     fireEvent.click(button);
 
@@ -232,6 +231,36 @@ describe("one day's meal money", () => {
     );
 
     await waitFor(() => expect(document.activeElement).toBe(button));
+  });
+
+  it("names each Batilisha by its row, with its note when it has one", async () => {
+    // Two rows of one amount: only the note tells a screen reader's two buttons apart (WAGE-7's review).
+    theDayIs(
+      mealDays([
+        mealDay({
+          rows: [
+            row({ amount: "3000.00", note: "Nyama" }),
+            row({ amount: "3000.00", note: "Mboga" }),
+            row({ amount: "2000.00", note: "" }),
+          ],
+        }),
+      ]),
+    );
+
+    render(<MealMoneyDayScreen date={MONDAY} />);
+    await rows();
+
+    expect(
+      screen
+        .getAllByRole("button", { name: /^Batilisha/ })
+        .map((button) =>
+          button.getAttribute("aria-label")?.replace(/\u00a0/g, " "),
+        ),
+    ).toEqual([
+      "Batilisha TSh 3,000 · Nyama",
+      "Batilisha TSh 3,000 · Mboga",
+      "Batilisha TSh 2,000",
+    ]);
   });
 
   it("says a ready reason's code in words, on the demo", async () => {
