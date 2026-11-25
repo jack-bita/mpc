@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { answer, refusal, sent } from "@/test/fake-server";
 import { MealMoneyAsked, mealMoneyIsAnswered } from "@/test/meals";
+import { PayAsked, payIsAnswered } from "@/test/pay";
 import { render } from "@/test/render";
 
 import { AddTap } from "./add-tap";
@@ -166,21 +167,23 @@ describe("Ongeza Ingia au Toka", () => {
     });
   });
 
-  it("asks the meal money again, as the date is split again with the tap (WAGE-7)", async () => {
+  it("asks the meal money and the pay again, as the date is split again with the tap (WAGE-7, WAGE-2)", async () => {
     answer("POST", TAPS, { status: 201, body: ADDED });
     const asked = mealMoneyIsAnswered();
+    const payAsked = payIsAnswered();
     render(
       <>
         <MealMoneyAsked />
+        <PayAsked />
         <AddTap day={THURSDAY} answer={month()} onClose={vi.fn()} />
       </>,
     );
-    await waitFor(() => expect(asked()).toBe(1));
+    await waitFor(() => expect([asked(), payAsked()]).toEqual([1, [1, 1]]));
 
     fill("18:45", "Alisahau kubonyeza Toka");
     fireEvent.click(add());
 
-    await waitFor(() => expect(asked()).toBe(2));
+    await waitFor(() => expect([asked(), payAsked()]).toEqual([2, [2, 2]]));
   });
 
   it("sends the same id on a try again, so the tap is added once", async () => {

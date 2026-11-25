@@ -36,6 +36,7 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Alert, AlertDescription } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
+import { PAY } from "@/features/pay/pay";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 import { Decimal } from "@/lib/decimal";
 import { formatDay, formatMoney } from "@/lib/format";
@@ -174,8 +175,9 @@ export function WorkerPay({
               }}
               onCancel={() => {
                 setOpen(false);
-                // Asked again: a save whose answer was lost may have been made (worker-roles.tsx).
+                // Asked again: a save whose answer was lost may have been made (worker-roles.tsx), and moved the pay.
                 void store.invalidateQueries({ queryKey: PAY_RATES });
+                void store.invalidateQueries({ queryKey: PAY });
               }}
               // After a save, the done line; after Ghairi, the button itself, named (worker-actions.tsx).
               finalFocus={() =>

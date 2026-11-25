@@ -13,6 +13,7 @@ import {
   monthsAreAnswered,
   row,
 } from "@/test/meals";
+import { PayAsked, payIsAnswered } from "@/test/pay";
 import { render } from "@/test/render";
 
 import { VoidMealMoney } from "./void-meal-money";
@@ -103,30 +104,39 @@ describe("Batilisha, of meal money", () => {
     // The server crossed it out, and its answer was lost: the day behind the sheet must not go on counting the row
     // (WAGE-7's review).
     ["no answer", refusal(503, "server_error")],
-  ])("asks the days and the workers' months again: %s", async (_how, reply) => {
-    answer("POST", VOID, reply);
-    const meals = mealMoneyIsAnswered();
-    const months = monthsAreAnswered();
-    render(
-      <>
-        <MealMoneyAsked />
-        <MonthsAsked />
-        <VoidMealMoney
-          row={MEAT}
-          readyReasons={[]}
-          onDone={vi.fn()}
-          onClose={vi.fn()}
-          finalFocus={() => null}
-        />
-      </>,
-    );
-    await waitFor(() => expect([meals(), months().worker]).toEqual([1, 1]));
+  ])(
+    "asks the days, the workers' months and the pay again: %s",
+    async (_how, reply) => {
+      answer("POST", VOID, reply);
+      const meals = mealMoneyIsAnswered();
+      const months = monthsAreAnswered();
+      const payAsked = payIsAnswered();
+      render(
+        <>
+          <MealMoneyAsked />
+          <MonthsAsked />
+          <PayAsked />
+          <VoidMealMoney
+            row={MEAT}
+            readyReasons={[]}
+            onDone={vi.fn()}
+            onClose={vi.fn()}
+            finalFocus={() => null}
+          />
+        </>,
+      );
+      await waitFor(() =>
+        expect([meals(), months().worker, payAsked()]).toEqual([1, 1, [1, 1]]),
+      );
 
-    fireEvent.change(reasonBox(), { target: { value: "Sifuri moja zaidi" } });
-    fireEvent.click(crossOut());
+      fireEvent.change(reasonBox(), { target: { value: "Sifuri moja zaidi" } });
+      fireEvent.click(crossOut());
 
-    await waitFor(() => expect([meals(), months().worker]).toEqual([2, 2]));
-  });
+      await waitFor(() =>
+        expect([meals(), months().worker, payAsked()]).toEqual([2, 2, [2, 2]]),
+      );
+    },
+  );
 
   it("says an empty reason at once, and sends nothing", async () => {
     openOn();

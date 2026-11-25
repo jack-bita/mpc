@@ -43,6 +43,7 @@ import { Sheet } from "@/components/design/sheet";
 import { ATTENDANCE_MONTHS } from "@/features/attendance/attendance-month";
 import { WORKER_MONTHS } from "@/features/attendance/worker-month";
 import { MEAL_MONEY } from "@/features/meals/meal-money";
+import { PAY } from "@/features/pay/pay";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { Decimal } from "@/lib/decimal";
 import { formatDay, formatMoney } from "@/lib/format";
@@ -121,10 +122,11 @@ export function PayRateForm({
       // Every worker's rates asked again: this worker's history and today's rate show the new one where it belongs.
       void store.invalidateQueries({ queryKey: PAY_RATES });
       // And what a rate moves: who the month lists (ATT-5), and who shares each day's meals, so every worker's share and
-      // the meal money's split (WAGE-7).
+      // the meal money's split (WAGE-7); and the pay (WAGE-2).
       void store.invalidateQueries({ queryKey: ATTENDANCE_MONTHS });
       void store.invalidateQueries({ queryKey: WORKER_MONTHS });
       void store.invalidateQueries({ queryKey: MEAL_MONEY });
+      void store.invalidateQueries({ queryKey: PAY });
       onDone(
         t("saved", {
           name: worker.display_name,

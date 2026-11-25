@@ -2,7 +2,8 @@
 // (WAGE-2), and who may open it. Tests only. Fake data: every name, amount and id is made up (rule 10).
 import type { components } from "@/api/schema";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
-import { answer } from "@/test/fake-server";
+import { usePayMonth, useWorkerPay } from "@/features/pay/pay";
+import { answer, sent } from "@/test/fake-server";
 
 export type Pay = components["schemas"]["Pay"];
 export type PayMonth = components["schemas"]["PayMonthAnswer"];
@@ -117,4 +118,25 @@ export function notPaidByDay(staff: string): void {
       paid_by_day: false,
     }),
   });
+}
+
+const SOMEONE = "019a8600-0000-7000-8000-0000000000ff";
+
+/** Everyone's pay and one worker's, open somewhere else on the page's store, as a tab's are: for a test of what asks them
+ * again. */
+export function PayAsked() {
+  usePayMonth("2026-11");
+  useWorkerPay(SOMEONE, "2026-11");
+  return null;
+}
+
+/** The server answers PayAsked's two questions, and how many times each was asked so far. A month gone by, so neither
+ * asks again by itself. */
+export function payIsAnswered(): () => [month: number, worker: number] {
+  const body = { month: "2026-10", today: TODAY };
+  answer("GET", PAY_ROUTE, { status: 200, body });
+  answer("GET", payRoute(SOMEONE), { status: 200, body });
+  const asked = (path: string) =>
+    sent.filter((request) => new URL(request.url).pathname === path).length;
+  return () => [asked(PAY_ROUTE), asked(payRoute(SOMEONE))];
 }

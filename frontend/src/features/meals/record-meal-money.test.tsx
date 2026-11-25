@@ -14,6 +14,7 @@ import {
   row,
   TODAY,
 } from "@/test/meals";
+import { PayAsked, payIsAnswered } from "@/test/pay";
 import { render } from "@/test/render";
 
 import { RecordMealMoney } from "./record-meal-money";
@@ -100,7 +101,7 @@ describe("Andika hela ya chakula", () => {
     ["saved", 201],
     ["no answer", 503],
   ])(
-    "asks the days and the workers' months again, as each share moves: %s",
+    "asks the days, the workers' months and the pay again, as each share moves: %s",
     async (_how, status) => {
       const meals = mealMoneyIsAnswered();
       answer("POST", MEAL_MONEY, {
@@ -108,21 +109,27 @@ describe("Andika hela ya chakula", () => {
         body: row({ date: TODAY, amount: "9000.00" }),
       });
       const months = monthsAreAnswered();
+      const payAsked = payIsAnswered();
       render(
         <>
           <MealMoneyAsked />
           <MonthsAsked />
+          <PayAsked />
           <RecordMealMoney day={TODAY} today={TODAY} />
         </>,
       );
-      await waitFor(() => expect([meals(), months().worker]).toEqual([1, 1]));
+      await waitFor(() =>
+        expect([meals(), months().worker, payAsked()]).toEqual([1, 1, [1, 1]]),
+      );
       fireEvent.click(button());
 
       type("Kiasi (TSh)", "9000");
       fireEvent.click(save());
 
       // The POST goes to the list's own address, so it is counted too.
-      await waitFor(() => expect([meals(), months().worker]).toEqual([3, 2]));
+      await waitFor(() =>
+        expect([meals(), months().worker, payAsked()]).toEqual([3, 2, [2, 2]]),
+      );
     },
   );
 

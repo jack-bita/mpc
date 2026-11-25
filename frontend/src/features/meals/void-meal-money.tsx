@@ -30,6 +30,7 @@ import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
 import type { Weekday } from "@/features/attendance/attendance-month";
 import { WORKER_MONTHS } from "@/features/attendance/worker-month";
+import { PAY } from "@/features/pay/pay";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { Decimal } from "@/lib/decimal";
 import { formatDay, formatMoney, weekdayOf } from "@/lib/format";
@@ -76,8 +77,10 @@ export function VoidMealMoney({
         }),
       ),
     onSuccess: async () => {
-      // The workers' months too, whose days' shares move with the money; not waited for, as none is on this page.
+      // The workers' months too, whose days' shares move with the money, and the pay (WAGE-2); not waited for, as none
+      // is on this page.
       void store.invalidateQueries({ queryKey: WORKER_MONTHS });
+      void store.invalidateQueries({ queryKey: PAY });
       // The day read again before the sheet goes: the mutation stays on its way until then (TanStack waits for what
       // this returns). A read that fails ends the wait too, and the page shows why.
       await store.invalidateQueries({ queryKey: MEAL_MONEY });
@@ -87,6 +90,7 @@ export function VoidMealMoney({
       // Asked again too: with no answer, the row may have been crossed out all the same, and the day behind the sheet
       // must not go on counting it (WAGE-7's review).
       void store.invalidateQueries({ queryKey: WORKER_MONTHS });
+      void store.invalidateQueries({ queryKey: PAY });
       void store.invalidateQueries({ queryKey: MEAL_MONEY });
     },
   });

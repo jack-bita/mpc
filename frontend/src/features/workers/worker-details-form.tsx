@@ -43,6 +43,7 @@ import type { components } from "@/api/schema";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
 import { Field } from "@/components/design/field";
+import { PAY } from "@/features/pay/pay";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { formatDay, formatPhone } from "@/lib/format";
 import { useOnline } from "@/offline/network";
@@ -143,6 +144,8 @@ export function DetailsForm({
       // The worker as they are now, on their page and in the list at once, then both asked again (workers.ts).
       keepWorker(store, changed);
       void store.invalidateQueries({ queryKey: WORKERS });
+      // A first day moved moves the days they are paid for, and a nickname is the pay's line (WAGE-2).
+      void store.invalidateQueries({ queryKey: PAY });
       onDone(changed);
     },
     onError: (error) => {
