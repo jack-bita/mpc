@@ -826,6 +826,14 @@
       "show": "Onyesha"
     }
   },
+  "advances": {
+    "title": "Advansi",
+    "total": "Jumla",
+    "rowsLabel": "Advansi za mwezi",
+    "line": "{weekday} {date} · {name}",
+    "voided": "Imebatilishwa",
+    "none": "Hakuna advansi katika mwezi huu."
+  },
   "pay": {
     "title": "Mishahara",
     "countedTo": "Hadi jana, {weekday} {date}",

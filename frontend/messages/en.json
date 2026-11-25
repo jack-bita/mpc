@@ -826,6 +826,14 @@
       "show": "Show"
     }
   },
+  "advances": {
+    "title": "Advances",
+    "total": "Total",
+    "rowsLabel": "The month's advances",
+    "line": "{weekday} {date} · {name}",
+    "voided": "Crossed out",
+    "none": "No advances in this month."
+  },
   "pay": {
     "title": "Pay",
     "countedTo": "Up to yesterday, {weekday} {date}",
