@@ -127,7 +127,7 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         # waits for (a deadlock). FOR NO KEY UPDATE, the light lock (backend rules): a tap pushed meanwhile still saves,
         # as its link to the job takes only a KEY SHARE lock, which this one lets through; a change to a job's own row,
         # a PIN or a fix (PPL-10), waits for the run, a moment.
-        jobs = list(StaffMember.objects.filter(shop=shop).order_by("pk").select_for_update(no_key=True))
+        jobs = lock_jobs(shop)
         # The attendance switch on each day, with the step a share of the meals is rounded to (WAGE-7): one read for the
         # whole span, never one per day.
         settings_by_day = shop_settings_between([ATTENDANCE_ON, ROUNDING_STEP], shop, first, last)
@@ -152,6 +152,14 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         # one (T1).
         with acting_as(_TheBook(shop.pk), device=None):
             return _keep(answered, kept)
+
+
+def lock_jobs(shop: Shop) -> list[StaffMember]:
+    """Every job of the shop, locked until the transaction ends, in the order of their ids: the book's lock, which
+    work_out_days explains. Whatever the pay is made of waits for it, one way or another: a decision and meal money take
+    it, as the approval of a month does (approve_month, WAGE-3); a tap, a rate and an advance take their own job's row,
+    one of these."""
+    return list(StaffMember.objects.filter(shop=shop).order_by("pk").select_for_update(no_key=True))
 
 
 def answer_days(

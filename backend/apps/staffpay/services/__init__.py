@@ -3,7 +3,8 @@
     book.py        the book of days: what each worker's day was, worked out and kept
     attendance.py  the month and a worker's month on the screen, a decision on a day, a tap added or crossed out
     money.py       what a person types for the pay: daily rates, the day's meal money, money given before payday
-    pay.py         the month's pay, worked out from all of them
+    pay.py         the month's pay, worked out from all of them, and read from its payslips once it is approved
+    approval.py    approving a month's pay: the payslips kept, and their days marked as paid
 
 Each file says what it owns. They were one file until WAGE-3, which grew past what anyone reads in one sitting. The rest
 of the code takes what it needs from here (`from apps.staffpay.services import pay_month`), so a function can move from
@@ -11,6 +12,7 @@ one file to another with no change anywhere else; a file of the package takes fr
 from here would be a circle. What isn't listed is the package's own.
 """
 
+from apps.staffpay.services.approval import approve_month
 from apps.staffpay.services.attendance import (
     DEMO_ADD_REASONS,
     DEMO_REASONS,
@@ -55,7 +57,16 @@ from apps.staffpay.services.money import (
     void_advance,
     void_meal_money,
 )
-from apps.staffpay.services.pay import PayMonth, WorkerPay, WorkerPayMonth, pay_month, worker_pay
+from apps.staffpay.services.pay import (
+    Approval,
+    OpenDay,
+    PayMonth,
+    ToApprove,
+    WorkerPay,
+    WorkerPayMonth,
+    pay_month,
+    worker_pay,
+)
 
 __all__ = [
     "DEMO_ADD_REASONS",
@@ -66,17 +77,20 @@ __all__ = [
     "AdvanceLine",
     "AdvanceWorker",
     "AdvancesMonth",
+    "Approval",
     "AttendanceMonth",
     "DayDecision",
     "DayOption",
     "MealDay",
     "MealMoneyDays",
     "MealMoneyLine",
+    "OpenDay",
     "PayMonth",
     "PhotoState",
     "TapLine",
     "TapPhoto",
     "TapStamp",
+    "ToApprove",
     "VoidedAdvance",
     "VoidedMealMoney",
     "WorkerAttendance",
@@ -87,6 +101,7 @@ __all__ = [
     "add_tap",
     "advance_line",
     "advances_month",
+    "approve_month",
     "attendance_month",
     "decide_day",
     "decision_of",

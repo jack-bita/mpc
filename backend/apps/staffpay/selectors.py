@@ -20,16 +20,21 @@ And each date's meal money (meal_money_by_date, WAGE-7), the sum of what was typ
 And what each job was given before payday over a span (advances_between, WAGE-8), the same way:
 
     Juma  10 Nov 20,000   16 Nov 30,000, and 300,000 crossed out      so November: 50,000
+
+And the laptops that have sent nothing since a moment (quiet_laptops, WAGE-3), as taps of the month may still be inside:
+
+    Laptop ya Vyakula, last sent on 28 Nov, asked on 1 Dec of November's end
 """
 
 import uuid
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Sum
+from django.db.models import Q, Sum
 
 from apps.core.settings_registry import (
     AFTERNOON_FROM,
@@ -44,6 +49,7 @@ from apps.core.settings_registry import (
     SettingKey,
 )
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
+from apps.people.models import Device, DeviceStatus
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_settings_between
 from apps.staffpay.calculations import DayRules
@@ -171,6 +177,25 @@ def meal_money_by_date(shop: Shop, first: date, last: date) -> dict[date, Decima
     )
 
 
+def advances_by_job(shop: Shop, first: date, last: date) -> dict[uuid.UUID, list[tuple[date, Decimal]]]:
+    """Each advance that counts from `first` to `last`, both counted, by the job it was given to, in the order they were
+    given: its day and its amount (WAGE-3). What a payslip copies line by line, where advances_between sums them."""
+    # The same check as the sum's, for the same reason (ADR-0022): a payslip with no advance on it would pay the worker
+    # money they already have, without a word.
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("advances_by_job was given a shop that is not the one open.")
+    given: dict[uuid.UUID, list[tuple[date, Decimal]]] = defaultdict(list)
+    for staff_id, day, amount in (
+        Advance.objects.filter(shop=shop, date__range=(first, last), voided_at__isnull=True)
+        # By their day, then as they were typed; the id last, for two typed at the very same moment.
+        .order_by("date", "created_at", "id")
+        .values_list("staff_id", "date", "amount")
+    ):
+        given[staff_id].append((day, amount))
+    return given
+
+
 def advances_between(shop: Shop, first: date, last: date) -> dict[uuid.UUID, Decimal]:
     """What each job was given before payday from `first` to `last`, both counted: {job id: the sum of its advances not
     voided} (WAGE-8, 02 §12). A job given none, or whose every one is crossed out, has no key. One read for the span,
@@ -190,3 +215,23 @@ def advances_between(shop: Shop, first: date, last: date) -> dict[uuid.UUID, Dec
         .annotate(total=Sum("amount"))
         .values_list("staff_id", "total")
     )
+
+
+@dataclass(frozen=True)
+class QuietLaptop:
+    # A laptop that has sent nothing since a moment, by its name, and when it last did, or None for one that never has.
+    name: str
+    last_synced_at: datetime | None
+
+
+def quiet_laptops(shop: Shop, since: datetime) -> list[QuietLaptop]:
+    """The shop's active laptops that have sent nothing since `since`, by name (WAGE-3): with no internet since the
+    28th, Laptop ya Vyakula may hold taps of the month that nobody has seen. Not a blocked one, whose records come only
+    by a person's doing; nor one paired after `since`, which can hold nothing from before it."""
+    rows = (
+        Device.objects.filter(shop=shop, status=DeviceStatus.ACTIVE, created_at__lt=since)
+        .filter(Q(last_synced_at__isnull=True) | Q(last_synced_at__lt=since))
+        .order_by("name", "pk")
+        .values_list("name", "last_synced_at")
+    )
+    return [QuietLaptop(name, last_synced_at) for name, last_synced_at in rows]
