@@ -826,6 +826,19 @@
       "show": "Show"
     }
   },
+  "pay": {
+    "title": "Pay",
+    "countedTo": "Up to yesterday, {weekday} {date}",
+    "nothingOverYet": "No working day of this month is over yet.",
+    "totalOfAll": "Total for everyone",
+    "workersLabel": "Each worker's pay",
+    "waiting": "{count, plural, one {1 day waits for a decision} other {# days wait for a decision}}",
+    "noRate": "{count, plural, one {1 day has no daily pay} other {# days have no daily pay}}",
+    "withToday": "Today included",
+    "todayWaits": "Today waits for a decision",
+    "left": "Left {date}",
+    "nobody": "No worker paid by the day in this month."
+  },
   "attendanceWorker": {
     "title": "A worker's attendance",
     "intro": "One worker's days, the whole month.",

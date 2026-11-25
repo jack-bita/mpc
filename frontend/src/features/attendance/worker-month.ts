@@ -64,11 +64,12 @@ export function useWorkerMonth(staff: string | null, month: string | null) {
 }
 
 /**
- * How often a worker's month is asked again by itself: each minute while it is this month, by the server's own today,
- * as today's taps come during the day; never for a month gone by, whose days are over, nor before the first answer.
+ * How often a worker's month, or the month's pay (WAGE-2), is asked again by itself: each minute while it is this month,
+ * by the server's own today, as today's taps come during the day; never for a month gone by, whose days are over, nor
+ * before the first answer.
  */
 export function askAgainEvery(
-  answer: WorkerAttendance | undefined,
+  answer: { month: string; today: string } | undefined,
 ): number | false {
   return answer !== undefined && monthOf(answer.today) === answer.month
     ? STALE_AFTER

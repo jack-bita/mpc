@@ -1,8 +1,8 @@
-// format.ts — money, stock, times of day, dates and phones as people read them: "TSh 41,000", "mifuko 26 + kilo
-// 35.5", "07:55", "13/11/2026" and "0712 345 678" (03 §7.4). A rule's own values too (SHOP-5): an amount written
-// exactly as saved, a day with no time, "2026-12-01", and the part of the day of a clock time, "07:35". And a day's
-// own sums, kept beside how a day is written: the day before it (ATT-9), its day and month alone, "12/11", and its
-// weekday (ATT-5), each read from the day's own parts, so no zone moves it.
+// format.ts — money, stock, times of day, dates and phones as people read them: "TSh 41,000", or "41,000" in a column
+// of money (WAGE-2), "mifuko 26 + kilo 35.5", "07:55", "13/11/2026" and "0712 345 678" (03 §7.4). A rule's own values
+// too (SHOP-5): an amount written exactly as saved, a day with no time, "2026-12-01", and the part of the day of a
+// clock time, "07:35". And a day's own sums, kept beside how a day is written: the day before it (ATT-9), its day and
+// month alone, "12/11", and its weekday (ATT-5), each read from the day's own parts, so no zone moves it.
 //
 // Every screen and slip writes numbers through here, so 41000 never shows as "41000.00" on one screen
 // and "TSh 41,000" on another. Writing never rounds: a value that would need rounding is refused, so
@@ -26,6 +26,9 @@ const MONEY = new Intl.NumberFormat(LOCALE, {
   maximumFractionDigits: 0,
 });
 
+// Money in a column that says what it is, with no "TSh" on each line.
+const AMOUNT = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 0 });
+
 // Quantities: up to three places, with the zeros at the end left off (35.500 → 35.5).
 const QUANTITY = new Intl.NumberFormat(LOCALE, {
   maximumFractionDigits: QUANTITY_PLACES,
@@ -47,12 +50,25 @@ const asText = (value: Big, places: number) =>
  * shillings (Jack, 16 Nov 2026, the server's Money kind), so cents here mean a missed rounding, said loudly.
  */
 export function formatMoney(amount: Big): string {
+  return MONEY.format(wholeShillings(amount));
+}
+
+/**
+ * Money with no "TSh", for a line of a column that adds up to one that has it: "10,000" in "14 × 10,000   140,000", as
+ * Jack drew a worker's pay (WAGE-2). Whole shillings only, as formatMoney.
+ */
+export function formatAmount(amount: Big): string {
+  return AMOUNT.format(wholeShillings(amount));
+}
+
+/** An amount's text, whole shillings: one with cents is refused, never rounded (formatMoney). */
+function wholeShillings(amount: Big) {
   const fitted = fit(amount, MONEY_PLACES);
   if (!fitted.round(0, Decimal.roundDown).eq(fitted))
     throw new RangeError(
       `${fitted.toString()} has cents: round it with roundMoney first.`,
     );
-  return MONEY.format(asText(fitted, 0));
+  return asText(fitted, 0);
 }
 
 // Money with its cents, for a rule's amount (SHOP-5). A money rule is whole shillings since Jack's choice (16 Nov

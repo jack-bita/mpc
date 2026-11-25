@@ -826,6 +826,19 @@
       "show": "Onyesha"
     }
   },
+  "pay": {
+    "title": "Mishahara",
+    "countedTo": "Hadi jana, {weekday} {date}",
+    "nothingOverYet": "Bado hakuna siku ya kazi iliyokwisha mwezi huu.",
+    "totalOfAll": "Jumla ya wote",
+    "workersLabel": "Malipo ya kila mfanyakazi",
+    "waiting": "{count, plural, one {Siku 1 inasubiri uamuzi} other {Siku # zinasubiri uamuzi}}",
+    "noRate": "{count, plural, one {Siku 1 haina malipo kwa siku} other {Siku # hazina malipo kwa siku}}",
+    "withToday": "Pamoja na leo",
+    "todayWaits": "Leo inasubiri uamuzi",
+    "left": "Aliondoka {date}",
+    "nobody": "Hakuna mfanyakazi anayelipwa kwa siku katika mwezi huu."
+  },
   "attendanceWorker": {
     "title": "Mahudhurio ya mfanyakazi",
     "intro": "Siku za mfanyakazi mmoja, mwezi mzima.",

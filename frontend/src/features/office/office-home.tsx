@@ -3,13 +3,14 @@
 //
 // Where a manager lands after logging in on their own phone (Jack, 7 Nov 2026): big buttons are easy to
 // tap, and the page grows a button as each office screen comes (products, prices, reports…). Today there
-// are seven. Two are for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
+// are eight. Two are for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
 // (UI-3), and Hali ya vifaa, as keeping the devices working is theirs too (SYNC-14). Mipangilio ya duka is
 // for anyone who works on a side: reading the shop's rules needs no key, and changing one is the owner's,
 // which the page itself asks for (SHOP-5). Wafanyakazi is for whoever holds staff.manage on the whole shop,
 // as even reading the workers is behind it (PPL-6). Mahudhurio ya mwezi is for whoever holds attendance.manage on
 // the whole shop, the owner and the managers, as its route asks (ATT-5). Hela ya chakula is for whoever the owner gave
-// meals.record on the whole shop (WAGE-7). Tofauti is for whoever holds flag.review on some side, as a flag shows only
+// meals.record on the whole shop (WAGE-7). Mishahara is for whoever may see a worker's pay, with settings.manage and
+// staff.manage on the whole shop (WAGE-2). Tofauti is for whoever holds flag.review on some side, as a flag shows only
 // to whoever may close it (CTRL-4).
 // A button for a screen someone may not use stays off the page; the server still checks every change
 // itself (PPL-5), so this only keeps a door nobody may use out of sight. Under them, for everyone,
@@ -32,6 +33,8 @@ import {
 import { mayManageAttendance } from "@/features/attendance/attendance-month";
 import { FLAGS_PAGE, mayReviewFlags } from "@/features/flags/flags";
 import { MEAL_MONEY_PAGE, mayRecordMeals } from "@/features/meals/meal-money";
+import { PAY_PAGE } from "@/features/pay/pay";
+import { maySeePay } from "@/features/workers/pay-rates";
 import { mayManageStaff } from "@/features/workers/workers";
 
 export function OfficeHome() {
@@ -45,6 +48,7 @@ export function OfficeHome() {
   const workers = useTranslations("workers");
   const attendanceMonth = useTranslations("attendanceMonth");
   const mealMoney = useTranslations("mealMoney");
+  const pay = useTranslations("pay");
   const flags = useTranslations("flags");
   const me = useWhoIsHere();
   // Focus on the welcome as each person arrives: after a login, or Chagua nenosiri lako's Hifadhi, the
@@ -75,7 +79,7 @@ export function OfficeHome() {
         open: here.permissions.sides.length > 0,
       },
       {
-        // The workers' page shows each worker's roles, and later their pay (WAGE-2): its routes ask
+        // The workers' page shows each worker's roles, and their pay to whoever may see it: its routes ask
         // staff.manage on the whole shop, not on a side, as a worker belongs to the shop (PPL-4).
         href: "/workers/",
         label: workers("title"),
@@ -94,6 +98,13 @@ export function OfficeHome() {
         href: MEAL_MONEY_PAGE,
         label: mealMoney("title"),
         open: mayRecordMeals(here),
+      },
+      {
+        // The month's pay shows each worker's daily rate: for whoever may see the rates, with the same two keys
+        // (WAGE-2).
+        href: PAY_PAGE,
+        label: pay("title"),
+        open: maySeePay(here),
       },
       {
         // What the system found and a person must look into: for whoever may close a flag on some side, as the
