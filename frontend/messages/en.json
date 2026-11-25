@@ -837,7 +837,28 @@
     "withToday": "Today included",
     "todayWaits": "Today waits for a decision",
     "left": "Left {date}",
-    "nobody": "No worker paid by the day in this month."
+    "nobody": "No worker paid by the day in this month.",
+    "monthAndCounted": "{month} · {counted}",
+    "linesCaption": "The pay, line by line",
+    "line": {
+      "full": "Full days",
+      "half": "Half days"
+    },
+    "times": "{days} × {each}",
+    "fines": "Fines",
+    "meals": "Meals",
+    "mealDays": "{count, plural, one {1 day} other {# days}}",
+    "less": "− {amount}",
+    "todayLine": {
+      "full": "Today: full day",
+      "half": "Today: half day",
+      "fines": "Today: fine",
+      "meals": "Today: meals"
+    },
+    "totalToday": "Total to pay today",
+    "totalMonth": "Total for the month",
+    "notPaidByDay": "No daily pay in this month.",
+    "worker": "A worker's pay"
   },
   "attendanceWorker": {
     "title": "A worker's attendance",

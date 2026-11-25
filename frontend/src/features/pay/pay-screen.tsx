@@ -14,10 +14,11 @@
 //     Aliondoka 14/11/2026
 //
 // The month: this one, on the shop's clock, unless the address names an earlier one (?month=2026-10), as on Mahudhurio
-// ya mwezi, whose switch it wears: on 2 December Baba still sees the whole of November. A worker's total counts the days
-// that are over, and today once they tapped Toka: Pamoja na leo (Jack: A). Which workers are listed, each total and the
-// whole are the server's (pay_month); the page adds nothing up. What isn't paid is said under the name, with the ! that
-// marks a day to decide on the attendance pages: days that wait for a decision, and days with no daily pay.
+// ya mwezi, whose switch it wears: on 2 December Baba still sees the whole of November. A name opens that worker's pay,
+// line by line (worker-pay-screen.tsx). A worker's total counts the days that are over, and today once they tapped Toka:
+// Pamoja na leo (Jack: A). Which workers are listed, each total and the whole are the server's (pay_month); the page adds
+// nothing up. What isn't paid is said under the name, with the ! that marks a day to decide on the attendance pages: days
+// that wait for a decision, and days with no daily pay.
 //
 // An office screen: it asks the server through the store of server answers (rule 5). Its route asks the two keys of pay
 // on the whole shop; someone without both has no button, and opening the address shows the server's refusal.
@@ -30,6 +31,7 @@ import { useTranslations } from "use-intl";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Card } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
+import { TextLink } from "@/components/design/text-link";
 import { useWordInAddress } from "@/components/tab-in-address";
 import {
   isMonth,
@@ -43,8 +45,8 @@ import { Decimal } from "@/lib/decimal";
 import { formatAmount, formatMoney } from "@/lib/format";
 import { shopToday } from "@/offline/rules";
 
-import { CountedTo, PayNotes } from "./pay-notes";
-import { type PayMonth, usePayMonth } from "./pay";
+import { type PayMonth, usePayMonth, workerPayPage } from "./pay";
+import { PayNotes, useCountedTo } from "./pay-notes";
 
 export function PayScreen() {
   const t = useTranslations("pay");
@@ -99,9 +101,10 @@ export function PayScreen() {
 /** How far the month is counted, the whole of it, then a line per worker. */
 function TheMonth({ answer }: { answer: PayMonth }) {
   const t = useTranslations("pay");
+  const counted = useCountedTo(answer);
   return (
     <>
-      <CountedTo answer={answer} />
+      {counted === null ? null : <p>{counted}</p>}
       {answer.workers.length === 0 ? (
         <p>{t("nobody")}</p>
       ) : (
@@ -125,9 +128,19 @@ function TheMonth({ answer }: { answer: PayMonth }) {
                 // Keyed by the job: a person hired again in the month has a line for each (PPL-11).
                 <li
                   key={worker.staff}
-                  className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 px-4 py-3"
+                  // relative: the name's link stretches over its whole line.
+                  className="relative grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 px-4 py-3"
                 >
-                  <p>{worker.display_name}</p>
+                  <p>
+                    {/* The whole line opens the worker's own pay, the same month, an empty box laid over it
+                        (after:absolute), so a finger anywhere on it works (meal-money-screen.tsx). */}
+                    <TextLink
+                      href={workerPayPage(worker.staff, answer.month)}
+                      className="after:absolute after:inset-0"
+                    >
+                      {worker.display_name}
+                    </TextLink>
+                  </p>
                   <p className="text-right tabular-nums">
                     {formatAmount(new Decimal(worker.total))}
                   </p>

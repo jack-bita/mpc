@@ -11,14 +11,33 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
-import { STALE_AFTER } from "@/features/attendance/attendance-month";
-import { askAgainEvery } from "@/features/attendance/worker-month";
+import {
+  MONTH_PARAM,
+  STALE_AFTER,
+} from "@/features/attendance/attendance-month";
+import { askAgainEvery, STAFF_PARAM } from "@/features/attendance/worker-month";
 
 export type PayMonth = components["schemas"]["PayMonthAnswer"];
 export type WorkerPay = components["schemas"]["WorkerPay"];
+export type WorkerPayMonth = components["schemas"]["WorkerPayMonthAnswer"];
+
+// The address's name for the worker, the same as on their attendance: /pay/worker/?staff=…&month=2026-11.
+export { STAFF_PARAM };
 
 /** Mishahara's own address, and the office home's button's. */
 export const PAY_PAGE = "/pay/";
+
+/** Mishahara on one month, or on this one when none is known yet. */
+export function payPage(month: string | null): string {
+  return month === null
+    ? PAY_PAGE
+    : `${PAY_PAGE}?${new URLSearchParams({ [MONTH_PARAM]: month }).toString()}`;
+}
+
+/** One worker's pay page, as their name on Mishahara opens it: their job's id, and the month shown. */
+export function workerPayPage(staff: string, month: string): string {
+  return `${PAY_PAGE}worker/?${new URLSearchParams({ [STAFF_PARAM]: staff, [MONTH_PARAM]: month }).toString()}`;
+}
 
 /** The pay's place in the store of server answers: every month of everyone's, and of each worker's, under it, so a save
  * that moves the pay asks them all again. */
@@ -41,6 +60,25 @@ export function usePayMonth(month: string | null) {
     staleTime: STALE_AFTER,
     // And while it shows this month, each minute by itself, only while the page is on the screen: Baba opens the page at
     // 18:40, and Asha's Toka at 18:45 brings her Leo (askAgainEvery).
+    refetchInterval: (query) => askAgainEvery(query.state.data),
+  });
+}
+
+/** One worker's pay of one month, from the store of server answers; nothing is asked until the page knows whose and
+ * which. */
+export function useWorkerPay(staff: string | null, month: string | null) {
+  return useQuery({
+    queryKey: [...PAY, "worker", staff, month],
+    queryFn: () =>
+      answerOf(
+        api.GET("/api/v1/staffpay/pay/{id}/", {
+          // Never null here: the query runs only once `enabled`.
+          params: { path: { id: staff ?? "" }, query: { month: month ?? "" } },
+        }),
+      ),
+    enabled: staff !== null && month !== null,
+    // As the month's, above.
+    staleTime: STALE_AFTER,
     refetchInterval: (query) => askAgainEvery(query.state.data),
   });
 }

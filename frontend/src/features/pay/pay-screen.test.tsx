@@ -152,6 +152,28 @@ describe("the month's pay", () => {
     ]);
   });
 
+  it("opens a worker's own pay, the same month, from their line", async () => {
+    // Two jobs of one person in the month are two lines, each opening its own.
+    const first = workerPay({ display_name: "Juma", left_on: "2026-10-09" });
+    const again = workerPay({ display_name: "Juma" });
+    window.history.replaceState(null, "", "/pay/?month=2026-10");
+    theShopPays({
+      "2026-10": payMonth([first, again], { month: "2026-10" }),
+    });
+
+    render(<PayScreen />);
+
+    const names = await screen.findAllByRole("link", { name: "Juma" });
+    expect(names.map((name) => name.getAttribute("href"))).toEqual([
+      expect.stringMatching(
+        new RegExp(`^/pay/worker/?\\?staff=${first.staff}&month=2026-10$`),
+      ),
+      expect.stringMatching(
+        new RegExp(`^/pay/worker/?\\?staff=${again.staff}&month=2026-10$`),
+      ),
+    ]);
+  });
+
   it("hides the ! from a screen reader, which the words already say", async () => {
     theShopPays({ "2026-11": NOVEMBER });
 

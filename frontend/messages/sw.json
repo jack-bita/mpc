@@ -837,7 +837,28 @@
     "withToday": "Pamoja na leo",
     "todayWaits": "Leo inasubiri uamuzi",
     "left": "Aliondoka {date}",
-    "nobody": "Hakuna mfanyakazi anayelipwa kwa siku katika mwezi huu."
+    "nobody": "Hakuna mfanyakazi anayelipwa kwa siku katika mwezi huu.",
+    "monthAndCounted": "{month} · {counted}",
+    "linesCaption": "Malipo, mstari kwa mstari",
+    "line": {
+      "full": "Siku kamili",
+      "half": "Nusu siku"
+    },
+    "times": "{days} × {each}",
+    "fines": "Faini",
+    "meals": "Chakula",
+    "mealDays": "siku {count}",
+    "less": "− {amount}",
+    "todayLine": {
+      "full": "Leo: siku kamili",
+      "half": "Leo: nusu siku",
+      "fines": "Leo: faini",
+      "meals": "Leo: chakula"
+    },
+    "totalToday": "Jumla ya kumlipa leo",
+    "totalMonth": "Jumla ya mwezi",
+    "notPaidByDay": "Hana malipo kwa siku katika mwezi huu.",
+    "worker": "Malipo ya mfanyakazi"
   },
   "attendanceWorker": {
     "title": "Mahudhurio ya mfanyakazi",

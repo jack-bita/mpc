@@ -91,3 +91,18 @@ export function payMonth(
     ...fields,
   };
 }
+
+/** One worker's pay of November, counted up to yesterday, unless told otherwise. */
+export function workerPayMonth(
+  worker: WorkerPay,
+  fields: Partial<WorkerPayMonth> = {},
+): WorkerPayMonth {
+  return {
+    month: "2026-11",
+    today: TODAY,
+    counted_to: "2026-11-24",
+    paid_by_day: true,
+    worker,
+    ...fields,
+  };
+}
