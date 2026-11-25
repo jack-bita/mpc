@@ -1,4 +1,4 @@
-"""apps/staffpay/services — the writes of attendance and pay, and the reads that go through them, in four files:
+"""apps/staffpay/services — the writes of attendance and pay, and the reads that go through them, in five files:
 
     book.py        the book of days: what each worker's day was, worked out and kept
     attendance.py  the month and a worker's month on the screen, a decision on a day, a tap added or crossed out
