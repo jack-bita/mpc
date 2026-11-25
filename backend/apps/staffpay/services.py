@@ -172,7 +172,6 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
     last = min(last, shop_today(shop) - dt.timedelta(days=1))
     if last < first:
         return []
-    dates = [first + dt.timedelta(days=n) for n in range((last - first).days + 1)]
     # One transaction: the span's days are kept all together, or none of them. It is not one moment of the database:
     # PostgreSQL, as Django runs it (READ COMMITTED), lets each read see what was committed when that read began, so a
     # tap committed between two reads is seen by the second alone. The lock below is what keeps two runs apart.
@@ -186,7 +185,10 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         # as its link to the job takes only a KEY SHARE lock, which this one lets through; a change to a job's own row,
         # a PIN or a fix (PPL-10), waits for the run, a moment.
         jobs = list(StaffMember.objects.filter(shop=shop).order_by("pk").select_for_update(no_key=True))
-        taps, in_doubt = _taps(shop, first, last, zone)
+        # The attendance switch on each day, with the step a share of the meals is rounded to (WAGE-7): one read for the
+        # whole span, never one per day.
+        settings_by_day = shop_settings_between([ATTENDANCE_ON, ROUNDING_STEP], shop, first, last)
+        answered = _answer_days(shop, jobs, first, last, zone, settings_by_day)
         # The days kept before, each with its job read in the same query: the month page (ATT-5) names each day's
         # worker, and a day answered as it was kept would otherwise read its job alone, one query per day, some 600 for
         # a month of 20 workers. A day kept for the first time carries its job already.
@@ -194,69 +196,6 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
             (row.staff_id, row.date): row
             for row in AttendanceDay.objects.filter(shop=shop, date__range=(first, last)).select_related("staff")
         }
-        # The days the whole shop is closed (ATT-8): a public holiday, a family funeral. The attendance switch on each
-        # day, with the step a share of the meals is rounded to (WAGE-7), and the day's rules on each day (A1). One read
-        # each for the whole span, never one per day.
-        closed = closed_days(shop, first, last)
-        settings_by_day = shop_settings_between([ATTENDANCE_ON, ROUNDING_STEP], shop, first, last)
-        rules_by_day = day_rules_between(shop, first, last)
-        answered: list[AttendanceDay] = []
-        for day in dates:
-            # Attendance counts only from the day the owner switched it on (ADR-0033), a dated rule, so read on each
-            # date: before it, nobody clocked in, and every day kept would be an absence that never was. No day at all,
-            # not even an off one.
-            if not settings_by_day[day][ATTENDANCE_ON.key]:
-                continue
-            # Sunday is off for every job that ran on it, whatever its taps, in doubt or not: the shop is shut, and
-            # Sunday work is paid outside the system (01 §8.1). No rule is read for it. A job outside its days keeps
-            # no Sunday at all: off pays nothing, so there is nothing for anyone to decide.
-            if day.weekday() == SUNDAY:
-                answered.extend(_off(shop, job, day) for job in jobs if _ran_on(job, day))
-                continue
-            # The day's rules, the same for every job (A1).
-            rules = rules_by_day[day]
-            rules_used = rules_as_text(rules)
-            for job in jobs:
-                # Only the job's own taps: Asha's on Asha's day, even on a laptop Juma used too. With none, the rule
-                # answers absent.
-                job_taps = taps.get((job.pk, day), [])
-                # Outside the job's days, before its first or after its last (02 §5): a worker added on the 10th has
-                # no absent days before it; one who left on Friday has none after. The days as they are now, as PPL-10
-                # can move them: a day kept before a first day moved later is no longer answered, and its row stays
-                # (rule 7), counted nowhere. Unless the job tapped on it: Neema, added from the 10th, came on the 10th
-                # and the 11th, and a manager then moved her first day to the 12th. Her taps say she came, her first
-                # day says she didn't, so a person decides (Jack, ATT-11: A), below.
-                outside = not _ran_on(job, day)
-                if outside and not job_taps:
-                    continue
-                if day in closed and not job_taps:
-                    # A closed day is off, and not paid, like Sunday (ATT-8).
-                    answered.append(_off(shop, job, day))
-                    continue
-                result = work_out_day(job_taps, rules)
-                # Three kinds of day the rule can't see, as each depends on more than the taps' kinds and minutes.
-                # Each goes to the owner or a manager (ATT-6), and takes no fine until then. Its taps' minutes stay,
-                # which the rule read, to show when the worker came; the rules too, for whoever decides.
-                # - A closed day a worker tapped on all the same: the owner closed the shop at 10:00 for a funeral, and
-                #   Asha had clocked in at 07:20. Nobody can tell from the taps whether her morning is paid (Jack,
-                #   ATT-10).
-                # - A day with a tap in doubt (ATT-11): Juma's, made the morning after Baba suspended him, on a laptop
-                #   offline that didn't know yet (X2), or the one Asha's later tap disagrees with. His tap is real, but
-                #   whether to pay for it is a person's call.
-                # - A day outside the job's days that it tapped on, as above (ATT-11).
-                # Each says why (ATT-5), the first that holds, in ReviewReason's order: outside the job's days, then a
-                # closed day, then a tap in doubt. The book's reason comes before the rule's, as each asks whether the
-                # day is paid at all, whatever its times say: Juma suspended, with no Toka, is about the suspension.
-                why = (
-                    ReviewReason.OUTSIDE_JOB
-                    if outside
-                    else ReviewReason.CLOSED_DAY
-                    if day in closed
-                    else in_doubt.get((job.pk, day))
-                )
-                if why is not None:
-                    result = replace(result, status=DayStatus.NEEDS_REVIEW, fine=NO_FINE, reason=why)
-                answered.append(_worked_out(shop, job, day, result, rules_used))
         # Who pays for each date's meals, once every job's day of it is worked out (WAGE-7).
         steps = {day: values[ROUNDING_STEP.key] for day, values in settings_by_day.items()}
         _share_meals(shop, first, last, answered, kept, steps)
@@ -268,6 +207,84 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         # one (T1).
         with acting_as(_TheBook(shop.pk), device=None):
             return _keep(answered, kept)
+
+
+def _answer_days(
+    shop: Shop,
+    jobs: list[StaffMember],
+    first: dt.date,
+    last: dt.date,
+    zone: ZoneInfo,
+    settings_by_day: dict[dt.date, dict[str, Any]],
+) -> list[AttendanceDay]:
+    # Each job's day from `first` to `last`, both counted, as the book answers it: worked out from its taps and its
+    # date's rules, date by date, with no share of the meals yet, and not kept: keeping is the book's, once the days are
+    # over (work_out_days). Apart from it, so today, which is still running, can be judged by the same rule and never be
+    # kept (WAGE-2).
+    taps, in_doubt = _taps(shop, first, last, zone)
+    # The days the whole shop is closed (ATT-8): a public holiday, a family funeral. And the day's rules on each day
+    # (A1). One read each for the whole span, never one per day.
+    closed = closed_days(shop, first, last)
+    rules_by_day = day_rules_between(shop, first, last)
+    dates = [first + dt.timedelta(days=n) for n in range((last - first).days + 1)]
+    answered: list[AttendanceDay] = []
+    for day in dates:
+        # Attendance counts only from the day the owner switched it on (ADR-0033), a dated rule, so read on each
+        # date: before it, nobody clocked in, and every day kept would be an absence that never was. No day at all,
+        # not even an off one.
+        if not settings_by_day[day][ATTENDANCE_ON.key]:
+            continue
+        # Sunday is off for every job that ran on it, whatever its taps, in doubt or not: the shop is shut, and
+        # Sunday work is paid outside the system (01 §8.1). No rule is read for it. A job outside its days keeps
+        # no Sunday at all: off pays nothing, so there is nothing for anyone to decide.
+        if day.weekday() == SUNDAY:
+            answered.extend(_off(shop, job, day) for job in jobs if _ran_on(job, day))
+            continue
+        # The day's rules, the same for every job (A1).
+        rules = rules_by_day[day]
+        rules_used = rules_as_text(rules)
+        for job in jobs:
+            # Only the job's own taps: Asha's on Asha's day, even on a laptop Juma used too. With none, the rule
+            # answers absent.
+            job_taps = taps.get((job.pk, day), [])
+            # Outside the job's days, before its first or after its last (02 §5): a worker added on the 10th has
+            # no absent days before it; one who left on Friday has none after. The days as they are now, as PPL-10
+            # can move them: a day kept before a first day moved later is no longer answered, and its row stays
+            # (rule 7), counted nowhere. Unless the job tapped on it: Neema, added from the 10th, came on the 10th
+            # and the 11th, and a manager then moved her first day to the 12th. Her taps say she came, her first
+            # day says she didn't, so a person decides (Jack, ATT-11: A), below.
+            outside = not _ran_on(job, day)
+            if outside and not job_taps:
+                continue
+            if day in closed and not job_taps:
+                # A closed day is off, and not paid, like Sunday (ATT-8).
+                answered.append(_off(shop, job, day))
+                continue
+            result = work_out_day(job_taps, rules)
+            # Three kinds of day the rule can't see, as each depends on more than the taps' kinds and minutes.
+            # Each goes to the owner or a manager (ATT-6), and takes no fine until then. Its taps' minutes stay,
+            # which the rule read, to show when the worker came; the rules too, for whoever decides.
+            # - A closed day a worker tapped on all the same: the owner closed the shop at 10:00 for a funeral, and
+            #   Asha had clocked in at 07:20. Nobody can tell from the taps whether her morning is paid (Jack,
+            #   ATT-10).
+            # - A day with a tap in doubt (ATT-11): Juma's, made the morning after Baba suspended him, on a laptop
+            #   offline that didn't know yet (X2), or the one Asha's later tap disagrees with. His tap is real, but
+            #   whether to pay for it is a person's call.
+            # - A day outside the job's days that it tapped on, as above (ATT-11).
+            # Each says why (ATT-5), the first that holds, in ReviewReason's order: outside the job's days, then a
+            # closed day, then a tap in doubt. The book's reason comes before the rule's, as each asks whether the
+            # day is paid at all, whatever its times say: Juma suspended, with no Toka, is about the suspension.
+            why = (
+                ReviewReason.OUTSIDE_JOB
+                if outside
+                else ReviewReason.CLOSED_DAY
+                if day in closed
+                else in_doubt.get((job.pk, day))
+            )
+            if why is not None:
+                result = replace(result, status=DayStatus.NEEDS_REVIEW, fine=NO_FINE, reason=why)
+            answered.append(_worked_out(shop, job, day, result, rules_used))
+    return answered
 
 
 def _ran_on(job: StaffMember, day: dt.date) -> bool:
