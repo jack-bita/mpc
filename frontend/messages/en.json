@@ -1550,6 +1550,7 @@
     },
     "pay_run": {
       "already_approved": "This month's pay is already approved.",
+      "later_month_approved": "A later month is already approved, so this one is closed.",
       "month_not_over": "This month isn't over. It is approved once it is.",
       "nobody": "Nobody is paid in this month.",
       "earlier_month_open": "An earlier month isn't approved yet. Approve that one first.",

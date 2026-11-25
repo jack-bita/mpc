@@ -544,7 +544,7 @@ def test_an_advance_is_taken_once_with_leo(
 
 def test_an_advance_bigger_than_the_pay_leaves_a_minus(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
     # The money was given, so the pay says so: 10,000 earned, 25,000 taken. The whole counts her as 0 (WAGE-3, Jack: A):
-    # it is the cash to prepare, and Juma is owed his 10,000 whatever Asha owes.
+    # it is what the month pays, and Juma is owed his 10,000 whatever Asha owes.
     juma = paid(shop_a, "Juma")
     for staff in (asha, juma):
         kept_day(staff, *FULL, date=MON)

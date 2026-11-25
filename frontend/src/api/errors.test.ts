@@ -155,6 +155,7 @@ const CODES_THE_API_SENDS = [
   // A month's pay approved, one worker's alone, and whatever an approved month then refuses (WAGE-3).
   "pay.day_approved",
   "pay_run.already_approved",
+  "pay_run.later_month_approved",
   "pay_run.month_not_over",
   "pay_run.nobody",
   "pay_run.earlier_month_open",

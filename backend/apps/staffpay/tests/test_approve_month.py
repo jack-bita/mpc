@@ -28,8 +28,8 @@ from apps.control.models import EditEvent
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE
 from apps.core.tenancy import ShopMismatch, shop_context
-from apps.people.models import Device, DeviceStatus, StaffMember
-from apps.people.services import grant_permission, mark_left
+from apps.people.models import Device, DeviceStatus, PermissionGrant, StaffMember
+from apps.people.services import end_permission, grant_permission, mark_left, suspend
 from apps.shops.models import Shop, Side
 from apps.staffpay.models import (
     Advance,
@@ -48,6 +48,7 @@ from apps.staffpay.services import (
     OpenDay,
     PayMonth,
     WorkerPay,
+    approve_leaver,
     approve_month,
     decide_day,
     pay_month,
@@ -424,6 +425,50 @@ def test_an_earlier_month_still_open_refuses_it(
     approve(shop_a, baba, DECEMBER)
 
 
+def test_a_month_before_an_approved_one_is_closed_for_good(shop_a: Shop, baba: StaffMember) -> None:
+    # Juma's first day was moved to 1 November, November approved, and the day moved back: October lists him again, with
+    # nothing to pay. Months are approved in order (A3), so what is found in one before is mended in a later one
+    # (WAGE-9): the page offers no approval, and the service refuses one.
+    rule(shop_a, ATTENDANCE_ON, True, OCTOBER)
+    juma = paid(shop_a, "Juma", since=OCTOBER)
+    kept_day(juma, *FULL, date=MON)
+    with shop_context(shop_a):
+        StaffMember.objects.filter(pk=juma.pk).update(started_on=NOVEMBER)
+    approve(shop_a, baba)
+    with shop_context(shop_a):
+        StaffMember.objects.filter(pk=juma.pk).update(started_on=JAN_1)
+    october = month(shop_a, OCTOBER)
+    assert (line_of(october, "Juma").total, october.to_approve) == (NOTHING, None)
+    assert refused(shop_a, baba, OCTOBER).code == "pay_run.later_month_approved"
+    # Nor once he has left, alone.
+    with shop_context(shop_a):
+        juma = mark_left(juma, left_on=dt.date(2026, 11, 30), by=baba, reason="Amehamia Moshi")
+        assert worker_pay(shop_a, juma, OCTOBER).to_approve is None
+        with pytest.raises(ValidationError) as refusal:
+            approve_leaver(juma, OCTOBER, payslip_id=uuid.uuid7(), seen=NOTHING, by=baba)
+    assert refusal.value.code == "pay_run.later_month_approved"
+
+
+def test_the_earlier_months_are_worked_out_once(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Asha owes from October, so her debt asks whether a month between is open, and so does the approval: one reading
+    # of those months serves both, inside the lock everyone else waits for.
+    kept_day(asha, *FULL, date=MON)
+    with shop_context(shop_a):
+        Payslip.objects.create(shop=shop_a, staff=asha, month=OCTOBER, total=Decimal("-5000.00"), created_by=baba)
+    asked: list[dt.date] = []
+    real = pay_services.open_before
+
+    def noted(shop: Shop, of: dt.date) -> dict[uuid.UUID, dt.date]:
+        asked.append(of)
+        return real(shop, of)
+
+    monkeypatch.setattr(pay_services, "open_before", noted)
+    assert line_of(month(shop_a), "Asha").total == Decimal("5000.00")
+    assert asked == [NOVEMBER]
+
+
 def test_money_given_before_attendance_was_on_is_an_earlier_month(
     shop_a: Shop, baba: StaffMember, asha: StaffMember
 ) -> None:
@@ -720,8 +765,54 @@ def test_a_month_still_running_waits_for_nothing(shop_a: Shop, baba: StaffMember
 # Two at once.
 
 
+@pytest.fixture
+def meneja(shop_a: Shop, give_role: GiveRole) -> StaffMember:
+    # A manager the owner handed the three keys an approval asks.
+    staff = job(shop_a, "Meneja")
+    give_role(staff, RoleTemplate.MANAGER, None)
+    with shop_context(shop_a):
+        for key in approval_services.APPROVES:
+            grant_permission(staff, key, side=None, by=None)
+    return staff
+
+
 @pytest.mark.django_db(transaction=True)
-def test_two_people_approving_at_once_make_one_run(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+@pytest.mark.parametrize("lost", ["a key", "his work"])
+def test_a_key_taken_away_meanwhile_approves_nothing(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, meneja: StaffMember, lost: str
+) -> None:
+    # Baba takes the key from Meneja, or suspends him, and Meneja taps Idhinisha before it is saved: he holds the key
+    # still, waits for the lock, and is asked again once he has it. An approval is never undone (A3).
+    kept_day(asha, *FULL, date=MON)
+    shown = totals(month(shop_a))
+    with shop_context(shop_a):
+        [key] = PermissionGrant.objects.filter(staff=meneja, permission=Permission.PAY_APPROVE)
+
+    def approves() -> str:
+        with shop_context(shop_a):
+            try:
+                approve_month(shop_a, NOVEMBER, run_id=uuid.uuid7(), seen=shown, by=meneja)
+            except PermissionDenied:
+                return "refused"
+        return "approved"
+
+    with shop_context(shop_a), transaction.atomic():
+        if lost == "a key":
+            end_permission(key, reason="Baba ataidhinisha mwenyewe", by=baba)
+        else:
+            suspend(meneja, reason="Uchunguzi", by=baba)
+        thread, ended = in_another_transaction(approves)
+        wait_until_someone_waits_for_me()
+    thread.join()
+    assert ended == ["refused"]
+    with shop_context(shop_a):
+        assert not PayRun.objects.exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_people_approving_at_once_make_one_run(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, meneja: StaffMember
+) -> None:
     # Baba and Meneja both tap Idhinisha. The second waits for the first, then finds the month approved.
     kept_day(asha, *FULL, date=MON)
     shown = totals(month(shop_a))
@@ -729,7 +820,7 @@ def test_two_people_approving_at_once_make_one_run(shop_a: Shop, baba: StaffMemb
     def again() -> str:
         with shop_context(shop_a):
             try:
-                approve_month(shop_a, NOVEMBER, run_id=uuid.uuid7(), seen=shown, by=baba)
+                approve_month(shop_a, NOVEMBER, run_id=uuid.uuid7(), seen=shown, by=meneja)
             except ValidationError as refusal:
                 return str(refusal.code)
         return "approved"

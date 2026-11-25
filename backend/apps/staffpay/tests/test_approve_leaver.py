@@ -20,13 +20,14 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.utils import timezone
 
-from apps.core.permissions import RoleTemplate
+from apps.core.permissions import Permission, RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import ShopMismatch, shop_context
-from apps.people.models import Device, StaffMember
-from apps.people.services import grant_permission, hire_again, mark_left
+from apps.people.models import Device, PermissionGrant, StaffMember
+from apps.people.services import end_permission, grant_permission, hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
 from apps.staffpay.models import AttendanceDay, ClockKind, DayChoice, DayStatus, PayRun, Payslip, PayslipLine
 from apps.staffpay.services import (
@@ -46,7 +47,9 @@ from apps.staffpay.services import (
     worker_pay,
 )
 from apps.staffpay.services import approval as approval_services
+from apps.staffpay.services import pay as pay_services
 from apps.staffpay.tests.days import doubted_tap, job, kept_day, rule, tapped
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -340,6 +343,29 @@ def test_a_last_day_that_is_off_is_approved(
         assert AttendanceDay.objects.get(staff=neema, date=TODAY).status == DayStatus.OFF
 
 
+def test_midnight_passing_as_it_is_read_keeps_nothing(
+    shop_a: Shop, baba: StaffMember, worked: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 23:59: what Baba read holds today as Leo. Midnight passes as her days are asked for, and the book keeps today as a
+    # day gone by: kept a second time, it would be an error of the database's. He reads it again, and it is the same.
+    leaves(worked, baba)
+    shown = page(worked).worker.total
+    real = pay_services.read_parts
+
+    def past_midnight(shop: Shop, first: dt.date, last: dt.date, today: dt.date) -> Any:
+        monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 11, 15, 0, 0)))
+        return real(shop, first, last, today)
+
+    monkeypatch.setattr(approval_services, "read_parts", past_midnight)
+    with shop_context(shop_a):
+        with pytest.raises(ValidationError) as refusal:
+            approve_leaver(worked, NOVEMBER, payslip_id=uuid.uuid7(), seen=shown, by=baba)
+        assert refusal.value.code == "pay_run.totals_moved"
+        assert not Payslip.objects.exists()
+    monkeypatch.setattr(approval_services, "read_parts", real)
+    assert approve(worked, baba).total == shown == Decimal("62000.00")
+
+
 def test_one_marked_as_gone_days_later(
     shop_a: Shop, baba: StaffMember, worked: StaffMember, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -517,6 +543,112 @@ def test_without_each_key_nobody_approves_one_alone(
         with pytest.raises(PermissionDenied):
             approve_leaver(worked, NOVEMBER, payslip_id=uuid.uuid7(), seen=Decimal("62000"), by=meneja)
         assert not Payslip.objects.exists()
+
+
+# Two at once.
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_key_taken_away_meanwhile_approves_nobody(
+    shop_a: Shop, baba: StaffMember, worked: StaffMember, give_role: GiveRole
+) -> None:
+    # As for a month: Baba takes the key from Meneja while Meneja taps Idhinisha.
+    meneja = job(shop_a, "Meneja")
+    give_role(meneja, RoleTemplate.MANAGER, None)
+    leaves(worked, baba)
+    with shop_context(shop_a):
+        for key in approval_services.APPROVES:
+            grant_permission(meneja, key, side=None, by=None)
+        [mine] = PermissionGrant.objects.filter(staff=meneja, permission=Permission.PAY_APPROVE)
+
+    def approves() -> str:
+        with shop_context(shop_a):
+            try:
+                approve_leaver(worked, NOVEMBER, payslip_id=uuid.uuid7(), seen=Decimal("62000"), by=meneja)
+            except PermissionDenied:
+                return "refused"
+        return "approved"
+
+    with shop_context(shop_a), transaction.atomic():
+        end_permission(mine, reason="Baba ataidhinisha mwenyewe", by=baba)
+        thread, ended = in_another_transaction(approves)
+        wait_until_someone_waits_for_me()
+    thread.join()
+    assert ended == ["refused"]
+    with shop_context(shop_a):
+        assert not Payslip.objects.exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_people_approving_one_at_once_make_one_payslip(
+    shop_a: Shop, baba: StaffMember, worked: StaffMember
+) -> None:
+    leaves(worked, baba)
+
+    def again() -> str:
+        with shop_context(shop_a):
+            try:
+                approve_leaver(worked, NOVEMBER, payslip_id=uuid.uuid7(), seen=Decimal("62000"), by=baba)
+            except ValidationError as refusal:
+                return str(refusal.code)
+        return "approved"
+
+    with shop_context(shop_a), transaction.atomic():
+        approve_leaver(worked, NOVEMBER, payslip_id=uuid.uuid7(), seen=Decimal("62000"), by=baba)
+        thread, ended = in_another_transaction(again)
+        wait_until_someone_waits_for_me()
+    thread.join()
+    assert ended == ["payslip.already_approved"]
+    with shop_context(shop_a):
+        assert Payslip.objects.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_leaver_beside_the_months_approval_waits_and_is_refused(
+    shop_a: Shop, baba: StaffMember, worked: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # On 1 December, November is approved for everyone as Neema is approved alone: one payslip of hers, the month's.
+    leaves(worked, baba)
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 12, 1, 19, 0)))
+    shown = {line.staff_id: line.total for line in month(shop_a).workers}
+
+    def alone() -> str:
+        with shop_context(shop_a):
+            try:
+                approve_leaver(worked, NOVEMBER, payslip_id=uuid.uuid7(), seen=shown[worked.pk], by=baba)
+            except ValidationError as refusal:
+                return str(refusal.code)
+        return "approved"
+
+    with shop_context(shop_a), transaction.atomic():
+        run = approve_month(shop_a, NOVEMBER, run_id=uuid.uuid7(), seen=shown, by=baba)
+        thread, ended = in_another_transaction(alone)
+        wait_until_someone_waits_for_me()
+    thread.join()
+    assert ended == ["pay_run.already_approved"]
+    with shop_context(shop_a):
+        assert list(Payslip.objects.values_list("staff", "pay_run")) == [(worked.pk, run.pk)]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_money_given_beside_it_waits_and_is_refused(shop_a: Shop, baba: StaffMember, worked: StaffMember) -> None:
+    # Baba types an advance of hers at the counter as her pay is being approved: it waits, and finds her month closed.
+    leaves(worked, baba)
+
+    def gives() -> str:
+        with shop_context(shop_a):
+            try:
+                record_advance(worked, advance_id=uuid.uuid7(), date=TODAY, amount=Decimal("5000"), by=baba)
+            except ValidationError as refusal:
+                return ",".join(error.code or "" for errors in refusal.error_dict.values() for error in errors)
+        return "given"
+
+    with shop_context(shop_a), transaction.atomic():
+        approve_leaver(worked, NOVEMBER, payslip_id=uuid.uuid7(), seen=Decimal("62000"), by=baba)
+        thread, ended = in_another_transaction(gives)
+        wait_until_someone_waits_for_me()
+    thread.join()
+    assert ended == ["pay.day_approved"]
 
 
 def test_another_shops_person_is_a_bug(

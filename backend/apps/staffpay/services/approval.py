@@ -38,7 +38,7 @@ from apps.shops.models import Shop
 from apps.shops.selectors import shop_today
 from apps.staffpay.calculations import PaidAs, Pay, add_up, work_out_pay
 from apps.staffpay.models import AttendanceDay, PayRun, Payslip, PayslipLine, PayslipLineKind
-from apps.staffpay.selectors import advances_by_job
+from apps.staffpay.selectors import advances_by_job, is_closed
 from apps.staffpay.services.book import lock_jobs, month_span
 from apps.staffpay.services.pay import (
     OpenDay,
@@ -63,25 +63,24 @@ def approve_month(
     none yet, its lines, and each of its days marked as paid, all in one transaction. `run_id`: the client's (ADR-0007),
     so the route answers a request sent twice with the run it made (CreateOnceMixin). `seen`: each worker's total as the
     person read it, by job, those approved alone among them. `by`: who approves, with pay.approve and the two keys of
-    pay on the whole shop. Refuses: a month approved already (pay_run.already_approved), one not over yet
-    (pay_run.month_not_over), one with nobody to pay (pay_run.nobody), one while an earlier month is open
-    (pay_run.earlier_month_open), a day that waits for a decision (pay_run.days_waiting), a day to pay with no rate
-    (pay_run.days_without_rate), and totals that are no longer those seen (pay_run.totals_moved). The shop must be open.
-    Returns the run as saved."""
+    pay on the whole shop. Refuses: a month approved already (pay_run.already_approved), one before a month approved
+    (pay_run.later_month_approved), one not over yet (pay_run.month_not_over), one with nobody to pay (pay_run.nobody),
+    one while an earlier month is open (pay_run.earlier_month_open), a day that waits for a decision
+    (pay_run.days_waiting), a day to pay with no rate (pay_run.days_without_rate), and totals that are no longer those
+    seen (pay_run.totals_moved). The shop must be open. Returns the run as saved."""
     # A job of another shop approving this shop's pay is a bug in the calling code (T1), never a person's mistake: the
     # route finds both in the one shop open. A server error, before anything is read.
     if by.shop_id != shop.pk:
         raise ShopMismatch("approve_month was given a person of another shop.")
     first, last = month_span(month)
     with transaction.atomic():
-        # First, so someone without a key sets nothing to work; read afresh, so one taken away a moment ago counts.
-        _ask_who_approves(by)
         # The book's lock, before anything the pay is made of is read, and held until the run is kept: a decision, a
         # tap, a rate, an advance or meal money sent now waits, and then finds the month approved. And two people
         # approving at once take turns here: the second finds the run.
-        lock_jobs(shop)
+        _, by = _locked_by(shop, by)
         if run_of(shop, first) is not None:
             raise ValidationError("This month's pay is approved already.", code="pay_run.already_approved")
+        _refuse_before_an_approved_month(shop, first)
         today = shop_today(shop)
         if today <= last:
             # Its last day isn't over, by the shop's own calendar, so nobody knows yet what it pays.
@@ -118,19 +117,19 @@ def approve_leaver(
     2026): their payslip, its lines, and their days marked as paid, today's kept with them when they go tonight (Leo).
     `payslip_id`: the client's (ADR-0007), as a run's. `seen`: the total the person read. `by`: who approves, as for a
     month, and never one's own. Refuses: one's own (payslip.own); a worker who hasn't left (payslip.not_left); a month
-    approved already (pay_run.already_approved), or theirs (payslip.already_approved); nothing to pay
-    (payslip.nothing); still clocked in today (payslip.still_clocked_in); and, as a month's, an earlier month of theirs
-    still open, a day of theirs that waits or has no rate, and a total that is no longer the one seen. The shop must be
-    open. Returns the payslip as saved."""
+    approved already (pay_run.already_approved), one before a month approved (pay_run.later_month_approved), or theirs
+    (payslip.already_approved); nothing to pay (payslip.nothing); still clocked in today (payslip.still_clocked_in);
+    and, as a month's, an earlier month of theirs still open, a day of theirs that waits or has no rate, and a total
+    that is no longer the one seen. The shop must be open. Returns the payslip as saved."""
     if by.shop_id != staff.shop_id:
         raise ShopMismatch("approve_leaver was given a person of another shop.")
     shop = Shop.objects.get(pk=staff.shop_id)
     first, last = month_span(month)
     with transaction.atomic():
-        _ask_who_approves(by)
         # The same lock as the month's, so the two never both make a payslip of theirs; and the job read afresh with it,
         # as it may have just been marked as gone.
-        staff = next(job for job in lock_jobs(shop) if job.pk == staff.pk)
+        jobs, by = _locked_by(shop, by)
+        staff = next(job for job in jobs if job.pk == staff.pk)
         # Never one's own, alone (as an advance, WAGE-8): someone hired again would close their old job's pay on their
         # own word. By the person, not the job.
         if staff.user_id == by.user_id:
@@ -142,10 +141,15 @@ def approve_leaver(
             raise ValidationError("This month's pay is approved already.", code="pay_run.already_approved")
         if Payslip.objects.filter(shop=shop, staff=staff, month=first).exists():
             raise ValidationError("This worker's pay is approved already.", code="payslip.already_approved")
+        _refuse_before_an_approved_month(shop, first, staff.pk)
         today = shop_today(shop)
         if today < first:
             raise ValidationError("This worker has no pay in this month.", code="payslip.nothing")
         parts = read_parts(shop, first, last, today)
+        if shop_today(shop) != today:
+            # Midnight passed as the month was read, so what the page showed as today is a day gone by, which the book
+            # may have kept a moment ago. The person reads the page again, which says it so.
+            raise ValidationError("A total has changed since it was read.", code="pay_run.totals_moved")
         line = next((line for line in draft_of(shop, parts).workers if line.staff_id == staff.pk), None)
         if line is None:
             raise ValidationError("This worker has no pay in this month.", code="payslip.nothing")
@@ -172,9 +176,29 @@ def approve_leaver(
     return slip
 
 
+def _locked_by(shop: Shop, by: StaffMember) -> tuple[list[StaffMember], StaffMember]:
+    # The book's lock, every job of the shop, with who approves asked of their own row under it: Baba takes Meneja's key
+    # away, or suspends him, while Meneja taps Idhinisha. Taking a key holds his job's row, which the lock waits for, so
+    # asked only before it, the key he no longer holds would approve a month for good (AUTH-8's order, as set_pay_rate
+    # keeps it). Asked before it too, so someone without a key sets nothing to work and holds nobody up.
+    _ask_who_approves(by)
+    jobs = lock_jobs(shop)
+    by = next(job for job in jobs if job.pk == by.pk)
+    _ask_who_approves(by)
+    return jobs, by
+
+
 def _ask_who_approves(by: StaffMember) -> None:
     for key in APPROVES:
         require(by, key, None)
+
+
+def _refuse_before_an_approved_month(shop: Shop, month: dt.date, job: uuid.UUID | None = None) -> None:
+    # Months are approved in order (A3), so one before an approved month is closed, with no payslip of its own or with
+    # one: Juma's first day moved to 1 November, November approved, and the day moved back to October, whose days then
+    # say he is owed. Nothing pays them by themselves: they are mended in a later month (WAGE-9).
+    if is_closed(shop, month, job):
+        raise ValidationError("A later month's pay is approved.", code="pay_run.later_month_approved")
 
 
 def _refuse_if_stopped(stops: ToApprove) -> None:

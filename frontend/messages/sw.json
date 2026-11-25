@@ -1550,6 +1550,7 @@
     },
     "pay_run": {
       "already_approved": "Malipo ya mwezi huu yameshaidhinishwa.",
+      "later_month_approved": "Mwezi wa baadaye umeshaidhinishwa, kwa hiyo mwezi huu umefungwa.",
       "month_not_over": "Mwezi huu haujaisha. Utaidhinishwa ukiisha.",
       "nobody": "Hakuna mfanyakazi wa kulipwa katika mwezi huu.",
       "earlier_month_open": "Kuna mwezi wa nyuma ambao haujaidhinishwa. Uidhinishe huo kwanza.",

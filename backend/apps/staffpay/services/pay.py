@@ -22,6 +22,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from decimal import Decimal
+from functools import cached_property
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
@@ -60,6 +61,7 @@ from apps.staffpay.models import (
 from apps.staffpay.selectors import (
     QuietLaptop,
     advances_between,
+    is_closed,
     meal_money_by_date,
     quiet_laptops,
     rates_between,
@@ -175,6 +177,7 @@ class MonthsParts:
     # that are over, in their order; today's, by job, while the month runs; the rates and the settings on each day; what
     # each was given before payday; the payslips already kept, of those approved alone; and who has a line. The approval
     # keeps a month from the very parts the page showed it from (approval.py), read inside its lock.
+    shop: Shop
     first: dt.date
     last: dt.date
     today: dt.date
@@ -191,6 +194,12 @@ class MonthsParts:
     def open_jobs(self) -> set[uuid.UUID]:
         # The jobs with pay of this month that no payslip keeps yet.
         return self.workers.keys() - self.kept.keys()
+
+    @cached_property
+    def open_before(self) -> dict[uuid.UUID, dt.date]:
+        # Each job with pay still open in an earlier month (open_before, below). Once for all that ask, as each month is
+        # read for it: a debt waits for them, and so does the approval.
+        return open_before(self.shop, self.first)
 
     def tonight(self, job: uuid.UUID) -> AttendanceDay | None:
         # Today's day of a job once it counts: when a Toka has ended it (first_out, ATT-4). Until then it is still
@@ -221,8 +230,8 @@ def pay_month(shop: Shop, month: dt.date) -> PayMonth:
     (work_out_days), so it writes as the book does, and asked twice writes nothing the second time; the draft itself is
     never kept. The shop must be open, as for the book."""
     answer, parts = _month(shop, month)
-    if parts is None or parts.today <= parts.last or not answer.workers:
-        # Approved, to come, still running, or nobody to pay: nothing to approve.
+    if parts is None or parts.today <= parts.last or not answer.workers or is_closed(shop, parts.first):
+        # Approved, to come, still running, nobody to pay, or before an approved month: nothing to approve.
         return answer
     return replace(answer, to_approve=what_stops(shop, parts, answer))
 
@@ -259,7 +268,11 @@ def worker_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
     line = next((line for line in whole.workers if line.staff_id == job.pk), None)
     alone = (
         what_stops_alone(shop, parts, line)
-        if parts is not None and line is not None and line.approval is None and job.status == StaffStatus.LEFT
+        if parts is not None
+        and line is not None
+        and line.approval is None
+        and job.status == StaffStatus.LEFT
+        and not is_closed(shop, parts.first, job.pk)
         else None
     )
     return WorkerPayMonth(
@@ -315,6 +328,7 @@ def read_parts(shop: Shop, first: dt.date, last: dt.date, today: dt.date) -> Mon
     for day in days:
         over[day.staff_id].append(day)
     return MonthsParts(
+        shop=shop,
         first=first,
         last=last,
         today=today,
@@ -375,7 +389,7 @@ def what_stops(shop: Shop, parts: MonthsParts, draft: PayMonth) -> ToApprove:
     from. Asked by the page, to say it before the tap, and by the approval itself, which refuses by it."""
     open_lines = [line for line in draft.workers if line.approval is None]
     return ToApprove(
-        earlier=min(open_before(shop, parts.first).values(), default=None),
+        earlier=min(parts.open_before.values(), default=None),
         waiting=_by_date((line, day) for line in open_lines for day in line.waiting_on),
         no_rate=_by_date((line, day) for line in open_lines for day in line.no_rate_on),
         quiet_laptops=quiet_laptops(shop, _midnight(shop, parts.last + dt.timedelta(days=1))),
@@ -407,7 +421,7 @@ def what_stops_alone(shop: Shop, parts: MonthsParts, line: WorkerPay) -> ToAppro
     # morning.
     since = min((line.left_on or parts.last) + dt.timedelta(days=1), parts.last + dt.timedelta(days=1), parts.today)
     return ToApprove(
-        earlier=open_before(shop, parts.first).get(job),
+        earlier=parts.open_before.get(job),
         waiting=_by_date((line, day) for day in (*line.waiting_on, *waits)),
         no_rate=_by_date((line, day) for day in (*line.no_rate_on, *no_rate)),
         quiet_laptops=quiet_laptops(shop, _midnight(shop, since)),
@@ -479,8 +493,7 @@ def _debts(shop: Shop, parts: MonthsParts) -> dict[uuid.UUID, tuple[dt.date, Dec
     if not owed:
         # Nearly always: nothing more is read.
         return owed
-    between = open_before(shop, parts.first)
-    return {job: debt for job, debt in owed.items() if job not in between}
+    return {job: debt for job, debt in owed.items() if job not in parts.open_before}
 
 
 def _approved(shop: Shop, run: PayRun, last: dt.date, today: dt.date) -> PayMonth:
@@ -560,8 +573,9 @@ def _approval_of(row: PayRun | Payslip) -> Approval:
 
 
 def _cash(lines: Iterable[WorkerPay]) -> Decimal:
-    # The cash to prepare (WAGE-3, Jack: A): one who owes is handed nothing, so they count as 0. Their minus would make
-    # the whole less than what the others are owed, and Baba would come short at the counter.
+    # What the month pays in all (WAGE-3, Jack: A): one who owes is handed nothing, so they count as 0. Their minus
+    # would make the whole less than what the others are owed, and Baba would come short at the counter. One approved
+    # alone counts too, though they were paid the evening they left: what is still to hand over is WAGE-9's.
     return add_up(cash_to_pay(line.total) for line in lines)
 
 
