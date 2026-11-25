@@ -58,6 +58,15 @@ export function isForgotten(day: MealDay): boolean {
 /** Days from one to another, both counted, as the server takes them: "2026-11-20". */
 export type Span = { first: string; last: string };
 
+/** Whether the pay of `day` is approved (WAGE-3), as the server says up to which day it is: no money of it is typed or
+ * crossed out any more. Days as text sort as days do. */
+export function isClosed(
+  answer: Pick<MealMoneyDays, "closed_to">,
+  day: string,
+): boolean {
+  return answer.closed_to !== null && day <= answer.closed_to;
+}
+
 /** A month's first and last day: "2026-11" → 01/11 to 30/11. Day 0 of the month after is this one's last, and Date.UTC
  * counts a leap February by itself; in UTC, so no zone moves it. */
 export function monthSpan(month: string): Span {

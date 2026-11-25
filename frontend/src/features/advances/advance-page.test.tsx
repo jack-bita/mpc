@@ -138,6 +138,35 @@ describe("one advance", () => {
     expect((await facts()).at(-1)).toBe("Sababu: Sifuri moja zaidi");
   });
 
+  it("offers no Batilisha once the pay it came off is approved, and says why", async () => {
+    thePageIs(advancePageOf(JUMAS, { closed: true }));
+
+    render(<AdvanceScreen id={JUMAS.id} />);
+
+    expect((await facts()).at(-1)).toBe(
+      "Malipo yake ya mwezi huo yameidhinishwa, kwa hiyo advansi hii haibatilishwi.",
+    );
+    expect(screen.queryByRole("button", { name: "Batilisha" })).toBeNull();
+  });
+
+  it("says the pay is approved on one's own too, not that someone else may", async () => {
+    // Nobody may cross it out now, so "someone else" would send Meneja to ask Baba for nothing.
+    thePageIs(advancePageOf(JUMAS, { own: true, closed: true }));
+
+    render(<AdvanceScreen id={JUMAS.id} />);
+
+    expect((await facts()).at(-1)).toMatch(/yameidhinishwa/);
+    expect(screen.queryByText(/Hii ni advansi yako/)).toBeNull();
+  });
+
+  it("says nothing of the pay on one crossed out before it was approved", async () => {
+    thePageIs(advancePageOf(CROSSED, { closed: true }));
+
+    render(<AdvanceScreen id={JUMAS.id} />);
+
+    expect((await facts()).at(-1)).toBe("Sababu: Sifuri moja zaidi");
+  });
+
   it("crosses it out from its button, and shows it struck through with the keyboard on it", async () => {
     thePageIs(advancePageOf(JUMAS));
     render(<AdvanceScreen id={JUMAS.id} />);

@@ -788,12 +788,14 @@
     "waiting": "{count, plural, one {1 anasubiri uamuzi} other {# wanasubiri uamuzi}}",
     "none": "Hakuna siku ya kuonyesha katika mwezi huu.",
     "noneChosen": "Hakuna siku ya kuonyesha katika siku hizi.",
+    "closed": "Malipo ya siku hizi yameidhinishwa, kwa hiyo hela ya chakula ya siku hizo haibadiliki tena.",
     "daysChosenLabel": "Siku ulizochagua",
     "span": "{first} hadi {last}",
     "wholeMonth": "Mwezi mzima",
     "dayPage": {
       "noDay": "Hakuna siku iliyochaguliwa.",
       "none": "Hakuna hela ya chakula siku hii.",
+      "closed": "Malipo ya siku hii yameidhinishwa, kwa hiyo hela yake ya chakula haibadiliki tena.",
       "total": "Jumla {amount}",
       "rowsLabel": "Hela iliyoandikwa siku hii",
       "rowWithNote": "{amount} · {note}",
@@ -833,6 +835,7 @@
     "line": "{weekday} {date} · {name}",
     "voided": "Imebatilishwa",
     "none": "Hakuna advansi katika mwezi huu.",
+    "closed": "Malipo ya mwezi huu yameidhinishwa, kwa hiyo advansi zake hazibadiliki tena.",
     "record": {
       "title": "Andika advansi",
       "worker": "Mfanyakazi",
@@ -851,7 +854,8 @@
       "typedBy": "Imeandikwa na {by} · {date} {time}",
       "voidedBy": "Imebatilishwa na {by}, {date}",
       "reason": "Sababu: {reason}",
-      "own": "Hii ni advansi yako. Mtu mwingine ndiye anayeweza kuibatilisha."
+      "own": "Hii ni advansi yako. Mtu mwingine ndiye anayeweza kuibatilisha.",
+      "closed": "Malipo yake ya mwezi huo yameidhinishwa, kwa hiyo advansi hii haibatilishwi."
     },
     "void": {
       "title": "Batilisha {amount}",

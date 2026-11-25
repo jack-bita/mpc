@@ -274,6 +274,78 @@ describe("the month's meal money", () => {
     expect(await lines()).toEqual(["Jumanne 24/11 (leo) | Haijaandikwa"]);
   });
 
+  it("says a month's pay is approved once every day of it is, and still types today's", async () => {
+    window.history.replaceState(null, "", "/meal-money/?month=2026-10");
+    theShopHas({
+      "2026-10-01 2026-10-31": mealDays([mealDay({ date: "2026-10-31" })], {
+        first: "2026-10-01",
+        last: "2026-10-31",
+        closed_to: "2026-10-31",
+      }),
+    });
+
+    render(<MealMoneyScreen />);
+
+    expect(
+      await screen.findByText(
+        "Malipo ya siku hizi yameidhinishwa, kwa hiyo hela ya chakula ya siku hizo haibadiliki tena.",
+      ),
+    ).toBeTruthy();
+    expect(await lines()).toHaveLength(1);
+    // Today's is still typed from any month: it is only the closed days that take none.
+    expect(
+      screen.getByRole("button", { name: "Andika hela ya chakula" }),
+    ).toBeTruthy();
+  });
+
+  it("says nothing of it while a day shown is still open", async () => {
+    // October is approved, and November, the month shown, is not.
+    theShopHas({
+      "2026-11-01 2026-11-30": { ...NOVEMBER, closed_to: "2026-10-31" },
+    });
+
+    render(<MealMoneyScreen />);
+
+    await lines();
+    expect(screen.queryByText(/yameidhinishwa/)).toBeNull();
+  });
+
+  it("says nothing of it on days chosen across the last approved one", async () => {
+    // Two days of October, approved, and one of November, where a day's money can still be written.
+    window.history.replaceState(
+      null,
+      "",
+      "/meal-money/?first=2026-10-30&last=2026-11-02",
+    );
+    theShopHas({
+      "2026-10-30 2026-11-02": mealDays([mealDay({ date: "2026-11-02" })], {
+        first: "2026-10-30",
+        last: "2026-11-02",
+        closed_to: "2026-10-31",
+      }),
+    });
+
+    render(<MealMoneyScreen />);
+
+    await screen.findByRole("list", { name: "Siku ulizochagua" });
+    expect(screen.queryByText(/yameidhinishwa/)).toBeNull();
+  });
+
+  it("says a month's pay is approved though nobody wrote any money in it", async () => {
+    window.history.replaceState(null, "", "/meal-money/?month=2026-10");
+    theShopHas({
+      "2026-10-01 2026-10-31": mealDays([], {
+        first: "2026-10-01",
+        last: "2026-10-31",
+        closed_to: "2026-10-31",
+      }),
+    });
+
+    render(<MealMoneyScreen />);
+
+    expect(await screen.findByText(/yameidhinishwa/)).toBeTruthy();
+  });
+
   it("says when a month has none", async () => {
     theShopHas({});
 

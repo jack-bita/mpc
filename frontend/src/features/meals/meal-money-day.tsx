@@ -19,6 +19,7 @@
 // At /meal-money/day/?date=…, as the app has no [id] pages (ADR-0016): the page around it reads the day from the address.
 // The day alone is asked for, from the list's own route, so its sums and split are the server's. A row crossed out stays,
 // struck through, with who, when and why (A2); Batilisha, under a row that counts, opens its sheet (void-meal-money.tsx).
+// On a day whose pay is approved neither Andika nor Batilisha shows, and the page says why (WAGE-3).
 // Andika hela ya chakula starts on the day itself: not on a Sunday, or a day to come, which the server would refuse.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
@@ -44,6 +45,7 @@ import {
 } from "@/lib/format";
 
 import {
+  isClosed,
   isDay,
   isForgotten,
   isTyped,
@@ -121,6 +123,8 @@ function TheDay({
   // The day, or none: a Sunday, or a day nobody came and nobody typed, isn't answered (meal_money_days).
   const day = answer.days[0];
   const rows = day?.rows ?? [];
+  // Its pay is approved (WAGE-3): what each paid for these meals is final, so nothing here is typed or crossed out.
+  const closed = isClosed(answer, date);
   return (
     <>
       <div className="grid gap-1">
@@ -155,6 +159,7 @@ function TheDay({
               <li key={row.id} className="grid gap-1 px-4 py-3">
                 <Row
                   row={row}
+                  closed={closed}
                   readyReasons={answer.ready_void_reasons}
                   timezone={timezone}
                 />
@@ -164,7 +169,9 @@ function TheDay({
         </Card>
       )}
       {/* Days as text sort as days do. */}
-      {date <= answer.today && weekdayOf(date) !== SUNDAY ? (
+      {closed ? (
+        <p>{t("dayPage.closed")}</p>
+      ) : date <= answer.today && weekdayOf(date) !== SUNDAY ? (
         <RecordMealMoney day={date} today={answer.today} />
       ) : null}
     </>
@@ -174,10 +181,13 @@ function TheDay({
 /** One row: what it bought, who typed it and when, and Batilisha, or who crossed it out, when and why. */
 function Row({
   row,
+  closed,
   readyReasons,
   timezone,
 }: {
   row: MealMoneyLine;
+  /** Its day's pay is approved: no Batilisha. */
+  closed: boolean;
   readyReasons: MealMoneyDays["ready_void_reasons"];
   timezone: string;
 }) {
@@ -221,21 +231,23 @@ function Row({
         })}
       </p>
       {row.voided === null ? (
-        <Button
-          ref={button}
-          kind="second"
-          size="normal"
-          className="justify-self-start"
-          // By its row too, the amount and the note: a day has several, each with a Batilisha, and two may be of one
-          // amount. Its visible word first (WCAG 2.5.3).
-          aria-label={t("void.title", { amount: said })}
-          onClick={() => {
-            afterVoid.current = false;
-            setCrossing(true);
-          }}
-        >
-          {t("void.action")}
-        </Button>
+        closed ? null : (
+          <Button
+            ref={button}
+            kind="second"
+            size="normal"
+            className="justify-self-start"
+            // By its row too, the amount and the note: a day has several, each with a Batilisha, and two may be of one
+            // amount. Its visible word first (WCAG 2.5.3).
+            aria-label={t("void.title", { amount: said })}
+            onClick={() => {
+              afterVoid.current = false;
+              setCrossing(true);
+            }}
+          >
+            {t("void.action")}
+          </Button>
+        )
       ) : (
         <>
           <p>

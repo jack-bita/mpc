@@ -155,6 +155,44 @@ describe("the month's advances", () => {
     );
   });
 
+  it("offers none to write in a month whose pay is approved, and says why", async () => {
+    theShopHas({
+      "2026-11": NOVEMBER,
+      "2026-10": { ...NOVEMBER, month: "2026-10", closed: true },
+    });
+    window.history.replaceState(null, "", "/advances/?month=2026-10");
+
+    render(<AdvancesScreen />);
+
+    expect(
+      await screen.findByText(
+        "Malipo ya mwezi huu yameidhinishwa, kwa hiyo advansi zake hazibadiliki tena.",
+      ),
+    ).toBeTruthy();
+    // Those given in it stay to be read.
+    expect(await lines()).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: "Andika advansi" })).toBeNull();
+  });
+
+  it("says why in an approved month with none too", async () => {
+    theShopHas({ "2026-11": advancesMonth([], { closed: true }) });
+
+    render(<AdvancesScreen />);
+
+    expect(await screen.findByText(/yameidhinishwa/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Andika advansi" })).toBeNull();
+  });
+
+  it("says nothing of it in a month still open, and offers to write one", async () => {
+    theShopHas({ "2026-11": NOVEMBER });
+
+    render(<AdvancesScreen />);
+
+    await lines();
+    expect(screen.queryByText(/yameidhinishwa/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Andika advansi" })).toBeTruthy();
+  });
+
   it("says when a month has none", async () => {
     theShopHas({});
 

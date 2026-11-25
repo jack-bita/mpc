@@ -366,6 +366,25 @@ describe("the server's refusals", () => {
     );
   });
 
+  it("shows beside its box that a day's pay is approved (WAGE-3)", async () => {
+    theServerHas(payRates([], null));
+    answer(
+      "POST",
+      PAY_RATES_ROUTE,
+      refusal(400, "invalid", {}, { effective_from: ["pay.day_approved"] }),
+    );
+    await openTheForm("Weka malipo");
+
+    typeInto(box("Kiasi kwa siku"), "10000");
+    fireEvent.click(sheetButton("Hifadhi malipo"));
+
+    await waitFor(() =>
+      expect(errorOf(box("Kuanzia"))).toBe(sentence("pay.day_approved")),
+    );
+    // The form stays, so a day still open can be picked.
+    expect(box("Kiasi kwa siku").value).toBe("10000");
+  });
+
   it("shows a box's refusal beside it, as the demo's note", async () => {
     theServerHas(payRates([], null));
     answer(
