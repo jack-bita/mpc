@@ -9,9 +9,9 @@
 // as Vifaa holds every device. The order is the server's, kept: a new worker comes first, where the owner who just
 // added him looks.
 //
-// Behind staff.manage on the whole shop (PPL-4): the page shows each worker's roles, and later their pay (WAGE-2),
-// which are the owner's to see. The office home offers the button only to someone holding it; the server asks the
-// key again on every read and every change.
+// Behind staff.manage on the whole shop (PPL-4): the page shows each worker's roles, which are the owner's to see, and
+// their pay to whoever may see that too (maySeePay, pay-rates.ts). The office home offers the button only to someone
+// holding it; the server asks the key again on every read and every change.
 "use client";
 
 import {
