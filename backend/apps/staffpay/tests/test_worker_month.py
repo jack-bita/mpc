@@ -47,6 +47,7 @@ from apps.staffpay.models import (
     ClockKind,
     DayChoice,
     DayStatus,
+    MealMoney,
     NoPhoto,
     ReviewReason,
     TimeCheck,
@@ -61,6 +62,7 @@ from apps.staffpay.services import (
     WorkerDay,
     add_tap,
     decide_day,
+    set_pay_rate,
     void_tap,
     worker_attendance,
 )
@@ -177,6 +179,25 @@ def test_the_workers_days_and_counts(shop_a: Shop, device_a: Device, asha: Staff
     assert days[dt.date(2026, 10, 4)].status == DayStatus.OFF
     assert all(day.reason is None for day in answer.days)
     assert answer.today == shop_today(shop_a)
+
+
+def test_a_day_says_its_share_of_the_meals(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # The 1st's meals cost 2,000: Asha and Juma came and share them, 1,000 each, as the book kept it, never worked out
+    # again here (WAGE-7). The 2nd, when she came and nobody typed any money, has no share; nor has a day she was away.
+    for each in (asha, juma):
+        tap(device_a, each, ClockKind.IN, on(1, 7, 20))
+        tap(device_a, each, ClockKind.OUT, on(1, 18, 45))
+        with shop_context(shop_a):
+            set_pay_rate(each, daily_rate=Decimal("10000"), effective_from=dt.date(2026, 9, 1), by=None)
+    tap(device_a, asha, ClockKind.IN, on(2, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, on(2, 18, 45))
+    with shop_context(shop_a):
+        for day in (1, 5):
+            MealMoney(shop=shop_a, date=dt.date(2026, 10, day), amount=Decimal("2000"), created_by=juma).save()
+    days = {day.date.day: day for day in month_of(shop_a, asha).days}
+    assert (days[1].meal_share, days[2].meal_share, days[5].meal_share) == (Decimal("1000"), Decimal("0"), Decimal("0"))
 
 
 def test_a_day_to_decide_says_why(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:

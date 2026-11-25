@@ -40,7 +40,7 @@ import { keepTheSide, SIDES } from "./sides";
 
 type Side = components["schemas"]["Side"];
 
-/** The key that switches a side: changing the shop itself is one of the owner's own four (spec §6). */
+/** The key that switches a side: changing the shop itself is one of the owner's own (spec §6). */
 const SWITCHES_SIDES = "settings.manage";
 
 export function SideSwitches({ me }: { me: WhoIsHere }) {

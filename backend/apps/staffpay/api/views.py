@@ -1,12 +1,14 @@
 """apps/staffpay/api/views.py — the staffpay routes an office screen calls, under /api/v1/staffpay/ (WAGE-1; 03 §5.10).
 
-Five: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
+Six: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
 read on Mahudhurio ya mwezi (ATT-5); one worker's month, their calendar and its days' taps (ATT-12); a decision on one
-of their days, sent from the sheet under the calendar (ATT-6); and a manager's fixes to the taps, a tap added and a tap
-crossed out, each sent from its sheet under the calendar (ATT-13). Thin, as every route is (ADR-0015): who may set a
-rate, and what it may be, are set_pay_rate's (apps/staffpay/services.py); which rate is in force, the selectors'; what a
-month holds, attendance_month's; what a worker's month holds, worker_attendance's; who may decide a day, and how,
-decide_day's; who may fix a tap, and how, add_tap's and void_tap's.
+of their days, sent from the sheet under the calendar (ATT-6); a manager's fixes to the taps, a tap added and a tap
+crossed out, each sent from its sheet under the calendar (ATT-13); and the day's meal money, read, typed and crossed out
+on Hela ya chakula (WAGE-7). Thin, as every route is (ADR-0015): who may set a rate, and what it may be, are
+set_pay_rate's (apps/staffpay/services.py); which rate is in force, the selectors'; what a month holds,
+attendance_month's; what a worker's month holds, worker_attendance's; who may decide a day, and how, decide_day's; who
+may fix a tap, and how, add_tap's and void_tap's; the meal money of any days, meal_money_days'; who may type it, and
+cross it out, and how, record_meal_money's and void_meal_money's.
 """
 
 from typing import Any, cast
@@ -29,22 +31,30 @@ from apps.staffpay.api.serializers import (
     AttendanceMonthQuery,
     DayDecisionSerializer,
     DecideDaySerializer,
+    MealMoneyAnswer,
+    MealMoneyDaysAnswer,
+    MealMoneyQuery,
     PayRateCreateSerializer,
     PayRatesAnswer,
     PayRateSerializer,
     PayRatesQuery,
+    RecordMealMoneySerializer,
     TapAnswer,
+    VoidMealMoneySerializer,
     VoidTapSerializer,
     WorkerAttendanceAnswer,
 )
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayChoice, PayRate
+from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayChoice, MealMoney, PayRate
 from apps.staffpay.selectors import NEWEST_FIRST, rate_in_force
 from apps.staffpay.services import (
     add_tap,
     attendance_month,
     decide_day,
     decision_of,
+    meal_money_days,
+    record_meal_money,
     set_pay_rate,
+    void_meal_money,
     void_tap,
     worker_attendance,
 )
@@ -257,3 +267,64 @@ class AttendanceTapViewSet(CreateOnceMixin[AttendanceEvent]):
         sent.is_valid(raise_exception=True)
         voided = void_tap(tap, reason=sent.validated_data["reason"], by=cast(StaffMember, self.actor))
         return Response(TapAnswer(voided).data)
+
+
+class MealMoneyViewSet(CreateOnceMixin[MealMoney]):
+    # GET meal-money/?first=…&last=…: the days of a span on Hela ya chakula (WAGE-7), each with its money, how it is
+    # split and its rows, and the whole of it. POST meal-money/: whoever the owner gave the key to types what the shop
+    # spent on one day's meals. POST meal-money/{id}/void/: a wrong row crossed out; the row in the address, one of the
+    # visit's shop, found through the guard (get_object): another shop's, or an id no shop has, is "not found" alike
+    # (03 §5.4). No read of a row alone: the rows come with their day.
+    # It works the days out through the book, as the month's route does, so this GET writes too, and is safe to send
+    # again (ATT-10).
+    model = MealMoney
+    # The whole shop's, not a side's: the workers of both sides eat together (02 §12).
+    side_field = None
+    # The one key for all three, on the whole shop: the owner's own, which he gives to whoever he chooses (Jack, 15 Nov
+    # 2026), so a manager without it sees none of it. The list names it too, so a create sent again, which hands back
+    # the row it made, asks it as any read of a row does (CreateOnceMixin). The services ask it again, inside their
+    # transactions.
+    action_permissions = {
+        "list": Permission.MEALS_RECORD,
+        "create": Permission.MEALS_RECORD,
+        "void": Permission.MEALS_RECORD,
+    }
+    serializer_class = MealMoneyAnswer
+    create_serializer_class = RecordMealMoneySerializer
+    # One answer, not pages: a span is at most a year of days, and the page adds nothing up.
+    pagination_class = None
+
+    @extend_schema(parameters=[MealMoneyQuery], responses=MealMoneyDaysAnswer)
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        asked = MealMoneyQuery(data=request.query_params)
+        # A day missing, or one that is none, Hadi before Kuanzia, or more than a year: 400, each under its own name.
+        asked.is_valid(raise_exception=True)
+        span = asked.validated_data
+        return Response(MealMoneyDaysAnswer(meal_money_days(self._shop(), span["first"], span["last"])).data)
+
+    def create_row(self, data: dict[str, Any]) -> MealMoney:
+        # record_meal_money checks the day and the amount, and refuses with its codes. cast: the login leaves the staff
+        # member acting in `request.auth`, which mypy reads as an Actor.
+        return record_meal_money(
+            self._shop(),
+            money_id=data["id"],
+            date=data["date"],
+            amount=data["amount"],
+            note=data["note"],
+            by=cast(StaffMember, self.actor),
+        )
+
+    @extend_schema(request=VoidMealMoneySerializer, responses=MealMoneyAnswer)
+    @action(detail=True, methods=["post"])
+    def void(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # The row first, through the guard, whatever was sent: before the body is read, so the tenancy sweep's empty
+        # request reaches the guard, never stops at a 400 (as a tap's void, ATT-13).
+        row = self.get_object()
+        sent = VoidMealMoneySerializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        voided = void_meal_money(row, reason=sent.validated_data["reason"], by=cast(StaffMember, self.actor))
+        return Response(MealMoneyAnswer(voided).data)
+
+    def _shop(self) -> Shop:
+        # The visit's own shop, open already (ShopViewSet): everything below reads inside it, through the guard.
+        return Shop.objects.get(pk=self.actor.shop_id)

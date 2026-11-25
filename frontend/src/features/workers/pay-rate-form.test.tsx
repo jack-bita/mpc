@@ -10,6 +10,12 @@ import { MESSAGES } from "@/i18n/language";
 import { Decimal } from "@/lib/decimal";
 import { formatMoney } from "@/lib/format";
 import { answer, refusal, sent } from "@/test/fake-server";
+import {
+  MealMoneyAsked,
+  mealMoneyIsAnswered,
+  MonthsAsked,
+  monthsAreAnswered,
+} from "@/test/meals";
 import { PAY_RATES_ROUTE, payRate, payRates, TODAY } from "@/test/pay-rates";
 import { render } from "@/test/render";
 import { BABA, STAFF, worker } from "@/test/workers";
@@ -147,6 +153,34 @@ describe("Weka malipo", () => {
 });
 
 describe("after a save", () => {
+  it("asks the months and the meal money again, as a rate says who is paid and who shares the meals", async () => {
+    // Baba makes Juma the cook, then opens Hela ya chakula within the minute its answer is kept: the split must be the
+    // new one (WAGE-7's review). And a first rate puts him on the month page, his days' shares on his own.
+    theServerHas(payRates([], null));
+    const meals = mealMoneyIsAnswered();
+    const months = monthsAreAnswered();
+    render(
+      <>
+        <MealMoneyAsked />
+        <MonthsAsked />
+        <WorkerScreen id={JUMA.id} />
+      </>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Weka malipo" }));
+    await screen.findByRole("dialog", { name: "Malipo mapya ya Juma" });
+    await waitFor(() =>
+      expect([meals(), months()]).toEqual([1, { month: 1, worker: 1 }]),
+    );
+
+    typeInto(box("Kiasi kwa siku"), "10000");
+    fireEvent.click(radio("Hapana, ni mpishi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
+
+    await waitFor(() =>
+      expect([meals(), months()]).toEqual([2, { month: 2, worker: 2 }]),
+    );
+  });
+
   it("shows the new rate as today's and in the history, read again from the server", async () => {
     // The card's first box, end to end on the page: Baba sets Juma's 10,000 from his first day, and the card shows it
     // as Sasa and in Historia, from the server's next answer, as the store asks the rates again after the save.

@@ -512,6 +512,57 @@ describe("Mipangilio yangu", () => {
   });
 });
 
+describe("Hela ya chakula", () => {
+  /** Neema, a seller the owner gave the key to the meal money, on the whole shop (WAGE-7). */
+  const NEEMA_WITH_THE_KEY: WhoIsHere = {
+    ...NEEMA,
+    permissions: {
+      whole_shop: ["meals.record"],
+      sides: [{ ...DAWA, permissions: ["sale.make", "meals.record"] }],
+    },
+  };
+
+  it("is offered to whoever the owner gave its key, under the welcome", async () => {
+    // She logs in by PIN here and never sees the office's home page: the meal money is one tap from her welcome, an
+    // office page under her PIN's own session.
+    theLaptop(NEEMA_WITH_THE_KEY);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    const link = screen.getByRole("link", { name: "Hela ya chakula" });
+    expect(link.getAttribute("href")).toMatch(/^\/meal-money\/?$/);
+  });
+
+  it("isn't offered without the key, nor for the key on one side alone", async () => {
+    for (const person of [
+      NEEMA,
+      {
+        ...NEEMA,
+        permissions: {
+          whole_shop: [],
+          sides: [{ ...DAWA, permissions: ["meals.record"] }],
+        },
+      },
+    ]) {
+      theLaptop(person);
+      const shown = render(<AtTheDevice device={DAWA_LAPTOP} />);
+      await screen.findByRole("heading", { name: "Karibu, Neema" });
+      expect(
+        screen.queryByRole("link", { name: "Hela ya chakula" }),
+      ).toBeNull();
+      shown.unmount();
+    }
+  });
+
+  it("isn't there while nobody is logged in", async () => {
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Wewe ni nani?" });
+
+    expect(screen.queryByRole("link", { name: "Hela ya chakula" })).toBeNull();
+  });
+});
+
 describe("each person's own language and font", () => {
   // Neema saved English and the second font in Mipangilio yangu; Juma keeps Swahili and the default one.
   const NEEMA_IN_ENGLISH: WhoIsHere = {
@@ -846,6 +897,21 @@ describe("with no network (SYNC-10)", () => {
     await jumaLogsInHere();
 
     expect(screen.queryByRole("link", { name: "Mipangilio yangu" })).toBeNull();
+  });
+
+  it("offers no Hela ya chakula in a local session, though the laptop's row gives its key (WAGE-7)", async () => {
+    // An office page, read from the server under the server's own session, which a local one isn't.
+    await aLaptopWithNoNetwork(null);
+    await db().staff.put({
+      ...JUMA_ROW,
+      permissions: { ...JUMA_ROW.permissions, every_side: ["meals.record"] },
+    });
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+
+    // His row is read, as Kompyuta hii, offered by the row, shows; so the key on it is known too.
+    await screen.findByRole("link", { name: "Kompyuta hii" });
+    expect(screen.queryByRole("link", { name: "Hela ya chakula" })).toBeNull();
   });
 
   it("tells the counter who the laptop let in, with the shop's idle minutes (SYNC-11)", async () => {

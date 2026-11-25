@@ -129,6 +129,16 @@ const CODES_THE_API_SENDS = [
   "tap.not_working_day",
   "tap.in_future",
   "tap.reason_missing",
+  // The day's meal money (WAGE-7, record_meal_money and void_meal_money): an amount of 0 or less, or with cents; one of
+  // zeros too many; a day to come; a Sunday, or a day attendance was off; crossing out with no reason. And the days
+  // chosen: Hadi before Kuanzia; more than a year. On the demo, a note is demo.no_note and a reason demo.ready_reasons.
+  "meal_money.amount_invalid",
+  "meal_money.amount_too_big",
+  "meal_money.in_future",
+  "meal_money.not_working_day",
+  "meal_money.reason_missing",
+  "meal_money.days_backwards",
+  "meal_money.too_many_days",
   // Explaining or closing a flag (CTRL-4, apps/control/services.py): no words; one closed already; one that names the
   // person closing it. On the demo, a note that isn't a ready one is demo.ready_reasons above.
   "flag.note_required",

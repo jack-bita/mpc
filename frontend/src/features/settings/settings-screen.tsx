@@ -66,7 +66,7 @@ import { useRuleWords } from "./setting-words";
 import { SHOP_RULES, useShopRules } from "./shop-rules";
 import { SideSwitches } from "./side-switch";
 
-/** The key that lets a person give a rule a new value: one of the owner's own four (spec §6). */
+/** The key that lets a person give a rule a new value: one of the owner's own (spec §6). */
 const CHANGES_RULES = "settings.manage";
 
 export function SettingsScreen() {

@@ -26,6 +26,11 @@ later ones, so its missing number is flagged and then closed by the system, as a
 tap it sends a record the server doesn't know, one number too far, so a missing number and a refused record both wait.
 None is about a tap's time or its worker, so none sends a day to review.
 
+And the meal money of those days (WAGE-7), typed by Meneja, who holds its key, meals.record, so a visitor sees on Hela
+ya chakula how each day's is split, and can type today's: 3,000 on each working day but one, forgotten, which the page
+calls Haijaandikwa. What a visitor types takes no note, and crossing out one takes the ready reason, as typed words
+would show to every visitor after them (record_meal_money, void_meal_money).
+
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
 the tests log in as these people, with the logins written again in frontend/e2e/pair-and-pin-login.spec.ts. Change
@@ -45,9 +50,9 @@ safe only on a database that holds nothing but demo data, so the seed refuses, b
 Once a day, not on every start (DATA-1's plan, 8 Nov 2026): the free demo sleeps after 15 minutes with no visitor,
 and every wake-up runs its start again. A visitor back from a break should find the PIN screen with their work still
 there (the idle lock, UI-4), so a start keeps a demo shop made today, in the shop's own time, and makes it again only
-when it was made on an earlier day, or lacks a rule, a closure, a person's extra key or rate, the taps of the days
-before today, or the flags this seed sets, as a demo an older seed made that morning does on a deploy's day (ATT-2,
-ATT-8, #275, WAGE-1, DATA-8, CTRL-4). `fresh=True` makes it again whatever its day.
+when it was made on an earlier day, or lacks a rule, a closure, a person's extra key or rate, the taps or the meal money
+of the days before today, or the flags this seed sets, as a demo an older seed made that morning does on a deploy's day
+(ATT-2, ATT-8, #275, WAGE-1, DATA-8, WAGE-7, CTRL-4). `fresh=True` makes it again whatever its day.
 
 Made through the services, as a real shop is set up (set_up_shop, add_staff, assign_role, set_pin), never by writing
 rows: the demo can't hold anything a real shop couldn't, and a service that changes its rules changes the demo too.
@@ -98,8 +103,8 @@ from apps.people.services import (
 from apps.shops.models import Closure, Setting, Shop, ShopKind, Side, SideBand
 from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide, add_closure, set_setting, switch_side
-from apps.staffpay.models import AttendanceEvent, ClockKind, NoPhoto, PayRate
-from apps.staffpay.services import SUNDAY, set_pay_rate
+from apps.staffpay.models import AttendanceEvent, ClockKind, MealMoney, NoPhoto, PayRate
+from apps.staffpay.services import SUNDAY, record_meal_money, set_pay_rate
 from apps.sync.api.serializers import MOST_DOCUMENTS
 from apps.sync.models import PushedDocument, PushedStatus
 from apps.sync.push import Answer, Sent, push
@@ -154,12 +159,13 @@ class DemoPerson:
 PEOPLE = (
     # The manager on every side: device.manage among the role's keys lets them confirm a new laptop on either side
     # (confirm_pairing). A password and no PIN: the manager works from their own phone, as at a real shop.
-    # And two of an owner's own keys (see the top of this file): the shop's rules, the one key a visitor needs to try
+    # And three of an owner's own keys (see the top of this file): the shop's rules, the one key a visitor needs to try
     # Mipangilio ya duka, which also changes the sides, kept as the seed made them on the demo
     # (_check_sides_fixed_on_demo, apps/shops/services.py); and its workers, to try Wafanyakazi (PPL-4), whose
     # services keep the seed's people as made on the demo (demo.people_fixed, apps/people/services.py), as a visitor
-    # who suspended Asha, or took Meneja's role away, would stop every visitor after them (OPS-3's note). Not the
-    # Owner's whole role, whose keys reach further than a visitor needs.
+    # who suspended Asha, or took Meneja's role away, would stop every visitor after them (OPS-3's note). And the meal
+    # money's, the owner's own too, to try Hela ya chakula (WAGE-7). Not the Owner's whole role, whose keys reach
+    # further than a visitor needs.
     DemoPerson(
         "Meneja Mfano",
         "Meneja",
@@ -167,7 +173,7 @@ PEOPLE = (
         side=None,
         email=MANAGER_EMAIL,
         password=MANAGER_PASSWORD,
-        keys=(Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE),
+        keys=(Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE, Permission.MEALS_RECORD),
         # Made-up amounts, as everything here is (rule 10): a manager paid a little more than a seller.
         daily_rate="15000",
         # He clocks in too, on the shop's laptop with his password (OPS-13): he has a daily rate, so the month page
@@ -217,6 +223,11 @@ PEOPLE = (
 # month's and, early in a month, the last one's. Three weeks hold three Sundays, so 18 working days, enough for every
 # odd day above. The shop's rules, its people's first days and their rates start on the first of them.
 HISTORY_DAYS = 21
+
+# The meal money of each working day before today (WAGE-7), a made-up 3,000: 1,000 each when all three came. But one
+# day, its place among them as an OddDay's `back`, an ordinary day, has none: forgotten, Haijaandikwa.
+MEALS_A_DAY = Decimal("3000")
+FORGOTTEN_MEALS_BACK = 5
 
 # The demo's own laptop (DATA-8), which sends the taps of the days before today: on Dawa, as a shop's laptop sits on a
 # side. Anyone working at the shop may clock in on it (Jack, ATT-1), Baraka of Vyakula too.
@@ -324,6 +335,7 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
         and _holds_its_keys(shop)
         and _holds_its_rates(shop)
         and _holds_its_taps(shop)
+        and _holds_its_meals(shop)
         and _holds_its_flags(shop)
     ):
         return Seeded.KEPT
@@ -458,6 +470,15 @@ def _holds_its_taps(shop: Shop) -> bool:
     return held >= len(_demo_taps(today, zone))
 
 
+def _holds_its_meals(shop: Shop) -> bool:
+    # Whether today's demo holds the meal money this seed types (WAGE-7): as for its taps, a deploy whose seed types it
+    # must not keep a demo an older seed made that morning without any. Known by its days: each holds a row, as a row a
+    # visitor crosses out is still there (T2), and what a visitor types only adds to them.
+    with shop_context(shop):
+        held = set(MealMoney.objects.filter(shop=shop).values_list("date", flat=True))
+    return set(_days_with_meals(shop_today(shop))) <= held
+
+
 def _holds_its_flags(shop: Shop) -> bool:
     # Whether today's demo holds the flags this seed raises (CTRL-4): as for its taps, a deploy whose seed raises them
     # must not keep a demo an older seed made that morning without them. Known by the refused record's line, sent last,
@@ -498,6 +519,7 @@ def _make_the_shop() -> Shop:
         taps = _demo_taps(today, ZoneInfo(shop.timezone))
         _send_the_taps(laptop, people, taps, today)
         _send_a_refused_record(laptop, people, taps)
+        _type_the_meals(shop, manager, today)
     return shop
 
 
@@ -649,6 +671,20 @@ def _send_the_taps(laptop: Device, people: dict[str, StaffMember], taps: list[_D
         ]
         if wrong:
             raise RuntimeError(f"The push refused or flagged the demo laptop's taps: {wrong}")
+
+
+def _days_with_meals(today: date) -> list[date]:
+    # The working days before `today` whose meal money the seed types: all but the forgotten one. From the date alone,
+    # so the seed's check counts them (_holds_its_meals) without reading the shop's rows.
+    return [day for back, day in enumerate(_working_days_back(today), start=1) if back != FORGOTTEN_MEALS_BACK]
+
+
+def _type_the_meals(shop: Shop, manager: StaffMember, today: date) -> None:
+    # The meal money of the days before today (WAGE-7), typed by Meneja through the service, as a person types it, the
+    # oldest first; with no note, as none is kept on the demo. The book splits it among who came when a page asks.
+    # `today`: the shop's day the taps were made from.
+    for day in reversed(_days_with_meals(today)):
+        record_meal_money(shop, money_id=uuid.uuid7(), date=day, amount=MEALS_A_DAY, by=manager)
 
 
 def _send_a_refused_record(laptop: Device, people: dict[str, StaffMember], taps: list[_DemoTap]) -> None:

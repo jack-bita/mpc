@@ -13,10 +13,15 @@ each day with its decision and what it may be decided as (ATT-6). And a decision
 which decide_day checks and keeps, answered as the day shows it (DayDecisionSerializer). And a manager's fixes to the
 taps (ATT-13): a tap added (AddTapSerializer) and a tap crossed out (VoidTapSerializer), which add_tap and void_tap
 check and keep, each answered as the day shows the tap (TapAnswer).
+
+And the day's meal money (WAGE-7): the days of a span, with their total (MealMoneyDaysAnswer), worked out by
+meal_money_days, for the span in the address (MealMoneyQuery); and a row typed (RecordMealMoneySerializer) or crossed
+out (VoidMealMoneySerializer), which record_meal_money and void_meal_money check and keep, each answered as the day's
+page shows it (MealMoneyAnswer).
 """
 
 import re
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from django.db.models import QuerySet
@@ -33,11 +38,20 @@ from apps.staffpay.models import (
     ClockKind,
     DayChoice,
     DayStatus,
+    MealMoney,
     NoPhoto,
     PayRate,
     ReviewReason,
 )
-from apps.staffpay.services import DEMO_ADD_REASONS, DEMO_REASONS, DEMO_VOID_REASONS, PhotoState, tap_line
+from apps.staffpay.services import (
+    DEMO_ADD_REASONS,
+    DEMO_MEAL_VOID_REASONS,
+    DEMO_REASONS,
+    DEMO_VOID_REASONS,
+    PhotoState,
+    meal_line,
+    tap_line,
+)
 
 
 # A job's id, as the schema says: a field with no model can't tell the schema its type by itself, as in the sheet that
@@ -203,6 +217,9 @@ class WorkerDaySerializer(serializers.Serializer[Any]):
     status = serializers.ChoiceField(choices=DayStatus.choices)
     reason = serializers.ChoiceField(choices=ReviewReason.choices, allow_null=True)
     fine = serializers.DecimalField(max_digits=14, decimal_places=2)
+    meal_share = serializers.DecimalField(
+        max_digits=14, decimal_places=2, help_text="The worker's share of the day's meal money, as the book kept it."
+    )
     first_in = serializers.TimeField(format="%H:%M", allow_null=True)
     first_out = serializers.TimeField(format="%H:%M", allow_null=True)
     # A person's decision, beside what the book said, which stays (A2), or null; and what the day may be decided as,
@@ -259,7 +276,8 @@ class WorkerAttendanceAnswer(serializers.Serializer[Any]):
     # A worker's month, as their calendar shows it (ATT-12): which month; the shop's today, which the calendar marks
     # (•), on the shop's own date; the worker's line, as the month page counts it; their first and last day, for a
     # day outside them to say why; each day the book answers for them, up to yesterday; and each tap of the month,
-    # today's too. No amount but the fines: a manager who fixes attendance sees no one's pay (WAGE-1's review).
+    # today's too. No amount but the fines and the meals' shares, the same for everyone who came: a manager who fixes
+    # attendance sees no one's pay (WAGE-1's review).
     month = MonthField()
     today = serializers.DateField()
     worker = WorkerMonthSerializer()
@@ -322,3 +340,105 @@ class TapAnswer(AttendanceTapSerializer):
     # a fix sends is AddTapSerializer's and VoidTapSerializer's.
     def to_representation(self, instance: AttendanceEvent) -> Any:
         return super().to_representation(tap_line(instance))
+
+
+# The most days one answer of meal money covers: a leap year's whole. The book works every one of them out, so a span is
+# kept to what a person would ask for.
+MOST_DAYS = timedelta(days=366)
+
+
+class MealMoneyQuery(serializers.Serializer[Any]):
+    # Which days, in the address (?first=2026-11-01&last=2026-11-30), both counted: the page's month, or the days chosen
+    # in Chagua siku, where Hadi before Kuanzia, or more than a year of them, is said beside Hadi in its own words. No
+    # day before 2000, as for a month (FIRST_MONTH): no shop's attendance is older.
+    first = serializers.DateField(help_text="The first day, as 2026-11-01.")
+    last = serializers.DateField(help_text="The last day, counted, as 2026-11-30.")
+
+    def validate_first(self, value: date) -> date:
+        if value < FIRST_MONTH:
+            raise serializers.ValidationError("Days start from 2000-01-01.", code="invalid")
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        # English for the logs; the screens translate the code (ADR-0032).
+        if attrs["last"] < attrs["first"]:
+            raise serializers.ValidationError(
+                {"last": ["The last day is before the first."]}, code="meal_money.days_backwards"
+            )
+        if attrs["last"] - attrs["first"] >= MOST_DAYS:
+            raise serializers.ValidationError({"last": ["At most a year of days."]}, code="meal_money.too_many_days")
+        return attrs
+
+
+class VoidedMealMoneySerializer(serializers.Serializer[Any]):
+    # Who crossed out a row of meal money, by nickname; when; and why. On the demo the reason is a ready one's code
+    # (`wrong_amount`), which the page says in words.
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+    reason = serializers.CharField()
+
+
+class MealMoneyLineSerializer(serializers.Serializer[Any]):
+    # One row of a day's meal money, as the day's page shows it: how much, a string (rule 3), for what, who typed it, by
+    # nickname, and when; and who crossed it out, or null while it counts. A row crossed out still comes, for the day to
+    # show it struck through (A2).
+    id = serializers.UUIDField()
+    date = serializers.DateField()
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    note = serializers.CharField()
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+    voided = VoidedMealMoneySerializer(allow_null=True)
+
+
+class MealDaySerializer(serializers.Serializer[Any]):
+    # One day of Hela ya chakula: its money and each one's share, strings (rule 3), and the two counts. No name: whoever
+    # types the meal money sees how many share it, and who came is the attendance pages' to show.
+    date = serializers.DateField()
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2, help_text="The rows that count, added up.")
+    over = serializers.BooleanField(help_text="Whether the day is over: today is not, so its money isn't split yet.")
+    sharers = serializers.IntegerField(help_text="How many workers share the day's money.")
+    share = serializers.DecimalField(
+        max_digits=14, decimal_places=2, help_text="What each of them pays, as the book kept it."
+    )
+    waiting = serializers.IntegerField(help_text="How many workers' days still wait for a decision.")
+    rows = MealMoneyLineSerializer(many=True)
+
+
+# One object, not a list, as for the month's answer above.
+@extend_schema_serializer(many=False)
+class MealMoneyDaysAnswer(serializers.Serializer[Any]):
+    # Hela ya chakula's answer (WAGE-7): the span, its last day no later than the shop's today unless it is all to come;
+    # today, on the shop's own date, as a phone's can be wrong; the whole of the money; and its days, newest first.
+    first = serializers.DateField()
+    last = serializers.DateField()
+    today = serializers.DateField()
+    total = serializers.DecimalField(max_digits=14, decimal_places=2)
+    days = MealDaySerializer(many=True)
+    ready_void_reasons = serializers.ListField(
+        child=serializers.ChoiceField(choices=DEMO_MEAL_VOID_REASONS),
+        help_text="On the demo, the ready reasons a row may be crossed out with, as codes; elsewhere none.",
+    )
+
+
+class RecordMealMoneySerializer(serializers.Serializer[Any]):
+    # Meal money as the sheet sends it (WAGE-7): its id, made on the phone (ADR-0007), required and a UUIDv7, as every
+    # create's; the day; the amount, a string; and what it bought, which may be left out. The amount's shape is checked
+    # here (a number, at most two places); whether it is whole, above 0 and no slip of the zeros, and the day, are
+    # record_meal_money's, each beside its box in its own code.
+    id = serializers.UUIDField(validators=[uuid7_only])
+    date = serializers.DateField()
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    note = serializers.CharField(max_length=200, allow_blank=True, default="")
+
+
+class VoidMealMoneySerializer(serializers.Serializer[Any]):
+    # Meal money crossed out, as the sheet sends it: why. Empty here is void_meal_money's to refuse, beside the box.
+    reason = serializers.CharField(max_length=200, allow_blank=True)
+
+
+class MealMoneyAnswer(MealMoneyLineSerializer):
+    # A row typed or crossed out, answered as the day's page shows it (meal_line). The fields are
+    # MealMoneyLineSerializer's own, so the schema describes the answer by itself, as a tap's does (TapAnswer).
+    def to_representation(self, instance: MealMoney) -> Any:
+        return super().to_representation(meal_line(instance))

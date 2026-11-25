@@ -12,13 +12,20 @@ text.
 And each worker's pay rate on each day of a span (rates_between, WAGE-1), read the same way, as a rate is a dated rule:
 
     Juma  from 10 Nov 10,000   from 15 Nov 12,000      so 10–14 Nov: 10,000 a day, 15–30 Nov: 12,000
+
+And each date's meal money (meal_money_by_date, WAGE-7), the sum of what was typed for it and not crossed out:
+
+    23 Nov  5,000 + 3,000, and 30,000 crossed out      so 23 Nov: 8,000
 """
 
 import uuid
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any
+
+from django.db.models import Sum
 
 from apps.core.settings_registry import (
     AFTERNOON_FROM,
@@ -36,7 +43,7 @@ from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_settings_between
 from apps.staffpay.calculations import DayRules
-from apps.staffpay.models import PayRate
+from apps.staffpay.models import MealMoney, PayRate
 
 # Each part of a day's rules, by its name in DayRules, and the setting it is read from: one list, so the rules read and
 # the copy a day keeps always name the same nine, and a rule added to DayRules without its setting fails at once
@@ -136,3 +143,25 @@ def rate_in_force(newest_first: Sequence[PayRate], day: date) -> PayRate | None:
     """Of one job's rates, in NEWEST_FIRST's order, the one in force on `day`: the first that has started by then. None
     before the job's first rate. One rule, for a span (rates_between) and for the worker's page (its `in_force`)."""
     return next((rate for rate in newest_first if rate.effective_from <= day), None)
+
+
+def meal_money_by_date(shop: Shop, first: date, last: date) -> dict[date, Decimal]:
+    """Each date's meal money from `first` to `last`, both counted: {the shop's date: the sum of its rows not voided}
+    (WAGE-7, 02 §12). A date with no row that counts, never typed or all crossed out, has no key. One read for the
+    span."""
+    # The same checks as the rates', for the same reasons (ADR-0022): asked inside another shop's visit, the guard would
+    # hide every row, and the answer would be "no money" without a word.
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("meal_money_by_date was given a shop that is not the one open.")
+    if isinstance(first, datetime) or isinstance(last, datetime):
+        raise TypeError("meal_money_by_date needs the shop's business dates, not datetimes.")
+    # Added up by the database, exactly: numeric(14,2) sums to numeric, never through a float (rule 3). order_by() drops
+    # any order of the rows' own, which would split the groups.
+    return dict(
+        MealMoney.objects.filter(shop=shop, date__range=(first, last), voided_at__isnull=True)
+        .order_by()
+        .values("date")
+        .annotate(total=Sum("amount"))
+        .values_list("date", "total")
+    )

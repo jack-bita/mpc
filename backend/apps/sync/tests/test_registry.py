@@ -317,7 +317,7 @@ def test_reading_the_photos_ids_costs_no_query_a_person(
 def test_each_persons_keys_are_sent_side_by_side(shop_a: Shop, dawa: Side, vyakula: Side, give_role: GiveRole) -> None:
     # Worked out on the server, as `me` and the office routes read them (HeldPermissions, 02 §5), so the laptop does no
     # role arithmetic: on a side, a person holds what was given on every side plus what was given on that side alone.
-    # Asha sells on Dawa. Juma manages every side, and may also change Vyakula's settings, one of the owner's four.
+    # Asha sells on Dawa. Juma manages every side, and may also change Vyakula's settings, one of the owner's own.
     asha = hire(shop_a, "Asha Mfano", "Asha")
     juma = hire(shop_a, "Juma Mfano", "Juma")
     give_role(asha, RoleTemplate.SELLER, dawa)

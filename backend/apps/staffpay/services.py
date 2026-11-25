@@ -1,12 +1,15 @@
 """apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12), the month the month
 page shows, worked out through it (ATT-5), a worker's own month (ATT-12), a person's decision on a day (ATT-6), a
-manager's fixes to the taps (ATT-13), and each worker's daily pay rate (WAGE-1).
+manager's fixes to the taps (ATT-13), each worker's daily pay rate (WAGE-1), and the day's meal money (WAGE-7).
 
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
     Juma   Mon 16 Nov  needs_review  0.00    07:20  —          no_out: a manager decides (ATT-6)
     Juma   Tue 17 Nov  needs_review  0.00    07:20  18:45      not_working: suspended on Monday (ATT-11)
     Asha   Sun 22 Nov  off           0.00    —      —          the shop is shut on Sundays and closed days
+
+Each day keeps the worker's share of that date's meal money too (WAGE-7): 8,000 among the 8 who came and share it, 1,000
+each, worked out again whenever the day is.
 
 The day's rule (work_out_day, apps/staffpay/calculations.py) says what one day was; the book finds each day's taps and
 rules, hands them in, and keeps the answer, one row per job and date (AttendanceDay). Three kinds of day the rule can't
@@ -41,15 +44,21 @@ reads both the next time it works the day out, as it reads every tap.
 A pay rate is typed by a person, the owner (set_pay_rate): from 10 Nov, Juma earns 10,000 a day. Whoever sets it sets a
 worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No line in the change log either: a
 worker's pay never sits on a shared device (03 §6.1).
+
+The day's meal money is typed by whoever the owner gave the key to (record_meal_money, WAGE-7): Monday's flour, 5,000,
+and its meat, 3,000. A wrong one is crossed out, with who, when and why (void_meal_money), and the book splits what
+counts among who came, as above. Hela ya chakula asks for any days of it, and the whole of them, through
+meal_money_days, which works them out through the book too, so it writes as the month's page does.
 """
 
 import calendar
 import datetime as dt
 import uuid
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -65,7 +74,7 @@ from apps.core.changes import record_change, recording_changes
 from apps.core.editing import VersionConflict
 from apps.core.links import table_of
 from apps.core.permissions import Permission
-from apps.core.settings_registry import ATTENDANCE_ON
+from apps.core.settings_registry import ATTENDANCE_ON, ROUNDING_STEP
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import StaffMember, StaffStatus
 from apps.people.permissions import require
@@ -74,28 +83,40 @@ from apps.shops.models import Shop
 from apps.shops.selectors import closed_days, get_setting, shop_settings_between, shop_today
 from apps.staffpay.calculations import (
     NO_FINE,
+    NO_MEAL_SHARE,
     TIME_IN_DOUBT,
     DayResult,
+    MealPart,
     Tap,
     day_choices,
+    meal_part,
+    meal_share,
     shop_minute,
     tap_day,
     work_out_day,
 )
 from apps.staffpay.models import (
     DECISION_OF,
+    MOST_MEAL_MONEY,
     AbsenceType,
     AttendanceDay,
     AttendanceEvent,
     ClockKind,
     DayChoice,
     DayStatus,
+    MealMoney,
     NoPhoto,
     PayRate,
     ReviewReason,
     TimeCheck,
 )
-from apps.staffpay.selectors import day_rules_between, rates_between, rules_as_text, rules_from_text
+from apps.staffpay.selectors import (
+    day_rules_between,
+    meal_money_by_date,
+    rates_between,
+    rules_as_text,
+    rules_from_text,
+)
 
 # Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
 # the owner and the worker, outside the system (01 §8.1), so a shop has no setting for it.
@@ -112,8 +133,12 @@ class _TheBook:
 
 # What the book works out on a day, and so what it writes again when a day comes out otherwise. Not the job, the date
 # or the shop, which say which day it is; nor `created_at`, which says when the day was first kept. The reason too
-# (ATT-5): a day to decide kept before it had none, and gets its reason the next time it is worked out.
-WORKED_OUT = ["status", "fine", "first_in", "first_out", "rules_used", "review_reason"]
+# (ATT-5): a day to decide kept before it had none, and gets its reason the next time it is worked out. And its share of
+# the date's meal money (WAGE-7), which money typed later, another worker's day decided, or a pay rate typed, moves.
+WORKED_OUT = ["status", "fine", "first_in", "first_out", "rules_used", "review_reason", "meal_share"]
+
+# How many changed days one UPDATE of the book's names (_keep).
+MOST_DAYS_A_STATEMENT = 300
 
 # A person's decision on a day (ATT-6), which only decide_day writes, and the book never: what the book works out above
 # and what a manager decided are two lists with no column in common, so neither ever writes over the other (A2).
@@ -170,16 +195,17 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
             for row in AttendanceDay.objects.filter(shop=shop, date__range=(first, last)).select_related("staff")
         }
         # The days the whole shop is closed (ATT-8): a public holiday, a family funeral. The attendance switch on each
-        # day, and the day's rules on each day (A1). One read each for the whole span, never one per day.
+        # day, with the step a share of the meals is rounded to (WAGE-7), and the day's rules on each day (A1). One read
+        # each for the whole span, never one per day.
         closed = closed_days(shop, first, last)
-        switched_on = shop_settings_between([ATTENDANCE_ON], shop, first, last)
+        settings_by_day = shop_settings_between([ATTENDANCE_ON, ROUNDING_STEP], shop, first, last)
         rules_by_day = day_rules_between(shop, first, last)
         answered: list[AttendanceDay] = []
         for day in dates:
             # Attendance counts only from the day the owner switched it on (ADR-0033), a dated rule, so read on each
             # date: before it, nobody clocked in, and every day kept would be an absence that never was. No day at all,
             # not even an off one.
-            if not switched_on[day][ATTENDANCE_ON.key]:
+            if not settings_by_day[day][ATTENDANCE_ON.key]:
                 continue
             # Sunday is off for every job that ran on it, whatever its taps, in doubt or not: the shop is shut, and
             # Sunday work is paid outside the system (01 §8.1). No rule is read for it. A job outside its days keeps
@@ -231,6 +257,9 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
                 if why is not None:
                     result = replace(result, status=DayStatus.NEEDS_REVIEW, fine=NO_FINE, reason=why)
                 answered.append(_worked_out(shop, job, day, result, rules_used))
+        # Who pays for each date's meals, once every job's day of it is worked out (WAGE-7).
+        steps = {day: values[ROUNDING_STEP.key] for day, values in settings_by_day.items()}
+        _share_meals(shop, first, last, answered, kept, steps)
         # Kept as the book, never as the person whose visit asked for the month. The edit history's trigger names
         # whoever the visit's note says acts (apps/core/acting.py): Meneja opens November (ATT-5), and Asha's Monday,
         # changed by the Toka that came late, would read "Meneja changed it", though nobody did. So the book tells
@@ -279,6 +308,68 @@ def _worked_out(
         # Why it needs a decision, on a day that does (ATT-5); empty on any other, as the table keeps "no reason".
         review_reason=result.reason or "",
     )
+
+
+def _share_meals(
+    shop: Shop,
+    first: dt.date,
+    last: dt.date,
+    answered: list[AttendanceDay],
+    kept: dict[tuple[uuid.UUID, dt.date], AttendanceDay],
+    steps: dict[dt.date, Decimal],
+) -> None:
+    # Each worked-out day's share of its date's meal money (WAGE-7, 02 §15, 14), written on the days the book is about
+    # to keep. Every job's day of a date is here, so the count of those who share it is whole. Read inside the book's
+    # lock, as the taps are: the last run to take it reads the newest money, and never keeps an older split over a newer
+    # one.
+    money = meal_money_by_date(shop, first, last)
+    if not money:
+        # Nobody typed any in the span, as in every month before WAGE-7: each day's share stays the 0 it is made with.
+        return
+    # Who shares the meals, on each day: by the rate in force that day (WAGE-1), which names the cook.
+    rates = rates_between(shop, first, last)
+    by_date: dict[dt.date, list[tuple[AttendanceDay, str]]] = defaultdict(list)
+    for day in answered:
+        if day.date not in money:
+            continue
+        # The day as a person decided it, where one did: the decision is on the row kept before, which this run read and
+        # whose decision nothing changes meanwhile, as deciding waits for the jobs' lock too (decide_day).
+        old = kept.get((day.staff_id, day.date))
+        by_date[day.date].append((day, old.decided_status if old is not None else ""))
+    for date, days in by_date.items():
+        sharing = _sharing(days, rates)
+        # The same for everyone who came, a half day too, rounded by the date's own step (A1).
+        share = meal_share(money[date], len(sharing.days), steps[date])
+        for day in sharing.days:
+            day.meal_share = share
+
+
+@dataclass(frozen=True)
+class _Sharing:
+    # Who shares one date's meals (WAGE-7): a day for each person, which carries their share; and how many more people
+    # may, once their day is decided.
+    days: list[AttendanceDay]
+    waiting: int
+
+
+def _sharing(days: Iterable[tuple[AttendanceDay, str]], rates: dict[tuple[uuid.UUID, dt.date], PayRate]) -> _Sharing:
+    # Of one date's days, each with its decision ("" for none), those that share its meals. By the person, not the job:
+    # a person who left and was hired again the same day has two jobs, so two days (PPL-11), and ate once (Jack: A, 25
+    # Nov 2026). Their share is on the job they had first, as ids are made in time's order (UUIDv7); and one who shares
+    # already waits for nothing, whatever their other day does. One rule, for the book, which writes the shares, and for
+    # the page, which counts who shares and who waits (_meal_day).
+    carries: dict[uuid.UUID, AttendanceDay] = {}
+    waits: set[uuid.UUID] = set()
+    for day, decided in sorted(days, key=lambda pair: pair[0].staff_id):
+        rate = rates.get((day.staff_id, day.date))
+        part = meal_part(day.status, decided, shares_meals=rate.shares_meals if rate is not None else None)
+        # The job comes with each day, in the read that found it, or as the book made it (work_out_days): no query here.
+        person = day.staff.user_id
+        if part is MealPart.SHARES:
+            carries.setdefault(person, day)
+        elif part is MealPart.WAITS:
+            waits.add(person)
+    return _Sharing(days=list(carries.values()), waiting=len(waits - carries.keys()))
 
 
 def _answer_log() -> Any:
@@ -400,6 +491,8 @@ def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], A
     # a month asked for twice writes nothing the second time.
     rows: list[AttendanceDay] = []
     changed: list[AttendanceDay] = []
+    # The days on which the share of the meals alone moved, by the share they now have.
+    moved: dict[Decimal, list[uuid.UUID]] = defaultdict(list)
     new: list[AttendanceDay] = []
     for day in answered:
         old = kept.get((day.staff_id, day.date))
@@ -407,16 +500,24 @@ def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], A
             new.append(day)
             rows.append(day)
             continue
-        if any(getattr(old, part) != getattr(day, part) for part in WORKED_OUT):
-            # Changed: the kept row takes the new answer, so it keeps its id and the day it was first kept.
-            for part in WORKED_OUT:
-                setattr(old, part, getattr(day, part))
+        differs = [part for part in WORKED_OUT if getattr(old, part) != getattr(day, part)]
+        # Changed: the kept row takes the new answer, so it keeps its id and the day it was first kept.
+        for part in differs:
+            setattr(old, part, getattr(day, part))
+        if differs == ["meal_share"]:
+            moved[old.meal_share].append(old.pk)
+        elif differs:
             changed.append(old)
         rows.append(old)
     # A day kept before: an UPDATE by its id, which the edit history's trigger writes down (ADR-0036), Asha's Monday
-    # from needs review to on time.
+    # from needs review to on time. A few hundred days a statement: each names every part of every row, so one
+    # statement for a whole year of them grows too long to be quick, with the jobs locked meanwhile.
     if changed:
-        AttendanceDay.objects.bulk_update(changed, WORKED_OUT)
+        AttendanceDay.objects.bulk_update(changed, WORKED_OUT, batch_size=MOST_DAYS_A_STATEMENT)
+    # A share moved alone, the same on every day that now has it: one UPDATE a share. Every worker's share of a date
+    # moves at once, and a rate mended from January moves a year of them (WAGE-7's review).
+    for share, days in moved.items():
+        AttendanceDay.objects.filter(pk__in=days).update(meal_share=share)
     # A day kept for the first time: an INSERT. No other run of the book can keep the same day meanwhile, as the jobs'
     # lock lets one run per shop at a time (work_out_days). Should a bug write a day twice all the same, the rule of
     # one day per job and date refuses the second, loudly, a server error, never a second row.
@@ -608,14 +709,16 @@ class DayOption:
 class WorkerDay:
     # One of a worker's days, as their calendar marks it and the day says it: what it was, why it waits for a decision
     # on a day to decide, and its fine. The fine is the shop's own rule, which anyone working there may read on the
-    # rules page, never the worker's rate or the day's pay (WAGE-1). And the two taps the rule read, the first Ingia and
-    # the first Toka after it, for the reason that names one, "alifika saa 09:10", as the month page's list says it.
-    # Its id: the address a decision on it is sent to (attendance-days/{id}/decide/, ATT-6).
+    # rules page, never the worker's rate or the day's pay (WAGE-1). Its share of the date's meals too, as the book kept
+    # it, the same for everyone who came (WAGE-7, as Jack drew the day), 0 for none. And the two taps the rule read, the
+    # first Ingia and the first Toka after it, for the reason that names one, "alifika saa 09:10", as the month page's
+    # list says it. Its id: the address a decision on it is sent to (attendance-days/{id}/decide/, ATT-6).
     id: uuid.UUID
     date: dt.date
     status: DayStatus
     reason: ReviewReason | None
     fine: Decimal
+    meal_share: Decimal
     first_in: dt.time | None
     first_out: dt.time | None
     # A person's decision on the day, or None (ATT-6), shown beside what the book said, which stays (A2).
@@ -721,6 +824,7 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
                 # The table keeps "no reason" as empty (ATT-5): said as None.
                 reason=ReviewReason(day.review_reason) if day.review_reason else None,
                 fine=day.fine,
+                meal_share=day.meal_share,
                 first_in=day.first_in,
                 first_out=day.first_out,
                 decision=decision_of(day, deciders),
@@ -1173,3 +1277,245 @@ def set_pay_rate(
         rate.full_clean()
         rate.save()
     return rate
+
+
+# On the demo, the ready reason a wrong amount of meal money is crossed out with, kept as its code, which the page says
+# in words, *Kiasi kimekosewa* (as DEMO_VOID_REASONS): a typed one would show to every visitor after.
+DEMO_MEAL_VOID_REASONS = ("wrong_amount",)
+
+
+def record_meal_money(
+    shop: Shop, *, money_id: uuid.UUID, date: dt.date, amount: Decimal, note: str = "", by: StaffMember
+) -> MealMoney:
+    """Type what the shop spent on the workers' meals on one day (WAGE-7, 02 §12): Monday's flour, 5,000. A day may have
+    several, which add up; the book splits the sum among who came the next time it works the date out. `money_id`: the
+    client's (ADR-0007), so the route answers a request sent twice with the row it made (CreateOnceMixin). `by`: who
+    types it, with meals.record on the whole shop. Refuses, all together, each beside its box: an amount of 0 or less,
+    or with cents (meal_money.amount_invalid), or over ten million (meal_money.amount_too_big); a day to come
+    (meal_money.in_future), a Sunday, or a day attendance was off (meal_money.not_working_day); and on the demo, a note
+    (demo.no_note). Returns the row as saved."""
+    # A job of another shop typing into this shop's money is a bug in the calling code (T1), never a person's mistake:
+    # the route finds both in the one shop open. A server error, before anything is read.
+    if by.shop_id != shop.pk:
+        raise ShopMismatch("record_meal_money was given a person of another shop.")
+    # Spaces around a note say nothing, and "  " is no note.
+    note = note.strip()
+    # Not a recording_changes block: meal money writes no line in the change log, as no laptop gets one (03 §6.1). No
+    # lock either: the book reads the money inside its own lock each time a day is asked for (_share_meals), so money
+    # typed beside a run of it is in the next. WAGE-3 takes one, once an approved month refuses new money.
+    with transaction.atomic():
+        # First, so someone without it sets nothing to work; read afresh, so a key taken away a moment ago counts. On
+        # the whole shop, as the workers of both sides eat together.
+        require(by, Permission.MEALS_RECORD, None)
+        # The boxes, all together, so a person who got two wrong sees both at once, each beside its own (ADR-0040).
+        errors: dict[str, list[ValidationError]] = {}
+        # As the table's rules hold: named here, beside the amount's box, where the table's own would name the whole
+        # row. to_integral_value() drops the places without rounding the check away: 5000.50 is not whole.
+        if amount <= 0 or amount != amount.to_integral_value():
+            errors["amount"] = [
+                ValidationError("Meal money is a whole amount above 0.", code="meal_money.amount_invalid")
+            ]
+        elif amount > MOST_MEAL_MONEY:
+            errors["amount"] = [ValidationError("Meal money is at most ten million.", code="meal_money.amount_too_big")]
+        if date > shop_today(shop):
+            # Tomorrow's meals aren't cooked yet, so it is a wrong date. Today's are: typed as they are paid for.
+            errors["date"] = [ValidationError("A day to come has no meals yet.", code="meal_money.in_future")]
+        elif date.weekday() == SUNDAY or not get_setting(ATTENDANCE_ON, shop, on=date):
+            # A day the book answers for nobody: money typed there would be shared by nobody, a slip of the date. A
+            # closed day takes it: breakfast was cooked the morning of a funeral, and each day that came is decided.
+            errors["date"] = [ValidationError("Only a working day has meal money.", code="meal_money.not_working_day")]
+        # On the demo every visitor logs in as Meneja (OPS-3): a note would show to every visitor after them, signed by
+        # the shared manager, until the morning's seed, so it isn't kept, as for a rule (demo.no_note, set_setting).
+        if settings.DEMO_SEED and note:
+            errors["note"] = [ValidationError("On the demo, a note isn't kept.", code="demo.no_note")]
+        if errors:
+            raise ValidationError(errors)
+        row = MealMoney(id=money_id, shop=shop, date=date, amount=amount, note=note, created_by=by)
+        # The row's own checks last, as a guard on what the boxes above already asked: a note too long, an id taken.
+        row.full_clean()
+        # An INSERT, never an UPDATE: an id another row holds clashes, loudly, and never overwrites it (03 §5.4).
+        row.save(force_insert=True)
+    return row
+
+
+def void_meal_money(money: MealMoney, *, reason: str, by: StaffMember) -> MealMoney:
+    """Cross out meal money typed wrong (WAGE-7, 02 §12, T2): 30,000 for 3,000, "Sifuri moja zaidi". The row stays,
+    voided once with who, when and why, and counts for nothing; the right amount is typed again. Never brought back.
+    `by`: who crosses it out, with meals.record on the whole shop, whoever typed it. A row crossed out already, by this
+    request sent twice or by someone a moment before, is answered as it was crossed out, never stamped again (CORE-3's
+    Watch out). Refuses, beside the reason's box: no reason (meal_money.reason_missing), or on the demo a reason not the
+    ready one (demo.ready_reasons). Returns the row as saved."""
+    # Who voids is a staff member of the row's own shop (T1): the void rule in the database checks only that the stamp
+    # is filled whole, so this is the check it can't make with one column.
+    if by.shop_id != money.shop_id:
+        raise ShopMismatch("void_meal_money was given a person of another shop.")
+    reason = reason.strip()
+    with transaction.atomic():
+        require(by, Permission.MEALS_RECORD, None)
+        if not reason:
+            raise ValidationError(
+                {"reason": [ValidationError("Money crossed out says why.", code="meal_money.reason_missing")]}
+            )
+        if settings.DEMO_SEED and reason not in DEMO_MEAL_VOID_REASONS:
+            raise ValidationError(
+                {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
+            )
+        # The stamp, filled once, by one guarded UPDATE, as a tap's (void_tap): only while the row is not crossed out,
+        # so two voids never both write it. Never save(), which AppendOnly refuses; the void trigger lets this UPDATE
+        # change the stamp and nothing else (ADR-0021).
+        MealMoney.objects.filter(pk=money.pk, voided_at__isnull=True).update(
+            voided_at=timezone.now(), voided_by=by, void_reason=reason
+        )
+        # Read back as it is now: crossed out by this request, or by the same one sent before, its answer lost, or by
+        # someone a moment before, whose stamp the page is then shown.
+        return MealMoney.objects.get(pk=money.pk)
+
+
+@dataclass(frozen=True)
+class VoidedMealMoney:
+    # Who crossed out a row of meal money, by nickname; when; and why. On the demo the reason is a ready one's code
+    # (`wrong_amount`), which the page says in words.
+    by: str
+    at: dt.datetime
+    reason: str
+
+
+@dataclass(frozen=True)
+class MealMoneyLine:
+    # One row of a day's meal money, as the day's page shows it: "TSh 5,000 · Unga na maharage", who typed it and when,
+    # and who crossed it out, or None while it counts. Its day too, as the sheet's answer is the row alone.
+    id: uuid.UUID
+    date: dt.date
+    amount: Decimal
+    note: str
+    by: str
+    at: dt.datetime
+    voided: VoidedMealMoney | None
+
+
+@dataclass(frozen=True)
+class MealDay:
+    # One day of Hela ya chakula (WAGE-7): its money, the sum of the rows that count; whether it is over, as today is
+    # not, so its money isn't split yet; how many workers share it, each one's share as the book kept it, and how many
+    # wait for a decision; and its rows, oldest first, the crossed-out ones too. No money and someone who came:
+    # Haijaandikwa. Money and nobody to share it: Hakuna wa kuchangia.
+    date: dt.date
+    amount: Decimal
+    over: bool
+    sharers: int
+    share: Decimal
+    waiting: int
+    rows: list[MealMoneyLine]
+
+
+@dataclass(frozen=True)
+class MealMoneyDays:
+    # The page's answer: the span, up to the shop's today, or as it was asked when it is all to come; today itself; the
+    # whole of its money; and its days, newest first. On the demo, the ready reason a row may be crossed out with;
+    # elsewhere none.
+    first: dt.date
+    last: dt.date
+    today: dt.date
+    total: Decimal
+    days: list[MealDay]
+    ready_void_reasons: list[str]
+
+
+# No money: a day nobody typed, or a span of them. Two places, as every amount.
+NO_MONEY = Decimal("0.00")
+
+
+def meal_money_days(shop: Shop, first: dt.date, last: dt.date) -> MealMoneyDays:
+    """The meal money from `first` to `last`, both counted and up to the shop's today, as Hela ya chakula shows it
+    (WAGE-7): each day with money typed for it, or with a worker who came and shares it, or who may have, and today; and
+    the whole of it. Worked out through the book (work_out_days), so it writes as the book does, and asked twice writes
+    nothing the second time. The shop must be open, as for the book."""
+    today = shop_today(shop)
+    ready = list(DEMO_MEAL_VOID_REASONS) if settings.DEMO_SEED else []
+    if today < first:
+        # Days to come alone, when nobody has eaten yet: nothing to read. Answered as they were asked for, so the page
+        # never heads them with a last day before the first.
+        return MealMoneyDays(first, last, today, NO_MONEY, [], ready)
+    last = min(last, today)
+    # The book first, so each day's share is as it is now: the money typed a moment ago, a tap that came late, a day
+    # decided. It answers every job's day up to yesterday. The rows are read after it, so money typed between the two
+    # shows with the split before it, until the page asks again (as a tap does, worker_attendance).
+    book: dict[dt.date, list[AttendanceDay]] = defaultdict(list)
+    for worked_out in work_out_days(shop, first, last):
+        book[worked_out.date].append(worked_out)
+    rates = rates_between(shop, first, last)
+    rows: dict[dt.date, list[MealMoney]] = defaultdict(list)
+    # Who typed each and who crossed it out come in the same read. Oldest first, as they were typed; then the id, for
+    # two typed at the very same moment.
+    for row in (
+        MealMoney.objects.filter(shop=shop, date__range=(first, last))
+        .select_related("created_by", "voided_by")
+        .order_by("date", "created_at", "id")
+    ):
+        rows[row.date].append(row)
+    days: list[MealDay] = []
+    for date in _dates_back(first, last):
+        day = _meal_day(date, today, book[date], rows[date], rates)
+        # A day to show: one with a row, crossed out or not; one whose meals someone ate, or may have; and today, while
+        # it is a working day, as that is when its money is typed.
+        if day.rows or day.sharers or day.waiting or (date == today and _works_today(shop, today)):
+            days.append(day)
+    return MealMoneyDays(first, last, today, sum((day.amount for day in days), NO_MONEY), days, ready)
+
+
+def _dates_back(first: dt.date, last: dt.date) -> list[dt.date]:
+    # Each day from `last` back to `first`, both counted. Counted forward from the first, never a day taken off each
+    # time: past the first day Python knows, that step is an error.
+    return [first + dt.timedelta(days=n) for n in range((last - first).days, -1, -1)]
+
+
+def _meal_day(
+    date: dt.date,
+    today: dt.date,
+    worked_out: list[AttendanceDay],
+    rows: list[MealMoney],
+    rates: dict[tuple[uuid.UUID, dt.date], PayRate],
+) -> MealDay:
+    # One date of Hela ya chakula, from its jobs' days as the book answered them, its rows, and the rates in force.
+    sharing = _sharing([(day, day.decided_status) for day in worked_out], rates)
+    # The share as the book kept it, the same for everyone who shares the date's meals: never worked out a second time
+    # here, so the page and the pay can't differ (WAGE-2). The most of them, as a rate typed between the book's read and
+    # this one's adds someone whose kept share is still 0, until the page asks again.
+    share = max((day.meal_share for day in sharing.days), default=NO_MEAL_SHARE)
+    return MealDay(
+        date=date,
+        amount=sum((row.amount for row in rows if row.voided_at is None), NO_MONEY),
+        over=date < today,
+        sharers=len(sharing.days),
+        share=share,
+        waiting=sharing.waiting,
+        rows=[meal_line(row) for row in rows],
+    )
+
+
+def meal_line(row: MealMoney) -> MealMoneyLine:
+    """A row of meal money as the day's page shows it, which the sheets' answers are too. Who typed it is always there,
+    as the table holds."""
+    by = cast(StaffMember, row.created_by)
+    voided = None
+    if row.voided_at is not None and row.voided_by is not None:
+        voided = VoidedMealMoney(by=row.voided_by.display_name, at=row.voided_at, reason=row.void_reason)
+    return MealMoneyLine(
+        id=row.pk,
+        date=row.date,
+        amount=row.amount,
+        note=row.note,
+        by=by.display_name,
+        at=row.created_at,
+        voided=voided,
+    )
+
+
+def _works_today(shop: Shop, today: dt.date) -> bool:
+    # Whether the shop works today, as the book will count it once it is over: not a Sunday, not a closed day, and while
+    # attendance is on.
+    return (
+        today.weekday() != SUNDAY
+        and today not in closed_days(shop, today, today)
+        and bool(get_setting(ATTENDANCE_ON, shop, on=today))
+    )

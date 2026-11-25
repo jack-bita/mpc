@@ -68,6 +68,7 @@ function day(
     id: `019a8400-0000-7000-9000-${fields.date.replaceAll("-", "").padStart(12, "0")}`,
     reason: null,
     fine: "0.00",
+    meal_share: "0.00",
     first_in: null,
     first_out: null,
     decision: null,
@@ -282,6 +283,52 @@ describe("a day under the calendar", () => {
     expect(
       within(open).getByText("Hakuna picha: hii ni demo, picha haitumwi"),
     ).toBeTruthy();
+  });
+
+  it("says their share of the day's meals, on a day with one, decided or not (WAGE-7)", async () => {
+    // Monday's 1,000, as the book kept it; Tuesday, decided a full day, the same; Wednesday, when nobody typed any money,
+    // says nothing of meals.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [
+          day({ date: "2026-11-02", status: "on_time", meal_share: "1000.00" }),
+          day({
+            date: "2026-11-03",
+            status: "needs_review",
+            reason: "no_out",
+            meal_share: "1000.00",
+            decision: {
+              status: "on_time",
+              absence_type: null,
+              fine: "0.00",
+              by: "Baba",
+              at: "2026-11-04T06:00:00Z",
+              reason: "Alisahau kubonyeza Toka",
+            },
+          }),
+          day({ date: "2026-11-04", status: "on_time" }),
+        ],
+        [],
+      ),
+    });
+    for (const [asked, name, shown] of [
+      ["2026-11-02", "Jumatatu 02/11/2026", true],
+      ["2026-11-03", "Jumanne 03/11/2026", true],
+      ["2026-11-04", "Jumatano 04/11/2026", false],
+    ] as const) {
+      const page = render(
+        <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay={asked} />,
+      );
+      const open = await theDay(name);
+      // Nothing of meals at all on the third, never "Chakula: TSh 0".
+      expect(
+        within(open)
+          .queryAllByText(/^Chakula/)
+          .map((line) => line.textContent),
+      ).toEqual(shown ? [expect.stringMatching(/^Chakula: TSh\s1,000$/)] : []);
+      page.unmount();
+    }
   });
 
   it("shows today's taps as they came, though the day isn't over", async () => {

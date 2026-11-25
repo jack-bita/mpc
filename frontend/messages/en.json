@@ -582,6 +582,9 @@
       "attendance": {
         "manage": "Fix attendance"
       },
+      "meals": {
+        "record": "Record the meal money"
+      },
       "pay": {
         "run": "Prepare the month's pay",
         "approve": "Approve the month's pay"
@@ -771,6 +774,58 @@
     },
     "nobody": "No worker paid by the day in this month."
   },
+  "mealMoney": {
+    "title": "Meal money",
+    "total": "Total",
+    "totalToToday": "Total up to today, {day}",
+    "daysLabel": "The month's days",
+    "day": "{weekday} {date}",
+    "today": "{weekday} {date} (today)",
+    "notTyped": "Not written",
+    "notSplitYet": "Will be split when the day is over",
+    "split": "{count, plural, one {1 person · {share}} other {# people · {share} each}}",
+    "nobodyShares": "Nobody to share it",
+    "waiting": "{count, plural, one {1 waits for a decision} other {# wait for a decision}}",
+    "none": "No day to show in this month.",
+    "noneChosen": "No day to show in these days.",
+    "daysChosenLabel": "The days you chose",
+    "span": "{first} to {last}",
+    "wholeMonth": "Whole month",
+    "dayPage": {
+      "noDay": "No day was chosen.",
+      "none": "No meal money on this day.",
+      "total": "Total {amount}",
+      "rowsLabel": "Money recorded for this day",
+      "rowWithNote": "{amount} · {note}",
+      "typedBy": "{by} · {date} {time}",
+      "voidedBy": "Crossed out by {by}, {date}",
+      "reason": "Why: {reason}"
+    },
+    "void": {
+      "title": "Cross out {amount}",
+      "about": "{day} · {note}",
+      "reason": "Why",
+      "action": "Cross out"
+    },
+    "readyReason": {
+      "wrong_amount": "The amount is wrong"
+    },
+    "record": {
+      "title": "Record meal money",
+      "date": "Day",
+      "amount": "Amount (TSh)",
+      "note": "Note (optional)",
+      "save": "Save",
+      "saved": "Recorded: {amount}, {weekday} {date}."
+    },
+    "choose": {
+      "title": "Choose days",
+      "first": "From",
+      "last": "To",
+      "notADay": "This isn't a right day.",
+      "show": "Show"
+    }
+  },
   "attendanceWorker": {
     "title": "A worker's attendance",
     "intro": "One worker's days, the whole month.",
@@ -816,6 +871,7 @@
       "off": "Shop closed"
     },
     "statusWithFine": "{status} · fine {amount}",
+    "meals": "Meals: {amount}",
     "why": "Why: {why}",
     "jobFrom": "Their work days: from {first}.",
     "jobBetween": "Their work days: {first} to {last}.",
@@ -1366,6 +1422,15 @@
       "not_working_day": "This day isn't one of this worker's working days.",
       "in_future": "This time hasn't come yet.",
       "reason_missing": "Write why."
+    },
+    "meal_money": {
+      "amount_invalid": "Type a whole number of shillings, above 0.",
+      "amount_too_big": "This amount is too big. Check its zeros.",
+      "in_future": "This day hasn't come yet.",
+      "not_working_day": "This isn't a working day, so it has no meal money.",
+      "reason_missing": "Write why.",
+      "days_backwards": "To is before From.",
+      "too_many_days": "Choose at most a year of days."
     },
     "flag": {
       "note_required": "Write a note.",

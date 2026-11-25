@@ -582,6 +582,9 @@
       "attendance": {
         "manage": "Kurekebisha mahudhurio"
       },
+      "meals": {
+        "record": "Kuandika hela ya chakula"
+      },
       "pay": {
         "run": "Kuandaa mishahara ya mwezi",
         "approve": "Kuidhinisha mishahara ya mwezi"
@@ -771,6 +774,58 @@
     },
     "nobody": "Hakuna mfanyakazi anayelipwa kwa siku katika mwezi huu."
   },
+  "mealMoney": {
+    "title": "Hela ya chakula",
+    "total": "Jumla",
+    "totalToToday": "Jumla hadi leo, {day}",
+    "daysLabel": "Siku za mwezi",
+    "day": "{weekday} {date}",
+    "today": "{weekday} {date} (leo)",
+    "notTyped": "Haijaandikwa",
+    "notSplitYet": "Itagawanywa siku ikiisha",
+    "split": "{count, plural, one {Mtu 1 · {share}} other {Watu # · {share} kila mmoja}}",
+    "nobodyShares": "Hakuna wa kuchangia",
+    "waiting": "{count, plural, one {1 anasubiri uamuzi} other {# wanasubiri uamuzi}}",
+    "none": "Hakuna siku ya kuonyesha katika mwezi huu.",
+    "noneChosen": "Hakuna siku ya kuonyesha katika siku hizi.",
+    "daysChosenLabel": "Siku ulizochagua",
+    "span": "{first} hadi {last}",
+    "wholeMonth": "Mwezi mzima",
+    "dayPage": {
+      "noDay": "Hakuna siku iliyochaguliwa.",
+      "none": "Hakuna hela ya chakula siku hii.",
+      "total": "Jumla {amount}",
+      "rowsLabel": "Hela iliyoandikwa siku hii",
+      "rowWithNote": "{amount} · {note}",
+      "typedBy": "{by} · {date} {time}",
+      "voidedBy": "Imebatilishwa na {by}, {date}",
+      "reason": "Sababu: {reason}"
+    },
+    "void": {
+      "title": "Batilisha {amount}",
+      "about": "{day} · {note}",
+      "reason": "Sababu",
+      "action": "Batilisha"
+    },
+    "readyReason": {
+      "wrong_amount": "Kiasi kimekosewa"
+    },
+    "record": {
+      "title": "Andika hela ya chakula",
+      "date": "Siku",
+      "amount": "Kiasi (TSh)",
+      "note": "Maelezo (si lazima)",
+      "save": "Hifadhi",
+      "saved": "Imeandikwa: {amount}, {weekday} {date}."
+    },
+    "choose": {
+      "title": "Chagua siku",
+      "first": "Kuanzia",
+      "last": "Hadi",
+      "notADay": "Siku hii si sahihi.",
+      "show": "Onyesha"
+    }
+  },
   "attendanceWorker": {
     "title": "Mahudhurio ya mfanyakazi",
     "intro": "Siku za mfanyakazi mmoja, mwezi mzima.",
@@ -816,6 +871,7 @@
       "off": "Duka limefungwa"
     },
     "statusWithFine": "{status} · faini {amount}",
+    "meals": "Chakula: {amount}",
     "why": "Kwa nini: {why}",
     "jobFrom": "Siku zake za kazi: kuanzia {first}.",
     "jobBetween": "Siku zake za kazi: {first} hadi {last}.",
@@ -1366,6 +1422,15 @@
       "not_working_day": "Siku hii si siku ya kazi ya mfanyakazi huyu.",
       "in_future": "Saa hii bado haijafika.",
       "reason_missing": "Andika sababu."
+    },
+    "meal_money": {
+      "amount_invalid": "Andika kiasi cha shilingi nzima, zaidi ya sifuri.",
+      "amount_too_big": "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
+      "in_future": "Siku hii bado haijafika.",
+      "not_working_day": "Siku hii si siku ya kazi, kwa hiyo haina hela ya chakula.",
+      "reason_missing": "Andika sababu.",
+      "days_backwards": "Hadi iko kabla ya Kuanzia.",
+      "too_many_days": "Chagua siku zisizozidi mwaka mmoja."
     },
     "flag": {
       "note_required": "Andika maelezo.",

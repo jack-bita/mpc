@@ -29,6 +29,7 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
+import { MEAL_MONEY } from "@/features/meals/meal-money";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { formatDay, weekdayOf } from "@/lib/format";
 import { useOnline } from "@/offline/network";
@@ -89,6 +90,8 @@ export function VoidTap({
       );
       void store.invalidateQueries({ queryKey: WORKER_MONTHS });
       void store.invalidateQueries({ queryKey: ATTENDANCE_MONTHS });
+      // And the meal money: who came shares it, so the date is split again (WAGE-7).
+      void store.invalidateQueries({ queryKey: MEAL_MONEY });
       onClose();
     },
   });

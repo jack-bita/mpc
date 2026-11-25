@@ -21,10 +21,10 @@ per day, which keeps each answer with the rules it used:
     Asha   Sun 22 Nov  off           0.00    —      —
     Juma   Mon 16 Nov  needs_review  0.00    07:20  —
 
-The events are the truth and the days only answers worked out from them: a day is worked out again, from its taps and
-its date's rules, as often as it is asked, until its pay run is approved (WAGE-3). Beside the answer, a day keeps a
-manager's or the owner's decision (ATT-6), which the book never writes, and why an absent worker was away
-(AbsenceType):
+and, with each, the worker's share of that date's meal money (`meal_share`, WAGE-7). The events are the truth and the
+days only answers worked out from them: a day is worked out again, from its taps and its date's rules, as often as it
+is asked, until its pay run is approved (WAGE-3). Beside the answer, a day keeps a manager's or the owner's decision
+(ATT-6), which the book never writes, and why an absent worker was away (AbsenceType):
 
     who    date        book says     decided   absence      fine  by    why
     Juma   Mon 16 Nov  needs_review  on_time   —            0.00  Baba  Alisahau kubonyeza Toka
@@ -36,8 +36,17 @@ and the old one stays, so a month with a raise on the 15th pays each day at its 
     who    from        rate        shares meals
     Juma   10 Nov      10,000.00   yes
     Juma   15 Nov      12,000.00   yes
+
+And the day's meal money (MealMoney, WAGE-7), a ledger too: what the shop spent on the workers' meals on one day, which
+they pay for out of their pay, crossed out with a reason when typed wrong, and typed again:
+
+    date    amount     note              typed by   crossed out
+    23 Nov   5,000.00  Unga na maharage  Asha
+    23 Nov  30,000.00  Nyama             Asha       by Baba: "Sifuri moja zaidi"
+    23 Nov   3,000.00  Nyama             Asha
 """
 
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from django.db import models
@@ -347,8 +356,7 @@ class AttendanceDay(ShopScoped):
     # Not on the laptops: no laptop works out a day (03 §6.6), and a worker's pay never sits on a shared device
     # (03 §6.1), so the book writes no line in the change log.
     #
-    # Later cards add their columns, each with its migration: `meal_share` (WAGE-7), and the lock of an approved pay run
-    # (WAGE-3).
+    # A later card adds the lock of an approved pay run, with its migration (WAGE-3).
 
     # Whose day it is: a job, not a person, as an event's `staff` is. A person who left and is hired again the same day
     # has two jobs, so two days on that date, each read from its own taps (PPL-11). PROTECT: nothing is deleted.
@@ -375,6 +383,14 @@ class AttendanceDay(ShopScoped):
     # day. Empty too on a day to decide kept before ATT-5, as the column came empty on every row already there, until
     # the book works that day out again and writes its reason (a reason is one of the day's answers, WORKED_OUT).
     review_reason = models.CharField(max_length=15, choices=ReviewReason, blank=True)
+
+    # The worker's part of the date's meal money (WAGE-7, 02 §15, 14): worked out with the day, so a worker's meals up
+    # to any day are a sum of days already worked out, and one who leaves on the 15th is paid at once. One of the book's
+    # answers (WORKED_OUT): it moves when money is typed or crossed out, when any worker's day of the date is decided or
+    # its taps fixed, and when a pay rate is typed, as the date is then split again. 0 on every day with nothing to
+    # share, and on all but one of a person's days of one date (_sharing, apps/staffpay/services.py). Money, so
+    # numeric(14,2) (rule 3).
+    meal_share = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
 
     # A manager's or the owner's decision on the day (ATT-6, 02 §12's `override`): what the day was, whatever the book
     # worked out. Empty until someone decides; whole once they do (a rule below). Deciding again writes over it, and the
@@ -442,6 +458,14 @@ class AttendanceDay(ShopScoped):
                     | (~models.Q(status=DayStatus.OFF) & ~models.Q(rules_used={}))
                 ),
                 name="staffpay_attendanceday_rules_kept_unless_off",
+            ),
+            # A share is never below 0, which would pay a worker for eating, and never on an off day, which is nobody's
+            # (WAGE-7), whatever was decided on it. No more than that: who shares reads the decision where there is one
+            # (meal_part, apps/staffpay/calculations.py), and a decision is written a moment before the book's next
+            # working out moves the share (decide_day), so a rule tying the two would refuse a manager's decision.
+            models.CheckConstraint(
+                condition=models.Q(meal_share=0) | (models.Q(meal_share__gt=0) & ~models.Q(status=DayStatus.OFF)),
+                name="staffpay_attendanceday_meal_share",
             ),
             # A reason only on a day to decide, and only one of the reasons there are (ATT-5): a reason on an on-time
             # day would put it on the month page's list for nothing. Not the other way: a day to decide kept before
@@ -551,3 +575,91 @@ class PayRate(AppendOnly):
 
     def __str__(self) -> str:
         return f"{self.daily_rate} from {self.effective_from}"
+
+
+# The most one row of meal money may be (WAGE-7): see its rule below.
+MOST_MEAL_MONEY = Decimal("10000000.00")
+
+
+class MealMoney(AppendOnly):
+    # What the shop spent on the workers' meals on one day (WAGE-7, 02 §12): the cook makes them at the shop, and the
+    # workers pay for their own, out of their pay (spec §8.1). Typed each day by whoever holds meals.record, a key the
+    # owner gives to whoever he chooses (Jack, 15 Nov 2026). A day may have several, flour in the morning and meat at
+    # noon: its money is the sum of its rows not voided. The whole shop's, not a side's: the workers of both sides eat
+    # together. Who typed it is the row's `created_by` (ShopScoped).
+    # Money, so a ledger (rule 2, T2): written once, never changed or deleted. AppendOnly (CORE-3) refuses a second
+    # save() and any delete() in Python, and the trigger in this table's migration refuses the same in PostgreSQL
+    # (ADR-0021), all but the void stamp, filled once: a wrong amount is voided, with who, when and why, and the right
+    # one typed. Never on a laptop: what a worker pays for meals is part of their pay, and pay never sits on a shared
+    # device (03 §6.1), so the services write no line in the change log, and no sync answer carries one. Written only by
+    # record_meal_money and void_meal_money (apps/staffpay/services.py), which ask who may.
+
+    # The day of the meals, on the shop's own calendar: a business date, not a moment (02 §1). Today's or an earlier
+    # working day's, which the service checks: a forgotten day is typed later.
+    date = models.DateField()
+    # Money, so numeric(14,2) and a Decimal, never a float (rule 3, 03 §9); above 0, in whole shillings and at most ten
+    # million, as the rules below hold.
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    # What it bought, in the person's own words ("Unga na maharage"); optional.
+    note = models.CharField(max_length=200, blank=True)
+    # The void stamp (03 §5.6): empty while the row counts, filled once when it is crossed out, then frozen, as the
+    # trigger makes PostgreSQL hold it. The same shape as a clock-in's. That whoever voids is of this row's shop is the
+    # void service's check (T1): the database can't hold it with one column. The fourth part, `void_approval`, comes
+    # with the Approval table (R1), if a void of meal money ever needs one.
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        "people.StaffMember", on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
+    void_reason = models.TextField(blank=True)
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). The amount's
+        # three rules carry the codes the page translates (ADR-0032), as the model's own checks (full_clean) name it to
+        # the person who typed it; the database holds the same rules for whatever writes past them.
+        constraints = [
+            # A day's meals cost more than nothing. A row below 0 would give the workers money back, and nobody could
+            # tell why: a wrong row is voided instead.
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="staffpay_mealmoney_above_zero",
+                violation_error_code="meal_money.amount_invalid",
+            ),
+            # Whole shillings, as every amount a person types (Jack, 16 Nov 2026). FLOOR of a whole amount is itself.
+            models.CheckConstraint(
+                condition=models.Q(amount=Floor("amount")),
+                name="staffpay_mealmoney_whole_shillings",
+                violation_error_code="meal_money.amount_invalid",
+            ),
+            # No more than ten million: more than any day's meals, so a slip of the zeros, and an amount so big that the
+            # sum of a few could pass what a column of money holds and stop the month from opening. A technical guard,
+            # never a shop's rule: a day that truly costs more is typed in two rows.
+            models.CheckConstraint(
+                condition=models.Q(amount__lte=MOST_MEAL_MONEY),
+                name="staffpay_mealmoney_at_most",
+                violation_error_code="meal_money.amount_too_big",
+            ),
+            # Every worker pays a share of it, so it never stands with nobody's name on it. No code, here or on the next
+            # rule: the route always knows who sent the request, so such a row is a bug in our code, never a person's
+            # mistake.
+            models.CheckConstraint(
+                condition=models.Q(created_by__isnull=False), name="staffpay_mealmoney_typed_by_someone"
+            ),
+            # A void says who and why (T2), as CORE-3's Watch out asks of each void table: the void rule only checks
+            # that the stamp is filled once. All three empty, or all three filled, the reason with at least one
+            # character that isn't a space.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(voided_at__isnull=True, voided_by__isnull=True, void_reason="")
+                    | models.Q(voided_at__isnull=False, voided_by__isnull=False, void_reason__regex=r"\S")
+                ),
+                name="staffpay_mealmoney_void_complete",
+            ),
+        ]
+        indexes = [
+            # How a span's money is read, the page's month (WAGE-7) and the book's (work_out_days), and a day's. Leads
+            # with `shop`, as every index does (03 §9).
+            models.Index(fields=["shop", "date"], name="staffpay_mealmoney_by_date"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.date:%Y-%m-%d} {self.amount}"

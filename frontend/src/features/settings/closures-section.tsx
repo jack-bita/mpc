@@ -49,7 +49,7 @@ import { ClosureForm } from "./closure-form";
 import { ClosureLastDay } from "./closure-last-day";
 import { type Closure, CLOSURES, useClosures, useDaysOf } from "./closures";
 
-/** The key that lets a person close the shop, on the whole shop: one of the owner's own four (spec §6). */
+/** The key that lets a person close the shop, on the whole shop: one of the owner's own (spec §6). */
 const CLOSES_THE_SHOP = "settings.manage";
 
 /** The two forms a closure's line opens under it. */

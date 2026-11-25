@@ -6,6 +6,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { answer, refusal, sent } from "@/test/fake-server";
+import { MealMoneyAsked, mealMoneyIsAnswered } from "@/test/meals";
 import { render } from "@/test/render";
 
 import { VoidTap } from "./void-tap";
@@ -131,6 +132,28 @@ describe("Batilisha", () => {
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(await sentBodies()).toEqual([{ reason: "Alibonyeza kwa makosa" }]);
+  });
+
+  it("asks the meal money again, as the date is split again without the tap (WAGE-7)", async () => {
+    answer("POST", VOID, { status: 200, body: CROSSED });
+    const asked = mealMoneyIsAnswered();
+    render(
+      <>
+        <MealMoneyAsked />
+        <VoidTap
+          tap={TEN_OCLOCK}
+          said={{ kind: "Toka", time: "10:00 asubuhi" }}
+          answer={month()}
+          onClose={vi.fn()}
+        />
+      </>,
+    );
+    await waitFor(() => expect(asked()).toBe(1));
+
+    fireEvent.change(reasonBox(), { target: { value: "Kwa makosa" } });
+    fireEvent.click(crossOut());
+
+    await waitFor(() => expect(asked()).toBe(2));
   });
 
   it("says an empty reason at once, and sends nothing", async () => {

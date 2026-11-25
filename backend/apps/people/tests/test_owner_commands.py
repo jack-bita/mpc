@@ -427,7 +427,7 @@ def test_owner_take_ends_every_owner_row_of_that_person(mfano: Shop, keyboard: K
 
 @pytest.mark.parametrize(("answer", "taken"), [("y", True), ("n", False), ("", False)])
 def test_taking_the_last_owner_asks_once_more(mfano: Shop, keyboard: Keyboard, answer: str, taken: bool) -> None:
-    # The card's default: with no Owner working, nobody at the shop holds the owner's four keys, and nobody there can
+    # The card's default: with no Owner working, nobody at the shop holds the owner's own keys, and nobody there can
     # give the role again. So a yes is asked, and only y or yes takes it.
     baba = an_owner(mfano, "Baba")
     keyboard.type("Sold the shop", answer)

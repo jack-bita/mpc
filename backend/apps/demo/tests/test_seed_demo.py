@@ -64,8 +64,15 @@ from apps.people.services import add_worker, end_permission, mark_left, suspend
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, Side
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
-from apps.staffpay.models import AttendanceEvent, DayStatus, NoPhoto, PayRate, ReviewReason, TimeCheck
-from apps.staffpay.services import attendance_month, set_pay_rate, work_out_days
+from apps.staffpay.models import AttendanceEvent, DayStatus, MealMoney, NoPhoto, PayRate, ReviewReason, TimeCheck
+from apps.staffpay.services import (
+    attendance_month,
+    meal_money_days,
+    record_meal_money,
+    set_pay_rate,
+    void_meal_money,
+    work_out_days,
+)
 from apps.sync.models import PushedDocument, PushedStatus
 from apps.sync.push import Answer, Sent, push
 from apps.sync.registry import REGISTRY
@@ -141,7 +148,15 @@ def what_the_shop_holds() -> dict[str, Any]:
             (event.staff.display_name, event.kind, event.client_time)
             for event in AttendanceEvent.objects.select_related("staff")
         )
-    return {"shop": (shop.name, shop.code, shop.kind), "sides": side_list, "people": people, "taps": taps}
+        # The meal money (WAGE-7): which days, how much, and who typed it.
+        meals = sorted(MealMoney.objects.values_list("date", "amount", "created_by__display_name"))
+    return {
+        "shop": (shop.name, shop.code, shop.kind),
+        "sides": side_list,
+        "people": people,
+        "taps": taps,
+        "meals": meals,
+    }
 
 
 def row_counts() -> dict[str, int]:
@@ -237,6 +252,10 @@ def test_seed_demo_is_repeatable(three_weeks: None) -> None:
     # but none on Baraka's absent day and no Toka on Asha's day to decide.
     taps = first.pop("taps")
     assert Counter(name for name, _kind, _at in taps) == {"Asha": 35, "Baraka": 34, "Meneja": 36}
+    # The meal money of those 18 working days but one, 3,000 a day, typed by Meneja (WAGE-7).
+    meals = first.pop("meals")
+    assert len(meals) == len({day for day, _amount, _by in meals}) == 17
+    assert {(str(amount), by) for _day, amount, by in meals} == {("3000.00", "Meneja")}
     assert first == {
         "shop": ("Duka la Mfano", "DEMO", ShopKind.DEMO),
         "sides": [("D", "Dawa"), ("F", "Vyakula")],
@@ -267,9 +286,13 @@ def test_seed_demo_is_repeatable(three_weeks: None) -> None:
                 "email": "meneja@example.com",
                 "staff": False,
                 "roles": [("manager", "every side")],
-                # The owner's key to the shop's rules, so a visitor can try Badilisha (SHOP-5); and to its workers, so a
-                # visitor can try Wafanyakazi (PPL-4).
-                "keys": [("settings.manage", "every side"), ("staff.manage", "every side")],
+                # The owner's key to the shop's rules, so a visitor can try Badilisha (SHOP-5); to its workers, so a
+                # visitor can try Wafanyakazi (PPL-4); and to the meal money, so one can try Hela ya chakula (WAGE-7).
+                "keys": [
+                    ("meals.record", "every side"),
+                    ("settings.manage", "every side"),
+                    ("staff.manage", "every side"),
+                ],
                 "rates": [("15000.00", True, True, None)],
                 "pin works": False,
                 "password works": True,
@@ -346,7 +369,7 @@ def test_seed_demo_makes_todays_shop_again_without_its_peoples_keys(monkeypatch:
     seed_demo(fresh=True)
     made = the_demo_shop()
     meneja = next(person for person in services.PEOPLE if person.keys)
-    # One of the owner's own four, which no role of the demo holds: only the seed's grant can give it.
+    # One of the owner's own, which no role of the demo holds: only the seed's grant can give it.
     more = replace(meneja, keys=(*meneja.keys, Permission.PAY_APPROVE))
     monkeypatch.setattr(services, "PEOPLE", tuple(more if person is meneja else person for person in services.PEOPLE))
 
@@ -633,7 +656,7 @@ def test_seed_demo_gives_each_side_its_band() -> None:
 
 def test_seed_demo_lets_its_manager_change_the_shops_rules() -> None:
     # The demo has no owner, and a manager alone may not change the shop's rules (settings.manage is one of the
-    # owner's own four, spec §6). Meneja holds that key besides the role, on the whole shop, so a visitor can try
+    # owner's own, spec §6). Meneja holds that key besides the role, on the whole shop, so a visitor can try
     # Badilisha on Mipangilio ya duka (Jack, SHOP-5). Not the Owner's whole role: the demo's people stay as the seed
     # made them, which the Owner's role would let a visitor change (see the test below, PPL-4).
     seed_demo(fresh=True)
@@ -835,6 +858,72 @@ def test_seed_demo_fills_the_month_page(three_weeks: None) -> None:
         ("Baraka", second, ReviewReason.CAME_LATE),
         ("Asha", first, ReviewReason.NO_OUT),
     ]
+
+
+def test_seed_demo_fills_the_meal_money(three_weeks: None) -> None:
+    # WAGE-7's box, as Hela ya chakula reads it (meal_money_days): 3,000 on each working day before today, split among
+    # whoever came, but one day nobody typed, which the page calls Haijaandikwa; and today, which waits for a visitor.
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        today = shop_today(shop)
+        answer = meal_money_days(shop, today - timedelta(days=21), today)
+        meneja = StaffMember.objects.get(display_name="Meneja")
+        asha = StaffMember.objects.get(display_name="Asha")
+        # Meneja may type it, so a visitor can; the sellers may not, as the owner gave them no key.
+        assert "meals.record" in effective_permissions(meneja, None)
+        assert "meals.record" not in effective_permissions(asha, None)
+    days = {day.date: day for day in answer.days}
+    back = services._working_days_back(today)
+    assert answer.total == Decimal("51000.00")
+    # The forgotten day: all three came, and nobody typed its money.
+    forgotten = days[back[services.FORGOTTEN_MEALS_BACK - 1]]
+    assert (forgotten.amount, forgotten.sharers, forgotten.rows) == (Decimal("0"), 3, [])
+    # An ordinary day, 1,000 each; and the latest, when Asha's day waits: 1,500 each, and one to decide.
+    ordinary, latest = days[back[6]], days[back[0]]
+    assert (ordinary.amount, ordinary.sharers, ordinary.share) == (Decimal("3000"), 3, Decimal("1000"))
+    assert (latest.sharers, latest.share, latest.waiting) == (2, Decimal("1500"), 1)
+    # Today, a working day: listed, with nothing typed yet.
+    if today.weekday() != 6:
+        assert (days[today].amount, days[today].over) == (Decimal("0"), False)
+
+
+def test_the_forgotten_meals_are_an_ordinary_day() -> None:
+    # A day somebody was away or waits would show another number of people, and the forgotten day would be about that.
+    assert all(odd.back != services.FORGOTTEN_MEALS_BACK for person in services.PEOPLE for odd in person.odd_days)
+    assert 1 <= services.FORGOTTEN_MEALS_BACK <= 18
+
+
+def test_seed_demo_makes_todays_shop_again_without_its_meal_money(
+    three_weeks: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # As for its taps: WAGE-7's deploy finds the demo the older seed made that morning, with no meal money, and makes
+    # the shop again at once, so Hela ya chakula has days to show the same day.
+    with monkeypatch.context() as older_seed:
+        older_seed.setattr(services, "_type_the_meals", lambda *_args: None)
+        seed_demo(fresh=True)
+    made = the_demo_shop()
+
+    assert seed_demo() == Seeded.MADE
+    assert the_demo_shop() != made
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_keeps_todays_shop_whose_meal_money_a_visitor_changed(three_weeks: None) -> None:
+    # A visitor crossed out every row and typed the forgotten day's: the demo wakes with their work in it, as a row
+    # crossed out is still there, and what a visitor types is nothing the seed lacks.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    with shop_context(made):
+        meneja = StaffMember.objects.get(display_name="Meneja")
+        for row in MealMoney.objects.all():
+            void_meal_money(row, reason="wrong_amount", by=meneja)
+        forgotten = services._working_days_back(shop_today(made))[services.FORGOTTEN_MEALS_BACK - 1]
+        record_meal_money(made, money_id=uuid.uuid7(), date=forgotten, amount=Decimal("2500"), by=meneja)
+
+    assert seed_demo() == Seeded.KEPT
+    assert the_demo_shop() == made
 
 
 def test_every_odd_day_falls_in_the_weeks(three_weeks: None) -> None:

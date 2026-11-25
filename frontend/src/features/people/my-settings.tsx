@@ -36,6 +36,7 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Choice } from "@/components/design/choice";
 import { PageHeader } from "@/components/design/page-header";
 import {
+  homeOf,
   useWhoIsHere,
   WHO_IS_HERE,
   type WhoIsHere,
@@ -44,12 +45,6 @@ import { useOnline } from "@/offline/network";
 
 type Change = components["schemas"]["OwnSettingsRequest"];
 type Saved = components["schemas"]["OwnSettingsAnswer"];
-
-/** The home page the person came from: the PIN screen's welcome at a shared device, where a PIN's session
- * names its device; the office's home page for a password's. */
-function home(here: WhoIsHere): string {
-  return here.device ? "/" : "/office/";
-}
 
 /** One tap: the choice it changes, and whose it is, by the person's id when it was tapped. */
 interface Tap {
@@ -146,7 +141,7 @@ export function MySettings() {
         <PageHeader
           title={t("title")}
           intro={t("intro")}
-          fallback={home(here)}
+          fallback={homeOf(here)}
           headingRef={heading}
         />
         {/* Each language named in that language, as the bar's button names it: someone who can't read

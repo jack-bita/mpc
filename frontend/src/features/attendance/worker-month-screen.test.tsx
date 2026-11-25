@@ -46,6 +46,7 @@ function day(date: number, status: WorkerDay["status"]): WorkerDay {
     status,
     reason: status === "needs_review" ? "no_out" : null,
     fine: status === "late" ? "500.00" : "0.00",
+    meal_share: "0.00",
     first_in: null,
     first_out: null,
     decision: null,

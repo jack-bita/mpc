@@ -27,7 +27,8 @@ tests may not import a higher layer (ADR-0035). Fake data only: the repo is publ
 import hashlib
 import uuid
 from collections.abc import Callable, Iterable, Mapping
-from datetime import timedelta
+from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -61,9 +62,10 @@ from apps.staffpay.api.views import (
     AttendanceMonthViewSet,
     AttendanceTapViewSet,
     AttendanceWorkerViewSet,
+    MealMoneyViewSet,
     PayRateViewSet,
 )
-from apps.staffpay.models import AttendanceEvent, PayRate
+from apps.staffpay.models import AttendanceEvent, MealMoney, PayRate
 from apps.staffpay.tests.days import job, kept_day, switch_on
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
@@ -80,6 +82,8 @@ ATTENDANCE_WORKER = "/api/v1/staffpay/attendance-worker/{}/"
 ATTENDANCE_DAY_DECIDE = "/api/v1/staffpay/attendance-days/{}/decide/"
 ATTENDANCE_TAPS = "/api/v1/staffpay/attendance-taps/"
 ATTENDANCE_TAP_VOID = "/api/v1/staffpay/attendance-taps/{}/void/"
+MEAL_MONEY = "/api/v1/staffpay/meal-money/"
+MEAL_MONEY_VOID = "/api/v1/staffpay/meal-money/{}/void/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -265,7 +269,7 @@ def test_list_shows_only_sides_with_a_permission(
 def test_action_needs_its_permission(
     shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
 ) -> None:
-    # Adding or renaming a side changes the shop itself: `settings.manage`, one of the owner's own four (spec §6).
+    # Adding or renaming a side changes the shop itself: `settings.manage`, one of the owner's own (spec §6).
     # A Manager on every side sees both sides, and still may not.
     give_role(staff_a2, RoleTemplate.MANAGER, None)
     manager = client_for(staff_a2)
@@ -1375,4 +1379,49 @@ def test_attendance_tap_route_names_its_permission() -> None:
     assert AttendanceTapViewSet.action_permissions == {
         "create": Permission.ATTENDANCE_MANAGE,
         "void": Permission.ATTENDANCE_MANAGE,
+    }
+
+
+@pytest.mark.django_db
+def test_meal_money_needs_meals_record(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # The day's meal money (WAGE-7) is for whoever the owner gave the key to (Jack, 15 Nov 2026): a Manager on every
+    # side may neither see it, type it nor cross it out, even with the address typed in, until he is given it; nor may
+    # Asha, a seller, with the key on Dawa alone, as the meals are the whole shop's.
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    switch_on(shop_a)
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.MEALS_RECORD, side=sides["D"], by=None)
+        row = MealMoney(shop=shop_a, date=date(2026, 11, 16), amount=Decimal("9000.00"), created_by=staff_a)
+        row.save()
+    typed = {"id": str(uuid.uuid7()), "date": "2026-11-16", "amount": "5000.00", "note": ""}
+    crossed = {"reason": "Sifuri moja zaidi"}
+    november = {"first": "2026-11-01", "last": "2026-11-30"}
+    for person in (staff_a, staff_a2):
+        for refused in (
+            client_for(person).get(MEAL_MONEY, november),
+            client_for(person).post(MEAL_MONEY, typed, format="json"),
+            # A create sent again hands back the row it made: with the id of one, nothing comes back (CreateOnceMixin).
+            client_for(person).post(MEAL_MONEY, {**typed, "id": str(row.pk)}, format="json"),
+            client_for(person).post(MEAL_MONEY_VOID.format(row.pk), crossed, format="json"),
+        ):
+            assert refused.status_code == 403
+            assert refused.json()["code"] == "permission_denied"
+            assert "9000" not in refused.content.decode()
+    with shop_context(shop_a):
+        grant_permission(staff_a2, Permission.MEALS_RECORD, side=None, by=None)
+    assert client_for(staff_a2).get(MEAL_MONEY, november).status_code == 200
+    assert client_for(staff_a2).post(MEAL_MONEY, typed, format="json").status_code == 201
+    assert client_for(staff_a2).post(MEAL_MONEY_VOID.format(row.pk), crossed, format="json").status_code == 200
+
+
+def test_meal_money_route_names_its_permission() -> None:
+    # Its three actions, the list too, behind the one key (WAGE-7): what the shop spends on meals, and who eats them, is
+    # nobody's to see by only working there. Written out in full, as above.
+    assert MealMoneyViewSet.action_permissions == {
+        "list": Permission.MEALS_RECORD,
+        "create": Permission.MEALS_RECORD,
+        "void": Permission.MEALS_RECORD,
     }

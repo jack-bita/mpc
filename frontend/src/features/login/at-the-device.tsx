@@ -7,8 +7,8 @@
 //                       offline-session.ts, SYNC-10); it comes first, as the server's session, if any, is
 //                       being ended
 // Either way: "Karibu, Asha", her name and the side she works on in the bar, all in her own language and
-// font (UI-9), Toka and Badilisha mtu, and the idle lock. Mipangilio yangu only by the server: the office
-// screens need its session.
+// font (UI-9), Toka and Badilisha mtu, and the idle lock. Mipangilio yangu, and Hela ya chakula for whoever
+// the owner gave its key (WAGE-7), only by the server: the office screens need its session.
 //
 // Nobody here, the PIN login shows, with its tiles from the laptop's own copy (SYNC-10):
 //   `me` refused, under 500        nobody here, or a session the server ended, with why
@@ -45,6 +45,7 @@ import { AppFrame } from "@/components/app-frame";
 import { Button, ButtonLink } from "@/components/design/button";
 import { OfflineBanner } from "@/components/offline-banner";
 import type { ThisDevice } from "@/features/devices/this-device";
+import { MEAL_MONEY_PAGE, mayRecordMeals } from "@/features/meals/meal-money";
 import { useFollowThePerson } from "@/features/people/follow-the-person";
 import { sideOfStaffRow } from "@/features/people/side-of-row";
 import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
@@ -95,6 +96,7 @@ export function AtTheDevice({
 }) {
   const t = useTranslations("login");
   const settings = useTranslations("mySettings");
+  const mealMoney = useTranslations("mealMoney");
   const attendance = useTranslations("attendance");
   const thisLaptop = useTranslations("thisLaptop");
   const me = useWhoIsHere();
@@ -364,6 +366,14 @@ export function AtTheDevice({
             {rowHere && (
               <ButtonLink href="/this-laptop/" kind="second" size="normal">
                 {thisLaptop("title")}
+              </ButtonLink>
+            )}
+            {/* What the workers' meals cost, for whoever the owner gave its key on the whole shop (WAGE-7): a
+                seller logged in by PIN types it here, as they never see the office's home page. An office page, so
+                only by the server's session, as Mipangilio yangu below. */}
+            {here && mayRecordMeals(here) && (
+              <ButtonLink href={MEAL_MONEY_PAGE} kind="second" size="normal">
+                {mealMoney("title")}
               </ButtonLink>
             )}
             {/* The person's own language and font, one tap from the welcome: someone logged in by PIN

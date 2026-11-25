@@ -54,7 +54,7 @@ class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMi
     # one is checked as an action on the whole shop (side_of_new()).
     side_field = "pk"
     # Anyone who works on a side may see it. Adding a side, renaming one, switching it on or off or changing its band
-    # changes the shop itself: the shop's rules (`settings.manage`), one of the owner's own four (spec §6). Adding one
+    # changes the shop itself: the shop's rules (`settings.manage`), one of the owner's own (spec §6). Adding one
     # asks on the whole shop; renaming, switching one or changing its band, on that side (PPL-5).
     action_permissions = {
         "list": SEES_THE_SIDE,
