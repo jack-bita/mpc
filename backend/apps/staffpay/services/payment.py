@@ -8,8 +8,8 @@ marked paid, with its proof, and a payment marked by mistake crossed out.
     08:20, Baraka is paid by M-Pesa:
         PayslipPayment  Baraka, Novemba  148,000  mobile_money QK7H2M9XPL, by Baba
 
-    09:00, he sees he tapped Lipa beside Juma, not Baraka, and crosses it out: "Nilibonyeza mfanyakazi mwingine"; the
-    payment and its signature stay, struck through, and Juma's payslip waits for Lipa again.
+    09:00, he sees the M-Pesa he marked for Baraka went to Juma, and crosses it out: "Nilibonyeza mfanyakazi mwingine";
+    the payment stays, struck through, and Baraka's payslip waits for Lipa again.
 
 The whole amount, at once (Jack: A), and only once a payslip says what it is: approving and paying are two moments
 (WAGE-3). Who may: whoever holds `pay.run` with the two keys of pay, on the whole shop, never on their own pay. No line
@@ -95,7 +95,7 @@ def pay_payslip(
         # not the job, as an advance's: someone hired again has two jobs, and neither's pay is theirs to hand out.
         if StaffMember.objects.get(pk=slip.staff_id).user_id == by.user_id:
             raise ValidationError("Nobody marks their own pay paid.", code="payment.own")
-        # A payslip below 0 pays nothing (WAGE-3, Jack: A): nothing to hand over, and nothing to sign for.
+        # A payslip of 0, or below it, pays nothing (WAGE-3, Jack: A): nothing to hand over, and nothing to sign for.
         amount = cash_to_pay(slip.total)
         if amount <= 0:
             raise ValidationError("This payslip pays nothing.", code="payment.nothing_to_pay")
@@ -121,7 +121,8 @@ def pay_payslip(
         _insert(row)
         if signature is not None and signature_id is not None:
             # The drawing last, its file after its row (adding_attachment), so a payment refused leaves no file. A
-            # drawing that is no JPEG, or past 1 MB, is refused here, and the payment with it: cash is never unsigned.
+            # drawing that is no picture (a JPEG or a WebP, as any photo kept), or past 1 MB, is refused here, and the
+            # payment with it: cash is never unsigned.
             with adding_attachment(
                 id=signature_id, kind=AttachmentKind.SIGNATURE, subject=row, content=signature, by=by
             ):
@@ -216,13 +217,13 @@ def ready_payment_void_reasons() -> list[str]:
 
 
 def void_payslip_payment(payment: PayslipPayment, *, reason: str, by: StaffMember) -> PayslipPayment:
-    """Cross out a payment marked by mistake (WAGE-9, 02 §12, T2): Baba tapped Lipa beside Juma when he paid Asha. The
-    row stays, voided once with who, when and why, and counts for nothing, its signature kept with it; the payslip waits
-    for Lipa again. Never brought back. `by`: who crosses it out, with pay.run and the two keys of pay on the whole
-    shop, whoever marked it, and never the worker it paid. A payment crossed out already, by this request sent twice or
-    by someone a moment before, is answered as it was crossed out, never stamped again. Refuses: one's own
-    (payment.own); and, beside the reason's box, no reason (payment.reason_missing), or on the demo a reason not the
-    ready one (demo.ready_reasons). Returns the row as saved."""
+    """Cross out a payment marked by mistake (WAGE-9, 02 §12, T2): Baba marked Baraka paid by an M-Pesa that went to
+    Juma. The row stays, voided once with who, when and why, and counts for nothing, its signature, if it had one, kept
+    with it; the payslip waits for Lipa again. Never brought back. `by`: who crosses it out, with pay.run and the two
+    keys of pay on the whole shop, whoever marked it, and never the worker it paid. A payment crossed out already, by
+    this request sent twice or by someone a moment before, is answered as it was crossed out, never stamped again.
+    Refuses: one's own (payment.own); and, beside the reason's box, no reason (payment.reason_missing), or on the demo a
+    reason not the ready one (demo.ready_reasons). Returns the row as saved."""
     # Who voids is a staff member of the row's own shop (T1): the void rule in the database checks only that the stamp
     # is filled whole, so this is the check it can't make with one column.
     if by.shop_id != payment.shop_id:

@@ -1014,7 +1014,8 @@ class PayslipPayment(AppendOnly):
     # made or crossed out by the job it pays (below). That it is the payslip's own job is the service's check (T1).
     staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
     # What was handed over: what the payslip pays, copied (T4), so the row says the money without reading another
-    # table; a payslip below 0 pays nothing, and has no payment. Money, so numeric(14,2) and a Decimal (rule 3).
+    # table; a payslip of 0, or below it, pays nothing, and has no payment. Money, so numeric(14,2) and a Decimal (rule
+    # 3).
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     method = models.CharField(max_length=20, choices=PaymentMethod)
     # The transaction number, by M-Pesa or a bank: empty for cash, which has the signature instead.
