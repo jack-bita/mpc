@@ -33,7 +33,7 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
-import { aboutTheWholeRequest, answerOf } from "@/api/refusal";
+import { aboutTheChange, answerOf } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
@@ -200,8 +200,10 @@ export function PaySheet({
           disabled={pay.isPending}
         />
       )}
-      {/* What the server refused of the whole payment: paid already, one's own, a key taken away, no network. */}
-      <ApiErrorAlert error={aboutTheWholeRequest(pay.error)} />
+      {/* What the server refused of the whole payment: paid already, one's own, a key taken away, no network; and what
+          it names a field no box here has, as an id held already comes on `id` (id.taken), which shows here, never
+          nowhere (aboutTheChange, PPL-8's review). A number refused shows beside its box instead. */}
+      <ApiErrorAlert error={aboutTheChange(pay.error, ["reference"])} />
     </Sheet>
   );
 }

@@ -4,6 +4,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import sw from "../../../messages/sw.json";
 import { standInCanvas, signOn, DRAWN } from "@/test/canvas";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { payment, workerPay } from "@/test/pay";
@@ -182,6 +183,15 @@ describe("PaySheet", () => {
     );
     // The same ids: the same payment and signature, never a second one.
     expect(second).toBe(first);
+  });
+
+  it("says an id held already above the buttons, where no box names it", async () => {
+    answer("PUT", IN_CASH, refusal(400, "invalid", {}, { id: ["id.taken"] }));
+    const { sheet, onDone } = open();
+    signOn(within(sheet).getByRole("img", { name: "Sahihi ya Asha" }));
+    fireEvent.click(nimemlipa(sheet));
+    expect(await within(sheet).findByText(sw.errors.id.taken)).toBeTruthy();
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it("on the demo, lets the visitor draw and sends no signature", async () => {
