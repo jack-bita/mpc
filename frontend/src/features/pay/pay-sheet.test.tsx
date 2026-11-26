@@ -51,6 +51,21 @@ function open(keepsSignatures = true) {
   return { sheet, onDone, onClose };
 }
 
+/** The sheet open, with the render's own handles, to draw it again with other props. */
+function openWith() {
+  const rendered = render(
+    <PaySheet
+      worker={ASHA}
+      month="2026-11"
+      keepsSignatures
+      onDone={vi.fn()}
+      onClose={vi.fn()}
+      finalFocus={() => null}
+    />,
+  );
+  return { ...rendered, sheet: screen.getByRole("dialog") };
+}
+
 function nimemlipa(sheet: HTMLElement): HTMLButtonElement {
   return within(sheet).getByRole("button", {
     name: "Nimemlipa",
@@ -84,6 +99,24 @@ describe("PaySheet", () => {
         within(sheet).getByRole("radio", { name: "Taslimu" }) as HTMLElement
       ).getAttribute("aria-checked"),
     ).toBe("true");
+  });
+
+  it("keeps the amount it opened with while the page reads the pay again", () => {
+    // Once paid, the page's line says nothing is left to hand out, a moment before the sheet goes: never "TSh 0".
+    const { sheet, rerender } = openWith();
+    rerender(
+      <PaySheet
+        worker={{ ...ASHA, to_hand_out: "0.00" }}
+        month="2026-11"
+        keepsSignatures
+        onDone={vi.fn()}
+        onClose={vi.fn()}
+        finalFocus={() => null}
+      />,
+    );
+    expect(sheet.textContent.replace(/\u00a0/g, " ")).toContain(
+      "Novemba 2026 · TSh 152,000",
+    );
   });
 
   it("keeps Nimemlipa off until Asha has signed", () => {

@@ -89,8 +89,10 @@ export function PaySheet({
   const [reference, setReference] = useState("");
   const [drawn, setDrawn] = useState(false);
   const pad = useRef<SignaturePadHandle>(null);
-  // Which payslip, kept as the sheet opened: the page asks itself again meanwhile, and the line it shows may move.
+  // Which payslip, and how much, kept as the sheet opened: the page asks itself again meanwhile, and once paid, before
+  // the sheet goes, it reads nothing left to hand out, which the sheet must not flash as "TSh 0" (WAGE-9's review).
   const [payslip] = useState(worker.payslip ?? "");
+  const [amount] = useState(worker.to_hand_out);
 
   const pay = useMutation({
     mutationFn: async (): Promise<PaymentLine> => {
@@ -149,7 +151,7 @@ export function PaySheet({
       title={t("title", { name: worker.display_name })}
       description={t("about", {
         month: monthTitle(month),
-        total: formatMoney(new Decimal(worker.to_hand_out)),
+        total: formatMoney(new Decimal(amount)),
       })}
       actionLabel={t("action")}
       onAction={send}
