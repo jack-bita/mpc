@@ -15,9 +15,13 @@ a month, advances_month's; who may type one, and cross it out, and how, record_a
 month pays, pay_month's and worker_pay's; and who may approve it, and when, approve_month's and approve_leaver's.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
 from typing import Any, cast
 
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.db.models import QuerySet
 from drf_spectacular.utils import extend_schema
 from rest_framework import exceptions
@@ -25,7 +29,10 @@ from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.control.api.uploads import PHOTO_BODY, photo_sent
+from apps.control.models import Attachment
 from apps.core.api.base import CreateOnceMixin, ShopViewSet
+from apps.core.api.ids import id_taken
 from apps.core.permissions import Permission
 from apps.people.models import StaffMember, StaffStatus
 from apps.shops.models import Shop
@@ -44,7 +51,10 @@ from apps.staffpay.api.serializers import (
     MealMoneyAnswer,
     MealMoneyDaysAnswer,
     MealMoneyQuery,
+    PayCashQuery,
+    PaymentLineSerializer,
     PayMonthAnswer,
+    PayPayslipSerializer,
     PayRateCreateSerializer,
     PayRatesAnswer,
     PayRateSerializer,
@@ -56,6 +66,7 @@ from apps.staffpay.api.serializers import (
     TapAnswer,
     VoidAdvanceSerializer,
     VoidMealMoneySerializer,
+    VoidPaymentSerializer,
     VoidTapSerializer,
     WorkerAttendanceAnswer,
     WorkerPayMonthAnswer,
@@ -67,13 +78,16 @@ from apps.staffpay.models import (
     ClockKind,
     DayChoice,
     MealMoney,
+    PaymentMethod,
     PayRate,
     PayRun,
     Payslip,
+    PayslipPayment,
 )
 from apps.staffpay.selectors import NEWEST_FIRST, is_closed, rate_in_force
 from apps.staffpay.services import (
     APPROVES,
+    PAYS,
     add_tap,
     advance_line,
     advances_month,
@@ -84,12 +98,15 @@ from apps.staffpay.services import (
     decision_of,
     meal_money_days,
     pay_month,
+    pay_payslip,
+    payment_line,
     ready_advance_void_reasons,
     record_advance,
     record_meal_money,
     set_pay_rate,
     void_advance,
     void_meal_money,
+    void_payslip_payment,
     void_tap,
     worker_attendance,
     worker_pay,
@@ -488,13 +505,21 @@ class PayViewSet(ShopViewSet[StaffMember]):
 
     @extend_schema(parameters=[AttendanceMonthQuery], responses=PayMonthAnswer)
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        return Response(PayMonthAnswer(pay_month(self._shop(), self._month(request))).data)
+        answer = pay_month(self._shop(), self._month(request))
+        return Response(PayMonthAnswer(answer, context=self._own()).data)
 
     @extend_schema(parameters=[AttendanceMonthQuery], responses=WorkerPayMonthAnswer)
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         # The month first, as a worker's attendance reads it: no month is refused before the worker is looked for.
         month = self._month(request)
-        return Response(WorkerPayMonthAnswer(worker_pay(self._shop(), self.get_object(), month)).data)
+        answer = worker_pay(self._shop(), self.get_object(), month)
+        return Response(WorkerPayMonthAnswer(answer, context=self._own()).data)
+
+    def _own(self) -> dict[str, frozenset[Any]]:
+        # Every job of the person looking, at this shop: a line of theirs says `own`, so the page offers no Lipa on it,
+        # as pay_payslip refuses one's own by the person (WAGE-9). Their own jobs only, read through the guard.
+        person = cast(StaffMember, self.actor).user_id
+        return {"own_jobs": frozenset(StaffMember.objects.filter(user_id=person).values_list("pk", flat=True))}
 
     def _month(self, request: Request) -> date:
         # The month in the address, as its first day. None, or one that is no month: 400 under `month`, through the one
@@ -522,7 +547,11 @@ class _ApprovalViewSet[M: PayRun | Payslip](CreateOnceMixin[M]):
         # (CreateOnceMixin), and who approved a month, and one worker's total, are the pay's own (as a tap's, ATT-13).
         # The services ask all three again, inside their transactions.
         super().initial(request, *args, **kwargs)
-        _ask(self, *APPROVES)
+        _ask(self, *self.keys_asked())
+
+    def keys_asked(self) -> tuple[Permission, ...]:
+        # What this visit's action asks, every key on the whole shop: an approval's, unless a route says otherwise.
+        return APPROVES
 
     def base_rows(self) -> QuerySet[M]:
         # Each names who approved it: their job comes in the same read.
@@ -550,10 +579,24 @@ class PayRunViewSet(_ApprovalViewSet[PayRun]):
 
 class PayslipViewSet(_ApprovalViewSet[Payslip]):
     # POST payslips/: the pay of one worker who left, approved alone (WAGE-3), from the sheet on their pay page. No list
-    # and no read of one alone: a payslip is read through pay/{id}/.
+    # and no read of one alone: a payslip is read through pay/{id}/. And Lipa (WAGE-9), a payslip handed out:
+    # POST payslips/{id}/pay/ by M-Pesa or a bank, with its number; PUT payslips/{id}/pay-cash/?id=…&signature=…, in
+    # cash, the body the worker's signature as the phone drew it. The payslip in the address, found through the guard
+    # (get_object) before anything sent is read: another shop's, or an id no shop has, is "not found" alike (03 §5.4).
     model = Payslip
     serializer_class = PayslipAnswer
     create_serializer_class = ApproveLeaverSerializer
+    # Lipa asks `pay.run`, every manager's, not the approval's key: handing out is a job of its own (WAGE-9).
+    action_permissions = {
+        "create": Permission.PAY_APPROVE,
+        "pay": Permission.PAY_RUN,
+        "pay_cash": Permission.PAY_RUN,
+    }
+
+    def keys_asked(self) -> tuple[Permission, ...]:
+        # Handing out asks `pay.run` with the two keys of pay, as nobody hands out what they may not read (PAYS);
+        # approving, the approval's three. pay_payslip asks its three again, under its locks.
+        return PAYS if self.action in ("pay", "pay_cash") else APPROVES
 
     def create_row(self, data: dict[str, Any]) -> Payslip:
         # The worker is one of the visit's shop (WorkerField); approve_leaver checks the rest, and refuses with its
@@ -565,3 +608,81 @@ class PayslipViewSet(_ApprovalViewSet[Payslip]):
             seen=data["seen"],
             by=cast(StaffMember, self.actor),
         )
+
+    @extend_schema(request=PayPayslipSerializer, responses=PaymentLineSerializer)
+    @action(detail=True, methods=["post"])
+    def pay(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # The payslip first, so another shop's is "not found" before anything sent is read.
+        slip = self.get_object()
+        sent = PayPayslipSerializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        with _refusing_a_taken_id(PayslipPayment):
+            made = pay_payslip(
+                slip,
+                payment_id=sent.validated_data["id"],
+                method=PaymentMethod(sent.validated_data["method"]),
+                reference=sent.validated_data["reference"],
+                by=cast(StaffMember, self.actor),
+            )
+        return Response(PaymentLineSerializer(payment_line(made)).data)
+
+    # PUT, as a payment sent twice is one payment: both ids in the address, after the ?, as a worker's photo's are
+    # (PPL-9). The body is the drawing itself, as the phone made it, with no form around it: read only once its length
+    # says it is small enough (photo_sent).
+    @extend_schema(parameters=[PayCashQuery], request=PHOTO_BODY, responses=PaymentLineSerializer)
+    @action(detail=True, methods=["put"], url_path="pay-cash")
+    def pay_cash(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # The payslip first, then the ids, the body last, its length before a byte of it.
+        slip = self.get_object()
+        asked = PayCashQuery(data=request.query_params)
+        asked.is_valid(raise_exception=True)
+        drawing = photo_sent(request)
+        with _refusing_a_taken_id(PayslipPayment), _refusing_a_taken_id(Attachment):
+            made = pay_payslip(
+                slip,
+                payment_id=asked.validated_data["id"],
+                method=PaymentMethod.CASH,
+                signature_id=asked.validated_data["signature"],
+                signature=drawing,
+                by=cast(StaffMember, self.actor),
+            )
+        return Response(PaymentLineSerializer(payment_line(made)).data)
+
+
+class PayslipPaymentViewSet(ShopViewSet[PayslipPayment]):
+    # POST payslip-payments/{id}/void/: Batilisha, a payment marked by mistake crossed out (WAGE-9), from the sheet at
+    # the foot of the payslip. Nothing else: a payment is made through its payslip, above, and read with it, through
+    # pay/. The row through the guard first: another shop's, or an id no shop has, is "not found" alike (03 §5.4).
+    model = PayslipPayment
+    # A worker's pay belongs to the whole shop: no side.
+    side_field = None
+    action_permissions = {"void": Permission.PAY_RUN}
+
+    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
+        # The base's checks, then the keys of handing out, all three, before anything is read: who crossed out a
+        # payment, and of what amount, are the pay's own. void_payslip_payment asks them again, under its locks.
+        super().initial(request, *args, **kwargs)
+        _ask(self, *PAYS)
+
+    @extend_schema(request=VoidPaymentSerializer, responses=PaymentLineSerializer)
+    @action(detail=True, methods=["post"])
+    def void(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        row = self.get_object()
+        sent = VoidPaymentSerializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        voided = void_payslip_payment(row, reason=sent.validated_data["reason"], by=cast(StaffMember, self.actor))
+        return Response(PaymentLineSerializer(payment_line(voided)).data)
+
+
+@contextmanager
+def _refusing_a_taken_id(model: type[PayslipPayment | Attachment]) -> Iterator[None]:
+    # A write that makes a row with the app's id: a payment, its signature. An id another shop's row holds is found only
+    # by the insert, which PostgreSQL refuses on the table's primary key: answered as the id taken, and nothing more
+    # about that row (03 §5.4), as CreateOnceMixin does (and the workers' photos, PPL-9). The service's block rolled
+    # back with the refusal, so nothing was written.
+    try:
+        yield
+    except IntegrityError as refusal:
+        if id_taken(refusal, model):
+            raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")}) from None
+        raise

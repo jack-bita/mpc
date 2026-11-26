@@ -1498,7 +1498,8 @@
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
       "no_note": "On the demo, notes aren't kept. Leave this box empty.",
       "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is.",
-      "ready_reasons": "On the demo, pick one of the ready reasons."
+      "ready_reasons": "On the demo, pick one of the ready reasons.",
+      "no_signature": "On the demo, the signature isn't kept, so nobody's real signature is shown to every visitor."
     },
     "closure": {
       "date_past": "A day that has already passed can't be changed.",
@@ -1565,6 +1566,16 @@
       "nothing": "This worker has no pay in this month.",
       "own": "You can't approve your own pay alone.",
       "still_clocked_in": "This worker hasn't tapped Toka yet today."
+    },
+    "payment": {
+      "own": "You can't mark your own pay paid, or cross it out.",
+      "nothing_to_pay": "This payslip pays 0, so there is nothing to hand over.",
+      "already_paid": "This worker is already paid this pay.",
+      "signature_missing": "The worker must draw their signature first.",
+      "reference_missing": "Type the transaction number.",
+      "reference_invalid": "A transaction number has only letters and digits.",
+      "reference_used": "This transaction number is already used for another payment.",
+      "reason_missing": "Write why."
     },
     "flag": {
       "note_required": "Write a note.",

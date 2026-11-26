@@ -29,6 +29,11 @@ And the month's pay (WAGE-2), for the month in the address (AttendanceMonthQuery
 out by pay_month, and one worker's (WorkerPayMonthAnswer), by worker_pay, each line by line, with who approved it, or
 what its approval waits for (WAGE-3). And its approval: a month's (ApproveMonthSerializer), kept by approve_month, and
 one worker's alone (ApproveLeaverSerializer), by approve_leaver.
+
+And handing a payslip out (WAGE-9): each payslip's payments on its worker's line (PaymentLineSerializer), and the
+month's Bado kulipa; a payment by M-Pesa or a bank (PayPayslipSerializer), or in cash with the signature's drawing as
+the request's body, its ids in the address (PayCashQuery), which pay_payslip checks and keeps; and one crossed out
+(VoidPaymentSerializer), by void_payslip_payment, each answered as the payslip shows it (PaymentLineSerializer).
 """
 
 import re
@@ -53,11 +58,14 @@ from apps.staffpay.models import (
     DayStatus,
     MealMoney,
     NoPhoto,
+    NoSignature,
+    PaymentMethod,
     PayRate,
     PayRun,
     Payslip,
     ReviewReason,
 )
+from apps.staffpay.models import LONGEST_REFERENCE as _LONGEST_REFERENCE
 from apps.staffpay.services import (
     DEMO_ADD_REASONS,
     DEMO_MONEY_VOID_REASONS,
@@ -616,6 +624,33 @@ class ToApproveSerializer(serializers.Serializer[Any]):
     )
 
 
+class VoidedPaymentSerializer(serializers.Serializer[Any]):
+    # Who crossed out a payment, by nickname, when and why (WAGE-9). On the demo the reason is a ready one's code.
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+    reason = serializers.CharField()
+
+
+class PaymentLineSerializer(serializers.Serializer[Any]):
+    # One handing-out of a payslip, as its foot shows it (WAGE-9): "Amelipwa taslimu na Baba · 2/12/2026 08:10", the
+    # number of one by M-Pesa or a bank, the amount, the signature's photo, opened at the attachments' own address with
+    # the two keys of pay (CTRL-3), or why there is none (on the demo), and who crossed it out, or null while it counts.
+    id = serializers.UUIDField()
+    method = serializers.ChoiceField(choices=PaymentMethod.choices)
+    reference = serializers.CharField(help_text="The transaction number; empty for cash.")
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+    signature = serializers.UUIDField(
+        source="signature_id", allow_null=True, help_text="The signature's attachment, for cash; else none."
+    )
+    no_signature = serializers.ChoiceField(
+        choices=[("", "")] + NoSignature.choices,
+        help_text="Why cash has no signature: on the demo, none is kept. Empty otherwise.",
+    )
+    voided = VoidedPaymentSerializer(allow_null=True, help_text="Who crossed it out, or none while it counts.")
+
+
 class WorkerPaySerializer(serializers.Serializer[Any]):
     # One worker's line of Mishahara, and their own page's: whose, and their last day if they left; the days that are
     # over; today alone, once they tapped Toka, or null (Leo); and what is left to pay, the two together. The month a
@@ -628,6 +663,17 @@ class WorkerPaySerializer(serializers.Serializer[Any]):
     total = serializers.DecimalField(max_digits=14, decimal_places=2)
     carried_from = MonthField(allow_null=True, help_text="The month a debt among them is from, or none (WAGE-3).")
     approval = ApprovalSerializer(allow_null=True, help_text="Who approved it, once a payslip keeps it, or none.")
+    # Once a payslip keeps it (WAGE-9): the payslip, which Lipa pays; its payments, crossed out ones too, in the order
+    # made; what is still to hand out, 0 once it is paid or when it pays nothing; and whether it is the person's own
+    # pay, by the person, so the page offers no Lipa on it, as the server would refuse it.
+    payslip = serializers.UUIDField(source="payslip_id", allow_null=True, help_text="The payslip, once approved.")
+    payments = PaymentLineSerializer(many=True)
+    to_hand_out = serializers.DecimalField(max_digits=14, decimal_places=2)
+    own = serializers.SerializerMethodField(help_text="Whether it is the pay of the person looking, any job of theirs.")
+
+    def get_own(self, line: Any) -> bool:
+        # The jobs of the person looking, which the route reads (own_jobs); none when nobody says, as in a test.
+        return bool(line.staff_id in self.context.get("own_jobs", frozenset()))
 
 
 # One object, not a list, as for the pay rates' answer above.
@@ -647,6 +693,12 @@ class PayMonthAnswer(serializers.Serializer[Any]):
     approval = ApprovalSerializer(allow_null=True, help_text="Who approved the month, or none while it is open.")
     to_approve = ToApproveSerializer(
         allow_null=True, help_text="What its approval waits for, once it is over and open; else none (WAGE-3)."
+    )
+    still_to_pay = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        allow_null=True,
+        help_text="Once approved: the cash still to hand out, 0 once each is paid; none while open (WAGE-9).",
     )
 
 
@@ -668,6 +720,10 @@ class WorkerPayMonthAnswer(serializers.Serializer[Any]):
     to_approve = ToApproveSerializer(
         allow_null=True,
         help_text="For one who left, with pay still open: what approving it alone waits for; else none (WAGE-3).",
+    )
+    void_reasons = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="The ready reasons a payment is crossed out with, on the demo alone; empty where it is typed.",
     )
 
 
@@ -718,3 +774,34 @@ class PayslipAnswer(serializers.ModelSerializer[Payslip]):
         model = Payslip
         fields = ["id", "staff", "month", "total", "approved_by", "approved_at"]
         read_only_fields = fields
+
+
+class PayPayslipSerializer(serializers.Serializer[Any]):
+    # What the Lipa sheet sends for a payment by M-Pesa or a bank, with the id it made itself (ADR-0007): how, and the
+    # transaction number. Cash comes this way only on the demo, where no signature is kept; elsewhere it comes with its
+    # drawing (pay-cash). Whether the number is there, its shape and whether it is used already are pay_payslip's to
+    # check, beside its box.
+    id = serializers.UUIDField(validators=[uuid7_only])
+    method = serializers.ChoiceField(choices=PaymentMethod.choices)
+    reference = serializers.CharField(max_length=_LONGEST_REFERENCE, allow_blank=True, default="")
+
+    def validate(self, sent: dict[str, Any]) -> dict[str, Any]:
+        # Cash is proven by the signature, never a number: the sheet never sends one with it.
+        if sent["method"] == PaymentMethod.CASH and sent["reference"].strip():
+            raise serializers.ValidationError({"reference": serializers.ErrorDetail("Cash has no number.", "invalid")})
+        return sent
+
+
+class PayCashQuery(serializers.Serializer[Any]):
+    # What a payment in cash carries in its address, beside the payslip's id (WAGE-9): its own id and the signature's,
+    # both made on the phone as Nimemlipa is tapped (ADR-0007), so a request sent again is one payment and one
+    # signature. After the ?, as a path names one row at most, as the tenancy sweep calls it (PPL-9).
+    id = serializers.UUIDField(validators=[uuid7_only], help_text="The payment's id, a UUIDv7 made on the phone.")
+    signature = serializers.UUIDField(
+        validators=[uuid7_only], help_text="The signature's id, a UUIDv7 made on the phone."
+    )
+
+
+class VoidPaymentSerializer(serializers.Serializer[Any]):
+    # A payment crossed out, as the sheet sends it: why. Empty here is void_payslip_payment's to refuse, beside the box.
+    reason = serializers.CharField(max_length=200, allow_blank=True)

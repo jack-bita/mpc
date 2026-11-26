@@ -608,6 +608,22 @@ def _payments_of(shop: Shop, slips: list[Payslip]) -> dict[uuid.UUID, tuple[Paym
     return {slip: tuple(payments) for slip, payments in by_slip.items()}
 
 
+def payment_line(payment: PayslipPayment) -> PaymentLine:
+    """One payment as the payslip's foot shows it, its signature read with it (WAGE-9): the answer of the routes that
+    make one or cross one out. The shop must be open."""
+    signature = (
+        Attachment.objects.filter(
+            shop_id=payment.shop_id,
+            kind=AttachmentKind.SIGNATURE,
+            subject_type=ATTACHMENT_KINDS[AttachmentKind.SIGNATURE].subject_type,
+            subject_id=payment.pk,
+        )
+        .values_list("pk", flat=True)
+        .first()
+    )
+    return _payment_line(payment, signature)
+
+
 def _payment_line(payment: PayslipPayment, signature: uuid.UUID | None) -> PaymentLine:
     # A payment as the page shows it. Always somebody's, as the table holds; and a crossing out always says who and why.
     voided = (

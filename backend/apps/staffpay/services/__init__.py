@@ -69,6 +69,7 @@ from apps.staffpay.services.pay import (
     WorkerPay,
     WorkerPayMonth,
     pay_month,
+    payment_line,
     worker_pay,
 )
 from apps.staffpay.services.payment import (
@@ -126,6 +127,7 @@ __all__ = [
     "meal_money_days",
     "pay_month",
     "pay_payslip",
+    "payment_line",
     "ready_advance_void_reasons",
     "ready_payment_void_reasons",
     "record_advance",

@@ -167,6 +167,19 @@ const CODES_THE_API_SENDS = [
   "payslip.nothing",
   "payslip.own",
   "payslip.still_clocked_in",
+  // Handing a payslip out, and crossing out a payment (WAGE-9, apps/staffpay/services/payment.py): one's own; a payslip
+  // of 0; one paid already; cash with no signature; a transaction number missing, not one, or used already; a crossing
+  // out with no reason. On the demo, a signature sent is demo.no_signature, and a reason not the ready one
+  // demo.ready_reasons.
+  "payment.own",
+  "payment.nothing_to_pay",
+  "payment.already_paid",
+  "payment.signature_missing",
+  "payment.reference_missing",
+  "payment.reference_invalid",
+  "payment.reference_used",
+  "payment.reason_missing",
+  "demo.no_signature",
   // Explaining or closing a flag (CTRL-4, apps/control/services.py): no words; one closed already; one that names the
   // person closing it. On the demo, a note that isn't a ready one is demo.ready_reasons above.
   "flag.note_required",

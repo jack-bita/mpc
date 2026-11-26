@@ -100,6 +100,11 @@ export function workerPay(fields: Partial<WorkerPay> = {}): WorkerPay {
     total: "132000.00",
     carried_from: null,
     approval: null,
+    // A draft: no payslip keeps it yet, so nothing is handed out, and it is nobody's own (WAGE-9).
+    payslip: null,
+    payments: [],
+    to_hand_out: "0.00",
+    own: false,
     ...fields,
   };
 }
@@ -118,6 +123,8 @@ export function payMonth(
     workers,
     approval: null,
     to_approve: null,
+    // Open: no Bado kulipa until it is approved (WAGE-9).
+    still_to_pay: null,
     ...fields,
   };
 }
@@ -135,6 +142,8 @@ export function workerPayMonth(
     no_day_yet: false,
     worker,
     to_approve: null,
+    // No ready reason to cross a payment out with, as off the demo it is typed (WAGE-9).
+    void_reasons: [],
     ...fields,
   };
 }

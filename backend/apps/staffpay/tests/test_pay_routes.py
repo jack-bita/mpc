@@ -88,6 +88,11 @@ def ashas_line(staff: StaffMember) -> dict[str, object]:
         "total": "33500.00",
         "carried_from": None,
         "approval": None,
+        # A draft: no payslip yet, so nothing to hand out and no payment (WAGE-9); and Asha's, not the owner's.
+        "payslip": None,
+        "payments": [],
+        "to_hand_out": "0.00",
+        "own": False,
     }
 
 
@@ -102,9 +107,10 @@ def test_the_months_pay_as_the_page_reads_it(staff_client_a: APIClient, asha: St
         "no_day_yet": False,
         "total": "33500.00",
         "workers": [ashas_line(asha)],
-        # Still running: nothing to approve yet (WAGE-3).
+        # Still running: nothing to approve yet (WAGE-3), and so nothing to hand out (WAGE-9).
         "approval": None,
         "to_approve": None,
+        "still_to_pay": None,
     }
 
 
@@ -119,6 +125,8 @@ def test_one_workers_pay_as_the_page_reads_it(staff_client_a: APIClient, asha: S
         "no_day_yet": False,
         "worker": ashas_line(asha),
         "to_approve": None,
+        # Off the demo, a payment is crossed out with the reason typed (WAGE-9).
+        "void_reasons": [],
     }
 
 
