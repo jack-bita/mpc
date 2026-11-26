@@ -323,16 +323,27 @@ def test_a_signature_opens_only_with_the_keys_of_pay(
     assert client.get(signature_file(str(signature))).status_code == 200
 
 
-def test_without_the_keys_nothing_is_told(give_role: GiveRole, staff_a2: StaffMember, asha: Payslip) -> None:
-    # The routes ask the keys before anything is read: a seller is refused alike for Asha's payslip and for an id no
-    # shop has, so he can't learn which payslips there are, or whether one was paid, by trying.
-    give_role(staff_a2, RoleTemplate.SELLER, None)
+def test_without_the_keys_of_pay_nothing_sent_is_read(
+    give_role: GiveRole, staff_a2: StaffMember, asha: Payslip
+) -> None:
+    # A manager holds pay.run, every manager's, but not the two keys of pay (02 §5): refused before anything he sent is
+    # read, so even a form that is wrong in every box answers only that he may not, never how it is wrong.
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    with shop_context(asha.shop_id):
+        made = PayslipPayment.objects.create(
+            shop_id=asha.shop_id,
+            payslip=asha,
+            staff=asha.staff,
+            amount=asha.total,
+            method=PaymentMethod.BANK,
+            reference="BENKI1",
+            created_by=asha.created_by,
+        )
     client = client_for(staff_a2)
-    nobody = uuid.uuid7()
+    wrong = {"id": str(uuid.uuid4()), "method": "hundi", "reference": "Q" * 31}
     for answer in (
-        mpesa(client, asha),
-        client.post(by_number(nobody), {"id": str(uuid.uuid7()), "method": "bank", "reference": "B1"}, format="json"),
-        client.put(in_cash(nobody, id=uuid.uuid7(), signature=uuid.uuid7()), data=DRAWING, content_type="image/jpeg"),
-        client.post(void(nobody), {"reason": "Kosa"}, format="json"),
+        client.post(by_number(asha.pk), wrong, format="json"),
+        client.put(in_cash(asha.pk), data=b"", content_type="image/jpeg"),
+        client.post(void(made.pk), {"reason": "u" * 201}, format="json"),
     ):
         assert code_of(answer) == (403, "permission_denied")
