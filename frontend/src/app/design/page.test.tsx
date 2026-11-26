@@ -45,11 +45,12 @@ describe("the design page", () => {
       expect(
         screen.getAllByRole("button", { name: t.buttons[kind] }),
       ).toHaveLength(4);
-    // One switched off for each screen kind, and one of the bar kind.
+    // One switched off for each screen kind, one of the bar kind, and the signature box's Futa sahihi, off until
+    // something is drawn (WAGE-9).
     const switchedOff = screen
       .getAllByRole("button")
       .filter((button) => (button as HTMLButtonElement).disabled);
-    expect(switchedOff).toHaveLength(SCREEN_BUTTON_KINDS.length + 1);
+    expect(switchedOff).toHaveLength(SCREEN_BUTTON_KINDS.length + 2);
   });
 
   it("shows the link that looks like a button, in each screen kind", () => {
@@ -88,6 +89,10 @@ describe("the design page", () => {
     expect(
       (screen.getByLabelText(t.fields.password) as HTMLInputElement).type,
     ).toBe("password");
+    // The box a worker signs in (WAGE-9), named by its label.
+    expect(screen.getByRole("img", { name: t.fields.signature }).tagName).toBe(
+      "CANVAS",
+    );
   });
 
   it("shows a choice with a hint, one with an error and one switched off", () => {
@@ -176,7 +181,8 @@ describe("the design page", () => {
 
   it("takes all its words from the message files", () => {
     // ADR-0040. A token's name, like --primary, is code and is shown as it is. Besides the page's own
-    // words, the top bars show the language button's word and their sample places, "MPC · Dawa".
+    // words, the top bars show the language button's word and their sample places, "MPC · Dawa", and the
+    // signature box its own Futa sahihi (WAGE-9).
     // The page header's arrow has no visible words: its name is an aria-label.
     const { container } = render(<DesignPage />);
     const places = Object.values(t.topBar.sampleSides).map((side) =>
@@ -184,7 +190,12 @@ describe("the design page", () => {
         .replace("{shop}", t.topBar.sampleShop)
         .replace("{side}", side),
     );
-    const allowed = new Set([...strings(t), sw.language.switch, ...places]);
+    const allowed = new Set([
+      ...strings(t),
+      sw.language.switch,
+      sw.signaturePad.clear,
+      ...places,
+    ]);
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
     const strays: string[] = [];
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {

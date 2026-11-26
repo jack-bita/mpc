@@ -147,6 +147,9 @@
   "passwordField": {
     "show": "Onyesha nenosiri"
   },
+  "signaturePad": {
+    "clear": "Futa sahihi"
+  },
   "sheet": {
     "cancel": "Ghairi"
   },
@@ -1305,7 +1308,9 @@
       "disabled": "Kimezimwa",
       "search": "Tafuta bidhaa",
       "normal": "Kisanduku cha kawaida",
-      "password": "Nenosiri"
+      "password": "Nenosiri",
+      "signature": "Sahihi ya Asha",
+      "signatureHint": "Asha achore sahihi yake kwa kidole."
     },
     "choices": {
       "title": "Chaguo",

@@ -147,6 +147,9 @@
   "passwordField": {
     "show": "Show password"
   },
+  "signaturePad": {
+    "clear": "Clear the signature"
+  },
   "sheet": {
     "cancel": "Cancel"
   },
@@ -1305,7 +1308,9 @@
       "disabled": "Switched off",
       "search": "Search products",
       "normal": "A normal-size box",
-      "password": "Password"
+      "password": "Password",
+      "signature": "Asha's signature",
+      "signatureHint": "Asha signs with her finger."
     },
     "choices": {
       "title": "Choices",
