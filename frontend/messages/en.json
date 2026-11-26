@@ -929,6 +929,27 @@
       "leaverTitle": "Approve {name}'s pay",
       "leaverAbout": "{month} · Total {total}",
       "leaverFinal": "Once approved, their pay of {month} never changes again."
+    },
+    "payment": {
+      "stillToPay": "Still to pay",
+      "allPaid": "Everyone is paid",
+      "paidOn": "Paid {date}",
+      "notPaid": "Not paid",
+      "lipa": "Pay",
+      "lipaFor": "Pay {name}",
+      "title": "Pay {name}",
+      "about": "{month} · {total}",
+      "method": "Paid by:",
+      "methods": {
+        "cash": "Cash",
+        "mobile_money": "M-Pesa",
+        "bank": "Bank"
+      },
+      "signature": "{name}'s signature",
+      "signatureHint": "{name} signs with a finger.",
+      "reference": "Transaction number",
+      "action": "I have paid",
+      "demoSignature": "On the demo, the signature isn't kept."
     }
   },
   "attendanceWorker": {

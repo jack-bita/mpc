@@ -5861,15 +5861,6 @@
                     "voided"
                 ]
             },
-            "MethodEnum": {
-                "enum": [
-                    "cash",
-                    "mobile_money",
-                    "bank"
-                ],
-                "type": "string",
-                "description": "* `cash` - Cash\n* `mobile_money` - Mobile money\n* `bank` - Bank"
-            },
             "MoneyVoidReasonEnum": {
                 "enum": [
                     "wrong_amount"
@@ -6292,11 +6283,17 @@
                         "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
                         "nullable": true,
                         "description": "Once approved: the cash still to hand out, 0 once each is paid; none while open (WAGE-9)."
+                    },
+                    "keeps_signatures": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9)."
                     }
                 },
                 "required": [
                     "approval",
                     "counted_to",
+                    "keeps_signatures",
                     "month",
                     "no_day_yet",
                     "still_to_pay",
@@ -6314,7 +6311,7 @@
                         "format": "uuid"
                     },
                     "method": {
-                        "$ref": "#/components/schemas/MethodEnum"
+                        "$ref": "#/components/schemas/PaymentMethodEnum"
                     },
                     "reference": {
                         "type": "string",
@@ -6576,7 +6573,7 @@
                         "format": "uuid"
                     },
                     "method": {
-                        "$ref": "#/components/schemas/MethodEnum"
+                        "$ref": "#/components/schemas/PaymentMethodEnum"
                     },
                     "reference": {
                         "type": "string",
@@ -6632,6 +6629,15 @@
                     "signature",
                     "voided"
                 ]
+            },
+            "PaymentMethodEnum": {
+                "enum": [
+                    "cash",
+                    "mobile_money",
+                    "bank"
+                ],
+                "type": "string",
+                "description": "* `cash` - Cash\n* `mobile_money` - Mobile money\n* `bank` - Bank"
             },
             "PayslipAnswer": {
                 "type": "object",
@@ -8747,10 +8753,16 @@
                             "type": "string"
                         },
                         "description": "The ready reasons a payment is crossed out with, on the demo alone; empty where it is typed."
+                    },
+                    "keeps_signatures": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9)."
                     }
                 },
                 "required": [
                     "counted_to",
+                    "keeps_signatures",
                     "month",
                     "no_day_yet",
                     "paid_by_day",

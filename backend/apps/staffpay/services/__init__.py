@@ -75,6 +75,7 @@ from apps.staffpay.services.pay import (
 from apps.staffpay.services.payment import (
     DEMO_PAYMENT_VOID_REASONS,
     PAYS,
+    keeps_signatures,
     pay_payslip,
     ready_payment_void_reasons,
     void_payslip_payment,
@@ -123,6 +124,7 @@ __all__ = [
     "attendance_month",
     "decide_day",
     "decision_of",
+    "keeps_signatures",
     "meal_line",
     "meal_money_days",
     "pay_month",

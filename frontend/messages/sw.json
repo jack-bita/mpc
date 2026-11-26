@@ -929,6 +929,27 @@
       "leaverTitle": "Idhinisha malipo ya {name}",
       "leaverAbout": "{month} · Jumla {total}",
       "leaverFinal": "Baada ya kuidhinisha, malipo yake ya {month} hayabadiliki tena."
+    },
+    "payment": {
+      "stillToPay": "Bado kulipa",
+      "allPaid": "Wote wamelipwa",
+      "paidOn": "Amelipwa {date}",
+      "notPaid": "Hajalipwa",
+      "lipa": "Lipa",
+      "lipaFor": "Lipa {name}",
+      "title": "Lipa {name}",
+      "about": "{month} · {total}",
+      "method": "Amelipwa kwa:",
+      "methods": {
+        "cash": "Taslimu",
+        "mobile_money": "M-Pesa",
+        "bank": "Benki"
+      },
+      "signature": "Sahihi ya {name}",
+      "signatureHint": "{name} achore sahihi yake kwa kidole.",
+      "reference": "Namba ya muamala",
+      "action": "Nimemlipa",
+      "demoSignature": "Kwenye demo, sahihi haihifadhiwi."
     }
   },
   "attendanceWorker": {

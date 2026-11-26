@@ -73,6 +73,7 @@ from apps.staffpay.services import (
     DEMO_VOID_REASONS,
     PhotoState,
     advance_line,
+    keeps_signatures,
     meal_line,
     tap_line,
 )
@@ -700,6 +701,12 @@ class PayMonthAnswer(serializers.Serializer[Any]):
         allow_null=True,
         help_text="Once approved: the cash still to hand out, 0 once each is paid; none while open (WAGE-9).",
     )
+    keeps_signatures = serializers.SerializerMethodField(
+        help_text="Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9)."
+    )
+
+    def get_keeps_signatures(self, _answer: Any) -> bool:
+        return keeps_signatures()
 
 
 class WorkerPayMonthAnswer(serializers.Serializer[Any]):
@@ -725,6 +732,12 @@ class WorkerPayMonthAnswer(serializers.Serializer[Any]):
         child=serializers.CharField(),
         help_text="The ready reasons a payment is crossed out with, on the demo alone; empty where it is typed.",
     )
+    keeps_signatures = serializers.SerializerMethodField(
+        help_text="Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9)."
+    )
+
+    def get_keeps_signatures(self, _answer: Any) -> bool:
+        return keeps_signatures()
 
 
 class SeenTotalSerializer(serializers.Serializer[Any]):

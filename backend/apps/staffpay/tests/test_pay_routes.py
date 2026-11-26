@@ -111,6 +111,8 @@ def test_the_months_pay_as_the_page_reads_it(staff_client_a: APIClient, asha: St
         "approval": None,
         "to_approve": None,
         "still_to_pay": None,
+        # Off the demo, cash is sent with the worker's signature (WAGE-9).
+        "keeps_signatures": True,
     }
 
 
@@ -127,6 +129,7 @@ def test_one_workers_pay_as_the_page_reads_it(staff_client_a: APIClient, asha: S
         "to_approve": None,
         # Off the demo, a payment is crossed out with the reason typed (WAGE-9).
         "void_reasons": [],
+        "keeps_signatures": True,
     }
 
 

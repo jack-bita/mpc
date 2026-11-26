@@ -32,6 +32,19 @@
 //
 // One who left and was approved alone says so under their name while the month is still open: Imeidhinishwa 14/11/2026.
 //
+// Once a payslip keeps a line, the line says whether it is handed out (WAGE-9), as Jack pictured it (26 Nov 2026), and
+// the month what cash is still to hand out:
+//
+//   Jumla ya wote          TSh 432,000
+//   Bado kulipa            TSh 280,000      (Wote wamelipwa, once each is)
+//   Asha                       152,000
+//     Amelipwa 2/12/2026
+//   Baraka                     148,000
+//     Hajalipwa               [ Lipa ]
+//
+// Lipa is on the line itself, for whoever may hand out pay (mayPay), never on their own; it opens the Lipa sheet
+// (pay-sheet.tsx). A payslip that pays nothing has neither, as there is nothing to hand over.
+//
 // An office screen: it asks the server through the store of server answers (rule 5). Its route asks the two keys of pay
 // on the whole shop; someone without both has no button, and opening the address shows the server's refusal.
 //
@@ -66,9 +79,13 @@ import {
   mayApprovePay,
   type PayMonth,
   usePayMonth,
+  type WorkerPay,
   workerPayPage,
 } from "./pay";
 import { PayNotes, useCountedTo } from "./pay-notes";
+import { PaySheet } from "./pay-sheet";
+import { PaymentNote } from "./payment-note";
+import { mayPay } from "./payments";
 
 export function PayScreen() {
   const t = useTranslations("pay");
@@ -123,6 +140,7 @@ export function PayScreen() {
           answer={answer.data}
           timezone={who.data.shop.timezone}
           mayApprove={mayApprovePay(who.data)}
+          mayPay={mayPay(who.data)}
           onMonth={choose}
           title={title}
         />
@@ -136,6 +154,7 @@ function TheMonth({
   answer,
   timezone,
   mayApprove,
+  mayPay,
   onMonth,
   title,
 }: {
@@ -143,6 +162,8 @@ function TheMonth({
   /** The shop's, for when it was approved. */
   timezone: string;
   mayApprove: boolean;
+  /** Whether Lipa is offered: the key of handing out pay, with the two of pay. */
+  mayPay: boolean;
   /** Move the page to another month, as ‹ › do. */
   onMonth: (month: string) => void;
   /** The page's title, which stays as the month moves. */
@@ -159,6 +180,10 @@ function TheMonth({
   const afterApproval = useRef(false);
   // Whether the sheet moved the page to another month, when all of this one's is gone.
   const moved = useRef(false);
+  // The worker whose Lipa sheet is open, or null; and, once paid, where the keyboard goes: their line's Amelipwa.
+  const [paying, setPaying] = useState<WorkerPay | null>(null);
+  const afterPayment = useRef(false);
+  const paidLines = useRef(new Map<string, HTMLElement>());
   return (
     <>
       {counted === null ? null : <p>{counted}</p>}
@@ -188,6 +213,19 @@ function TheMonth({
               {formatMoney(new Decimal(answer.total))}
             </span>
           </p>
+          {/* Once approved: the cash still to hand out, and once each is paid, that everyone is (WAGE-9). */}
+          {answer.still_to_pay === null ? null : new Decimal(
+              answer.still_to_pay,
+            ).gt("0") ? (
+            <p className="flex flex-wrap justify-between gap-x-4 text-lg font-semibold">
+              <span>{t("payment.stillToPay")}</span>{" "}
+              <span className="tabular-nums">
+                {formatMoney(new Decimal(answer.still_to_pay))}
+              </span>
+            </p>
+          ) : (
+            <p className="text-lg font-semibold">{t("payment.allPaid")}</p>
+          )}
           <Card className="py-0">
             {/* A list, so a screen reader says how many workers there are. role="list" written out: Safari with
                 VoiceOver stops calling a <ul> a list once its bullets are styled away (workers-screen.tsx). */}
@@ -224,6 +262,20 @@ function TheMonth({
                         : null
                     }
                   />
+                  <PaymentNote
+                    worker={worker}
+                    timezone={timezone}
+                    mayPay={mayPay}
+                    onPay={() => {
+                      afterPayment.current = false;
+                      setPaying(worker);
+                    }}
+                    lineRef={(element) => {
+                      if (element === null)
+                        paidLines.current.delete(worker.staff);
+                      else paidLines.current.set(worker.staff, element);
+                    }}
+                  />
                 </li>
               ))}
             </ul>
@@ -243,6 +295,25 @@ function TheMonth({
           {t("approval.monthButton", { month: monthTitle(answer.month) })}
         </Button>
       ) : null}
+      {/* Mounted only while open, so each opening makes its own payment (its ids). Once paid, the keyboard goes to the
+          line's Amelipwa, as its Lipa is gone; else back to the Lipa that opened it. */}
+      {paying === null ? null : (
+        <PaySheet
+          worker={paying}
+          month={answer.month}
+          keepsSignatures={answer.keeps_signatures}
+          onDone={() => {
+            afterPayment.current = true;
+            setPaying(null);
+          }}
+          onClose={() => setPaying(null)}
+          finalFocus={() =>
+            afterPayment.current
+              ? (paidLines.current.get(paying.staff) ?? null)
+              : null
+          }
+        />
+      )}
       {/* Mounted only while open, so each opening makes its own request (its id). It stays until it is done, though the
           page has learned meanwhile that the month is approved and its button is gone. */}
       {approving ? (

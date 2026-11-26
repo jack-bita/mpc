@@ -1884,13 +1884,6 @@ export interface components {
             voided: components["schemas"]["VoidedMealMoney"] | null;
         };
         /**
-         * @description * `cash` - Cash
-         *     * `mobile_money` - Mobile money
-         *     * `bank` - Bank
-         * @enum {string}
-         */
-        MethodEnum: "cash" | "mobile_money" | "bank";
-        /**
          * @description * `wrong_amount` - wrong_amount
          * @enum {string}
          */
@@ -2074,11 +2067,13 @@ export interface components {
              * @description Once approved: the cash still to hand out, 0 once each is paid; none while open (WAGE-9).
              */
             still_to_pay: string | null;
+            /** @description Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9). */
+            readonly keeps_signatures: boolean;
         };
         PayPayslipRequest: {
             /** Format: uuid */
             id: string;
-            method: components["schemas"]["MethodEnum"];
+            method: components["schemas"]["PaymentMethodEnum"];
             /** @default  */
             reference: string;
         };
@@ -2161,7 +2156,7 @@ export interface components {
         PaymentLine: {
             /** Format: uuid */
             id: string;
-            method: components["schemas"]["MethodEnum"];
+            method: components["schemas"]["PaymentMethodEnum"];
             /** @description The transaction number; empty for cash. */
             reference: string;
             /** Format: decimal */
@@ -2184,6 +2179,13 @@ export interface components {
             /** @description Who crossed it out, or none while it counts. */
             voided: components["schemas"]["VoidedPayment"] | null;
         };
+        /**
+         * @description * `cash` - Cash
+         *     * `mobile_money` - Mobile money
+         *     * `bank` - Bank
+         * @enum {string}
+         */
+        PaymentMethodEnum: "cash" | "mobile_money" | "bank";
         PayslipAnswer: {
             /** Format: uuid */
             readonly id: string;
@@ -2884,6 +2886,8 @@ export interface components {
             to_approve: components["schemas"]["ToApprove"] | null;
             /** @description The ready reasons a payment is crossed out with, on the demo alone; empty where it is typed. */
             void_reasons: string[];
+            /** @description Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9). */
+            readonly keeps_signatures: boolean;
         };
     };
     responses: never;

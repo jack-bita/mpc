@@ -188,6 +188,12 @@ def _insert(row: PayslipPayment) -> None:
 DEMO_PAYMENT_VOID_REASONS = ("marked_by_mistake",)
 
 
+def keeps_signatures() -> bool:
+    """Whether a payment in cash is sent with its signature: everywhere but the demo, which keeps none (WAGE-9). The
+    Lipa sheet asks it first, so on the demo the visitor draws and nothing is sent."""
+    return not settings.DEMO_SEED
+
+
 def ready_payment_void_reasons() -> list[str]:
     """The ready reason a payment may be crossed out with, for the sheet to offer: the demo's, or none elsewhere, where
     it is typed."""

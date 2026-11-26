@@ -347,3 +347,15 @@ def test_without_the_keys_of_pay_nothing_sent_is_read(
         client.post(void(made.pk), {"reason": "u" * 201}, format="json"),
     ):
         assert code_of(answer) == (403, "permission_denied")
+
+
+def test_the_demo_says_no_signature_is_kept(settings: Any, staff_client_a: APIClient, asha: Payslip) -> None:
+    # The sheet asks first, so on the demo the visitor draws and nothing is sent; cash then comes as JSON.
+    assert staff_client_a.get(PAY, {"month": "2026-11"}).json()["keeps_signatures"] is True
+    settings.DEMO_SEED = True
+    assert staff_client_a.get(PAY, {"month": "2026-11"}).json()["keeps_signatures"] is False
+    one = staff_client_a.get(f"{PAY}{asha.staff_id}/", {"month": "2026-11"}).json()
+    assert (one["keeps_signatures"], one["void_reasons"]) == (False, ["marked_by_mistake"])
+    made = mpesa(staff_client_a, asha, method="cash", reference="")
+    assert (made.status_code, made.json()["no_signature"], made.json()["signature"]) == (200, "demo", None)
+    assert code_of(cash(staff_client_a, asha)) == (400, "payment.already_paid")

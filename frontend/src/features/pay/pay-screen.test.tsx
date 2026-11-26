@@ -1,5 +1,6 @@
 // pay-screen.test.tsx — Mishahara (WAGE-2): a line per worker with their total, what isn't paid said under the name, the
-// whole of it, how far the month is counted, and the month moved back and forward, kept in the address.
+// whole of it, how far the month is counted, and the month moved back and forward, kept in the address. And once a
+// month is approved, who is paid, Bado kulipa, and Lipa on each line (WAGE-9).
 import {
   act,
   fireEvent,
@@ -11,11 +12,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DAWA, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
+import { standInCanvas, signOn } from "@/test/canvas";
 import {
   NO_PAY,
   OWNER,
   pay,
   PAY_ROUTE,
+  PAYER,
+  payment,
   type PayMonth,
   payMonth,
   workerPay,
@@ -374,5 +378,171 @@ describe("the month's pay", () => {
 
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect((await lines())[0]).toBe("Asha | 152,000");
+  });
+});
+
+/** Approved by Baba on 1 December; Asha paid on the 2nd, Baraka and Juma not yet (Jack's picture, 26 Nov 2026). */
+const BY_BABA = { by: "Baba", at: "2026-12-01T16:05:00Z" };
+const PAID_ASHA = workerPay({
+  display_name: "Asha",
+  total: "152000.00",
+  approval: BY_BABA,
+  payslip: "019a8600-0000-7000-8000-0000000005a1",
+  payments: [payment()],
+  to_hand_out: "0.00",
+});
+const BARAKA = workerPay({
+  display_name: "Baraka",
+  total: "148000.00",
+  approval: BY_BABA,
+  payslip: "019a8600-0000-7000-8000-0000000005b2",
+  to_hand_out: "148000.00",
+});
+const JUMA = workerPay({
+  display_name: "Juma",
+  total: "132000.00",
+  approval: BY_BABA,
+  payslip: "019a8600-0000-7000-8000-0000000005c3",
+  to_hand_out: "132000.00",
+});
+const APPROVED = payMonth([PAID_ASHA, BARAKA, JUMA], {
+  today: "2026-12-02",
+  counted_to: "2026-11-30",
+  total: "432000.00",
+  approval: BY_BABA,
+  still_to_pay: "280000.00",
+});
+
+describe("who is paid (WAGE-9)", () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2026-12-02T06:00:00Z"));
+    window.history.replaceState(null, "", "/pay/?month=2026-11");
+  });
+
+  function paysNovember(month: PayMonth, me = PAYER) {
+    answer("GET", ME, { status: 200, body: me });
+    answer("GET", PAY_ROUTE, () => Response.json(month));
+  }
+
+  it("says what is still to hand out, and under each name whether they are paid", async () => {
+    paysNovember(APPROVED);
+    render(<PayScreen />);
+    expect(await lines()).toEqual([
+      "Asha | 152,000 | Amelipwa 02/12/2026",
+      "Baraka | 148,000 | Hajalipwa",
+      "Juma | 132,000 | Hajalipwa",
+    ]);
+    expect(wordsOf(screen.getByText("Bado kulipa").parentElement)).toBe(
+      "Bado kulipa TSh 280,000",
+    );
+    // Lipa beside each who waits, named for whose it is; none beside Asha.
+    expect(
+      screen
+        .getAllByRole("button", { name: /^Lipa / })
+        .map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Lipa Baraka", "Lipa Juma"]);
+  });
+
+  it("says everyone is paid once each is", async () => {
+    paysNovember(
+      payMonth([PAID_ASHA], {
+        ...APPROVED,
+        workers: [PAID_ASHA],
+        still_to_pay: "0.00",
+      }),
+    );
+    render(<PayScreen />);
+    expect(await screen.findByText("Wote wamelipwa")).toBeTruthy();
+    expect(screen.queryByText("Bado kulipa")).toBeNull();
+  });
+
+  it("offers no Lipa to whoever may not hand out pay", async () => {
+    paysNovember(payMonth([BARAKA], { ...APPROVED, workers: [BARAKA] }), OWNER);
+    render(<PayScreen />);
+    expect(await lines()).toEqual(["Baraka | 148,000 | Hajalipwa"]);
+    expect(screen.queryAllByRole("button", { name: /^Lipa / })).toHaveLength(0);
+  });
+
+  it("offers none on one's own pay, though they may hand out the others' (02 A5)", async () => {
+    const mine = { ...JUMA, own: true };
+    paysNovember(
+      payMonth([BARAKA, mine], { ...APPROVED, workers: [BARAKA, mine] }),
+    );
+    render(<PayScreen />);
+    expect(await lines()).toEqual([
+      "Baraka | 148,000 | Hajalipwa",
+      "Juma | 132,000 | Hajalipwa",
+    ]);
+    expect(
+      screen
+        .getAllByRole("button", { name: /^Lipa / })
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Lipa Baraka"]);
+  });
+
+  it("says neither of a payslip that pays nothing", async () => {
+    const owes = { ...JUMA, total: "-18000.00", to_hand_out: "0.00" };
+    paysNovember(
+      payMonth([owes], { ...APPROVED, workers: [owes], still_to_pay: "0.00" }),
+    );
+    render(<PayScreen />);
+    const [line] = await lines();
+    expect(line).not.toContain("Hajalipwa");
+    expect(screen.queryAllByRole("button", { name: /^Lipa / })).toHaveLength(0);
+  });
+
+  it("pays from the line, and lands on its Amelipwa once the pay is read again", async () => {
+    standInCanvas();
+    let month = APPROVED;
+    paysNovember(APPROVED);
+    answer("GET", PAY_ROUTE, () => Response.json(month));
+    answer(
+      "PUT",
+      `/api/v1/staffpay/payslips/${BARAKA.payslip ?? ""}/pay-cash/`,
+      () => {
+        const made = payment({ id: "019a8700-0000-7000-8000-000000000002" });
+        month = {
+          ...APPROVED,
+          workers: [
+            PAID_ASHA,
+            { ...BARAKA, payments: [made], to_hand_out: "0.00" },
+            JUMA,
+          ],
+          still_to_pay: "132000.00",
+        };
+        return Response.json(made);
+      },
+    );
+    render(<PayScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "Lipa Baraka" }));
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("heading").textContent).toBe("Lipa Baraka");
+    signOn(within(sheet).getByRole("img", { name: "Sahihi ya Baraka" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "Nimemlipa" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect((await lines())[1]).toBe("Baraka | 148,000 | Amelipwa 02/12/2026");
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe("Amelipwa 02/12/2026"),
+    );
+    vi.restoreAllMocks();
+  });
+
+  it("offers Lipa to one who left, approved alone, while the month is still open", async () => {
+    vi.setSystemTime(new Date("2026-11-25T09:00:00Z"));
+    window.history.replaceState(null, "", "/pay/");
+    const neema = workerPay({
+      display_name: "Neema",
+      left_on: "2026-11-14",
+      total: "62000.00",
+      approval: { by: "Baba", at: "2026-11-14T16:00:00Z" },
+      payslip: "019a8600-0000-7000-8000-0000000005d4",
+      to_hand_out: "62000.00",
+    });
+    paysNovember(payMonth([neema], { total: "62000.00" }));
+    render(<PayScreen />);
+    expect((await lines())[0]).toContain("Hajalipwa");
+    expect(screen.getByRole("button", { name: "Lipa Neema" })).toBeTruthy();
+    // No Bado kulipa on a month still open.
+    expect(screen.queryByText("Bado kulipa")).toBeNull();
   });
 });
