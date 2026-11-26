@@ -24,7 +24,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.control.models import AttachmentKind
+from apps.control.models import Attachment, AttachmentKind
 from apps.control.services import adding_attachment
 from apps.core.permissions import Permission
 from apps.core.tenancy import ShopMismatch
@@ -83,6 +83,13 @@ def pay_payslip(
         made = PayslipPayment.objects.filter(pk=payment_id, payslip=slip).first()
         if made is not None:
             return made
+        # An id this shop holds already, on another payslip's payment or another photo: told as one held anywhere is,
+        # id.taken, so the answer never says which shop holds it (03 §5.4). Another shop's is found only by the insert,
+        # which the route says the same way (_refusing_a_taken_id). Never sent by the app, which makes each id new.
+        if PayslipPayment.objects.filter(pk=payment_id).exists() or (
+            signature_id is not None and Attachment.objects.filter(pk=signature_id).exists()
+        ):
+            raise ValidationError({"id": [ValidationError("This id is already in use.", code="id.taken")]})
         # Never one's own (02 A5): Meneja marking his own November paid proves nothing, signed or not. By the person,
         # not the job, as an advance's: someone hired again has two jobs, and neither's pay is theirs to hand out.
         if StaffMember.objects.get(pk=slip.staff_id).user_id == by.user_id:
@@ -106,8 +113,10 @@ def pay_payslip(
             no_signature=no_signature,
             created_by=by,
         )
-        # The row's own checks, as a guard on what was asked above: an id taken.
-        row.full_clean()
+        # The row's own checks of its fields, as a guard on what was asked above: a choice or a length. Not its unique
+        # rules or its checks, which the insert's own refusal says (_insert): asked here, a number another commit took a
+        # moment ago would come back under no box, and an id as a word no screen has.
+        row.full_clean(validate_unique=False, validate_constraints=False)
         _insert(row)
         if signature is not None and signature_id is not None:
             # The drawing last, its file after its row (adding_attachment), so a payment refused leaves no file. A

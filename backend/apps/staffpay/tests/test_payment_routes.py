@@ -19,6 +19,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core.permissions import Permission, RoleTemplate
@@ -254,6 +255,31 @@ def test_an_id_another_shop_holds_is_taken(
     answer = mpesa(staff_client_a, asha, id=str(theirs.pk))
     assert answer.status_code == 400
     assert answer.json()["fields"] == {"id": ["id.taken"]}
+
+
+def test_an_id_this_shop_holds_is_taken_too(
+    staff_client_a: APIClient, shop_a: Shop, staff_a: StaffMember, asha: Payslip
+) -> None:
+    # Held by another payslip's payment of this shop, or by another photo of it: the same answer as another shop's id,
+    # so the answer never tells whose it is (03 §5.4), and nothing is kept.
+    with shop_context(shop_a):
+        other = Payslip.objects.create(
+            shop=shop_a, staff=job(shop_a, "Baraka"), month=NOVEMBER, total=Decimal("5000.00"), created_by=staff_a
+        )
+    held = mpesa(staff_client_a, other, reference="QK7H2N4ZTR").json()
+    answer = mpesa(staff_client_a, asha, id=held["id"])
+    assert (answer.status_code, answer.json()["fields"]) == (400, {"id": ["id.taken"]})
+    # Baraka's M-Pesa crossed out, and paid in cash: his signature's id, sent again on Asha's payment.
+    with shop_context(shop_a):
+        PayslipPayment.objects.filter(pk=held["id"]).update(
+            voided_at=timezone.now(), voided_by=staff_a, void_reason="Kosa"
+        )
+    first = cash(staff_client_a, other)
+    photo = first.json()["signature"]
+    again = cash(staff_client_a, asha, signature=photo)
+    assert (again.status_code, again.json()["fields"]) == (400, {"id": ["id.taken"]})
+    with shop_context(shop_a):
+        assert not PayslipPayment.objects.filter(payslip=asha).exists()
 
 
 @pytest.mark.parametrize("missing", [Permission.PAY_RUN, Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE])
