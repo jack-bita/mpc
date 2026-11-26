@@ -6,6 +6,11 @@
 // WAGE-1's rate, ATT-13's taps, the book that counts the day, the sum, the approval (approve_leaver) and the lock in
 // each service.
 //
+// And then he pays her (WAGE-9): by M-Pesa with its number, crossed out with the demo's ready reason, then in cash, her
+// signature drawn with the mouse in a real browser's canvas, which no jsdom test can draw on. On the demo no signature is
+// kept (Jack, ATT-3 and PPL-9), so this proves the pad draws and the payment goes, not that the drawing is sent: the
+// server's tests send one (test_payment_routes.py), and so does the Lipa sheet's (pay-sheet.test.tsx).
+//
 // Neema is the visitor's own worker, as a seed person can't be marked left on the demo (demo.people_fixed). A month of
 // everyone is approved by no browser test: it needs a month that is over, which the demo has only on a month's first
 // days, and nothing may be decided, typed or crossed out in it after, so every other test of it would fail.
@@ -49,7 +54,7 @@ async function back(phone: Page) {
   await phone.getByRole("button", { name: sw.pageHeader.back }).click();
 }
 
-test("Meneja approves the pay of one who left, and none of it changes after", async ({
+test("Meneja approves and pays the pay of one who left, and none of it changes after", async ({
   managersPhone,
 }) => {
   const phone = await managersPhone.newPage();
@@ -246,6 +251,136 @@ test("Meneja approves the pay of one who left, and none of it changes after", as
     await phone.reload();
     await expect(phone.getByText(/^Imeidhinishwa na Meneja · /)).toBeVisible();
     await expect(total).toHaveText(/^TSh\s10,000$/);
+  });
+
+  const PAYMENT = PAY.payment;
+  const foot = phone.getByRole("region", {
+    name: PAYMENT.section,
+    exact: true,
+  });
+
+  await test.step("Lipa by M-Pesa, with its number", async () => {
+    await expect(
+      foot.getByText(PAYMENT.notPaid, { exact: true }),
+    ).toBeVisible();
+    await foot.getByRole("button", { name: PAYMENT.lipa, exact: true }).click();
+    const sheet = sheetCalled(words(PAYMENT.title, { name: "Neema" }));
+    // The whole amount, as Jack drew it: "Novemba 2026 · TSh 10,000".
+    await expect(sheet.getByText(/ · TSh\s10,000$/)).toBeVisible();
+    await sheet
+      .getByRole("radio", { name: PAYMENT.methods.mobile_money, exact: true })
+      .click();
+    const action = sheet.getByRole("button", {
+      name: PAYMENT.action,
+      exact: true,
+    });
+    // Off until the number is typed (Jack: A).
+    await expect(action).toBeDisabled();
+    await sheet
+      .getByLabel(PAYMENT.reference, { exact: true })
+      .fill("qk7h 2m9xpl");
+    await action.click();
+    await expect(sheet).toBeHidden();
+    await expect(
+      foot.getByText(/^Amelipwa kwa M-Pesa na Meneja · /),
+    ).toBeVisible();
+    // Kept as the owner's statement has it.
+    await expect(
+      foot.getByText(words(PAYMENT.number, { reference: "QK7H2M9XPL" }), {
+        exact: true,
+      }),
+    ).toBeVisible();
+  });
+
+  await test.step("Batilisha, with the demo's ready reason: struck through, and Hajalipwa again", async () => {
+    await foot
+      .getByRole("button", { name: PAYMENT.batilisha, exact: true })
+      .click();
+    const sheet = sheetCalled(words(PAYMENT.void.title, { name: "Neema" }));
+    await sheet
+      .getByRole("radio", {
+        name: PAYMENT.readyReason.marked_by_mistake,
+        exact: true,
+      })
+      .click();
+    await sheet
+      .getByRole("button", { name: PAYMENT.void.action, exact: true })
+      .click();
+    await expect(sheet).toBeHidden();
+    await expect(
+      foot.getByText(new RegExp(`: ${PAYMENT.readyReason.marked_by_mistake}$`)),
+    ).toBeVisible();
+    // The payment stays, struck through.
+    await expect(foot.locator("s")).toHaveText(
+      /^Amelipwa kwa M-Pesa na Meneja · /,
+    );
+    await expect(
+      foot.getByText(PAYMENT.notPaid, { exact: true }),
+    ).toBeVisible();
+  });
+
+  await test.step("Lipa in cash, her signature drawn with the mouse", async () => {
+    await foot.getByRole("button", { name: PAYMENT.lipa, exact: true }).click();
+    const sheet = sheetCalled(words(PAYMENT.title, { name: "Neema" }));
+    // Taslimu is picked as it opens.
+    await expect(
+      sheet.getByRole("radio", { name: PAYMENT.methods.cash, exact: true }),
+    ).toHaveAttribute("aria-checked", "true");
+    const action = sheet.getByRole("button", {
+      name: PAYMENT.action,
+      exact: true,
+    });
+    await expect(action).toBeDisabled();
+    const pad = sheet.getByRole("img", {
+      name: words(PAYMENT.signature, { name: "Neema" }),
+      exact: true,
+    });
+    // What the canvas holds before and after: a real browser paints it, as no jsdom test can.
+    const picture = () =>
+      pad.evaluate((canvas) =>
+        (canvas as HTMLCanvasElement).toDataURL("image/jpeg"),
+      );
+    const blank = await picture();
+    const box = await pad.boundingBox();
+    if (box === null) throw new Error("The signature box isn't on the screen.");
+    await phone.mouse.move(box.x + 30, box.y + box.height / 2);
+    await phone.mouse.down();
+    await phone.mouse.move(box.x + 90, box.y + 40, { steps: 8 });
+    await phone.mouse.move(box.x + 150, box.y + box.height - 40, { steps: 8 });
+    await phone.mouse.up();
+    expect(await picture()).not.toBe(blank);
+    await expect(action).toBeEnabled();
+    // On the demo nothing of it is kept, and the sheet says so.
+    await expect(
+      sheet.getByText(PAYMENT.demoSignature, { exact: true }),
+    ).toBeVisible();
+    await action.click();
+    await expect(sheet).toBeHidden();
+    await expect(
+      foot.getByText(/^Amelipwa taslimu na Meneja · /),
+    ).toBeVisible();
+    await expect(
+      foot.getByText(PAYMENT.demoSignature, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      foot.getByRole("button", { name: PAYMENT.lipa, exact: true }),
+    ).toHaveCount(0);
+    // Read again from the server, it says the same, the struck one above it.
+    await phone.reload();
+    await expect(
+      foot.getByText(/^Amelipwa taslimu na Meneja · /),
+    ).toBeVisible();
+    await expect(foot.locator("s")).toHaveCount(1);
+  });
+
+  await test.step("Mishahara says she is paid, and offers no Lipa", async () => {
+    await back(phone);
+    const line = phone
+      .getByRole("list", { name: PAY.workersLabel })
+      .getByRole("listitem")
+      .filter({ hasText: "Neema" });
+    await expect(line.getByText(/^Amelipwa \d\d\/\d\d\/\d{4}$/)).toBeVisible();
+    await expect(line.getByRole("button")).toHaveCount(0);
   });
 
   await test.step("her day says it can't change any more, and offers nothing", async () => {
