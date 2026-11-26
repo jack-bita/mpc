@@ -11,9 +11,15 @@ page is. And today, still running, is added once the worker taps Toka, less thei
 who leaves tonight is paid for it (Jack: A): judged by the book's own rule (answer_days), and never kept.
 
 Once a month is approved, its payslips are the answer (Payslip, PayslipLine), and nothing is worked out: November says
-the same a year later (A3). A debt a payslip left, a total below 0, comes off the job's next pay, as a line of its own
-(Jack: A). Approving is approval.py's, which keeps exactly what this file answers; so is what stops it (ToApprove), as
-the page that shows the pay shows that too.
+the same a year later (A3). Each payslip comes with how it was handed out (PayslipPayment, WAGE-9), crossed out ones
+too, and the month with what is still to hand out, Bado kulipa:
+
+    pay_month(MPC, November), approved, 2 Dec   Asha 152,000 paid in cash by Baba · Juma 132,000 not paid yet
+                                                Bado kulipa 132,000
+
+A debt a payslip left, a total below 0, comes off the job's next pay, as a line of its own (Jack: A). Approving is
+approval.py's, which keeps exactly what this file answers; so is what stops it (ToApprove), as the page that shows the
+pay shows that too.
 """
 
 import datetime as dt
@@ -28,6 +34,7 @@ from zoneinfo import ZoneInfo
 
 from django.db.models import Min
 
+from apps.control.models import ATTACHMENT_KINDS, Attachment, AttachmentKind
 from apps.core.settings_registry import ATTENDANCE_ON, ROUNDING_STEP
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import StaffMember, StaffStatus
@@ -56,6 +63,7 @@ from apps.staffpay.models import (
     Payslip,
     PayslipLine,
     PayslipLineKind,
+    PayslipPayment,
     ReviewReason,
 )
 from apps.staffpay.selectors import (
@@ -68,6 +76,7 @@ from apps.staffpay.selectors import (
 )
 from apps.staffpay.services.book import answer_days, month_span, who_shares, work_out_days
 from apps.staffpay.services.money import NO_MONEY
+from apps.staffpay.services.payment import ready_payment_void_reasons
 
 
 @dataclass(frozen=True)
@@ -76,6 +85,31 @@ class Approval:
     # 19:05".
     by: str
     at: dt.datetime
+
+
+@dataclass(frozen=True)
+class VoidedPayment:
+    # Who crossed out a payment, by nickname; when; and why. On the demo the reason is a ready one's code
+    # (`marked_by_mistake`), which the page says in words.
+    by: str
+    at: dt.datetime
+    reason: str
+
+
+@dataclass(frozen=True)
+class PaymentLine:
+    # One handing-out of a payslip (WAGE-9), as the payslip's foot shows it: "Amelipwa taslimu na Baba · 2/12/2026
+    # 08:10", the M-Pesa number, the amount, the signature's photo, or why there is none (on the demo), and who crossed
+    # it out, or None while it counts.
+    id: uuid.UUID
+    method: str
+    reference: str
+    amount: Decimal
+    by: str
+    at: dt.datetime
+    signature_id: uuid.UUID | None
+    no_signature: str
+    voided: VoidedPayment | None
 
 
 @dataclass(frozen=True)
@@ -98,6 +132,23 @@ class WorkerPay:
     # The days that stop its approval: those that wait for a decision, and those to pay with no rate. None on a payslip.
     waiting_on: tuple[dt.date, ...] = ()
     no_rate_on: tuple[dt.date, ...] = ()
+    # Once a payslip keeps it: the payslip, which Lipa pays, and each time it was handed out, in the order made, those
+    # crossed out among them (WAGE-9). None and nothing on a draft.
+    payslip_id: uuid.UUID | None = None
+    payments: tuple[PaymentLine, ...] = ()
+
+    @property
+    def payment(self) -> PaymentLine | None:
+        # The payment that counts, or None: at most one, as the table holds.
+        return next((made for made in self.payments if made.voided is None), None)
+
+    @property
+    def to_hand_out(self) -> Decimal:
+        # What is still to hand this worker for a kept payslip (Bado kulipa): all it pays, until it is paid; nothing
+        # once it is, nor for a payslip of 0, which has nothing to hand over (WAGE-9), nor for a draft, not yet kept.
+        if self.payslip_id is None or self.payment is not None:
+            return NO_PAY
+        return cash_to_pay(self.total)
 
 
 @dataclass(frozen=True)
@@ -140,6 +191,9 @@ class PayMonth:
     # pay, what its approval waits for.
     approval: Approval | None = None
     to_approve: ToApprove | None = None
+    # Once the month is approved: the cash still to hand out, each payslip not paid yet (Bado kulipa, WAGE-9), 0 once
+    # each is (Wote wamelipwa); None while it is open, as its payslips aren't all kept yet.
+    still_to_pay: Decimal | None = None
 
     @property
     def is_running(self) -> bool:
@@ -169,6 +223,8 @@ class WorkerPayMonth:
     # For one who left, with pay still open: what their approval alone waits for (WAGE-3), or None, when there is
     # nothing to approve alone.
     to_approve: ToApprove | None = None
+    # The ready reasons a payment may be crossed out with, on the demo alone; empty where the reason is typed (WAGE-9).
+    void_reasons: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -284,6 +340,7 @@ def worker_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
         no_day_yet=whole.is_running and job.left_on is None and job.pk not in whole.worked,
         worker=_worker_pay(job, work_out_pay([]), None) if line is None else line,
         to_approve=alone,
+        void_reasons=tuple(ready_payment_void_reasons()),
     )
 
 
@@ -510,21 +567,70 @@ def _approved(shop: Shop, run: PayRun, last: dt.date, today: dt.date) -> PayMont
         total=_cash(lines),
         worked=frozenset(line.staff_id for line in lines),
         approval=_approval_of(run),
+        still_to_pay=add_up(line.to_hand_out for line in lines),
     )
 
 
 def _payslips_of(shop: Shop, month: dt.date) -> dict[uuid.UUID, WorkerPay]:
-    # Each payslip of a month as its worker's line, by job: in two reads, whatever their number.
+    # Each payslip of a month as its worker's line, by job, with how it was handed out (WAGE-9): in four reads at most,
+    # whatever their number.
     slips = list(Payslip.objects.filter(shop=shop, month=month).select_related("staff", "created_by"))
     if not slips:
         return {}
     lines: dict[uuid.UUID, list[PayslipLine]] = defaultdict(list)
     for line in PayslipLine.objects.filter(shop=shop, payslip__in=slips).order_by("payslip_id", "position"):
         lines[line.payslip_id].append(line)
-    return {slip.staff_id: _line_of(slip, lines[slip.pk]) for slip in slips}
+    paid = _payments_of(shop, slips)
+    return {slip.staff_id: _line_of(slip, lines[slip.pk], paid.get(slip.pk, ())) for slip in slips}
 
 
-def _line_of(slip: Payslip, lines: list[PayslipLine]) -> WorkerPay:
+def _payments_of(shop: Shop, slips: list[Payslip]) -> dict[uuid.UUID, tuple[PaymentLine, ...]]:
+    # Each payslip's payments, in the order made, crossed out ones too, which the page shows struck through; and the
+    # signature pinned to each one in cash. In two reads, the second only when any was handed out.
+    made = list(
+        PayslipPayment.objects.filter(shop=shop, payslip__in=slips)
+        .select_related("created_by", "voided_by")
+        .order_by("created_at", "pk")
+    )
+    if not made:
+        return {}
+    signed = dict(
+        Attachment.objects.filter(
+            shop=shop,
+            kind=AttachmentKind.SIGNATURE,
+            subject_type=ATTACHMENT_KINDS[AttachmentKind.SIGNATURE].subject_type,
+            subject_id__in=[payment.pk for payment in made],
+        ).values_list("subject_id", "pk")
+    )
+    by_slip: dict[uuid.UUID, list[PaymentLine]] = defaultdict(list)
+    for payment in made:
+        by_slip[payment.payslip_id].append(_payment_line(payment, signed.get(payment.pk)))
+    return {slip: tuple(payments) for slip, payments in by_slip.items()}
+
+
+def _payment_line(payment: PayslipPayment, signature: uuid.UUID | None) -> PaymentLine:
+    # A payment as the page shows it. Always somebody's, as the table holds; and a crossing out always says who and why.
+    voided = (
+        None
+        if payment.voided_at is None
+        else VoidedPayment(
+            by=cast(StaffMember, payment.voided_by).display_name, at=payment.voided_at, reason=payment.void_reason
+        )
+    )
+    return PaymentLine(
+        id=payment.pk,
+        method=payment.method,
+        reference=payment.reference,
+        amount=payment.amount,
+        by=cast(StaffMember, payment.created_by).display_name,
+        at=payment.created_at,
+        signature_id=signature,
+        no_signature=payment.no_signature,
+        voided=voided,
+    )
+
+
+def _line_of(slip: Payslip, lines: list[PayslipLine], payments: tuple[PaymentLine, ...]) -> WorkerPay:
     # A payslip as the same line its draft was, so the page draws one thing: each amount as it was kept, nothing
     # multiplied or rounded again.
     def off(*kinds: PayslipLineKind) -> Decimal:
@@ -564,6 +670,8 @@ def _line_of(slip: Payslip, lines: list[PayslipLine]) -> WorkerPay:
         total=slip.total,
         carried_from=carried_from,
         approval=_approval_of(slip),
+        payslip_id=slip.pk,
+        payments=payments,
     )
 
 
@@ -575,7 +683,8 @@ def _approval_of(row: PayRun | Payslip) -> Approval:
 def _cash(lines: Iterable[WorkerPay]) -> Decimal:
     # What the month pays in all (WAGE-3, Jack: A): one who owes is handed nothing, so they count as 0. Their minus
     # would make the whole less than what the others are owed, and Baba would come short at the counter. One approved
-    # alone counts too, though they were paid the evening they left: what is still to hand over is WAGE-9's.
+    # alone counts too, though they were paid the evening they left: what is still to hand over is Bado kulipa
+    # (still_to_pay, WAGE-9).
     return add_up(cash_to_pay(line.total) for line in lines)
 
 

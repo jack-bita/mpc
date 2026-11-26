@@ -193,8 +193,11 @@ def test_baba_approves_november(shop_a: Shop, baba: StaffMember, asha: StaffMemb
     said = Approval(by="Baba", at=timezone.now())
     assert (answer.approval, answer.to_approve) == (said, None)
     assert (answer.counted_to, answer.total) == (dt.date(2026, 11, 30), Decimal("44500.00"))
-    # Each worker's line is the very line he read, but for who approved it: lines, fines, total, all of it.
-    assert answer.workers == [replace(line, approval=said) for line in shown.workers]
+    # Each worker's line is the very line he read, but for who approved it and the payslip that keeps it, which Lipa
+    # pays (WAGE-9): lines, fines, total, all of it.
+    with shop_context(shop_a):
+        slips = dict(Payslip.objects.values_list("staff_id", "pk"))
+    assert answer.workers == [replace(line, approval=said, payslip_id=slips[line.staff_id]) for line in shown.workers]
     with shop_context(shop_a):
         assert worker_pay(shop_a, juma, NOVEMBER).worker == line_of(answer, "Juma")
 
@@ -283,8 +286,8 @@ def test_an_approved_month_says_the_same_whatever_comes(shop_a: Shop, baba: Staf
 def test_an_approved_month_is_read_in_a_few_queries_and_writes_nothing(
     shop_a: Shop, baba: StaffMember, asha: StaffMember
 ) -> None:
-    # The run and who gave it, the payslips with their workers, their lines; whatever the number of workers. The book
-    # isn't asked, so nothing is locked or written.
+    # The run and who gave it, the payslips with their workers, their lines, and their payments (WAGE-9); whatever the
+    # number of workers. The book isn't asked, so nothing is locked or written.
     for name in ("Baraka", "Juma", "Zawadi"):
         paid(shop_a, name)
     for staff_name in ("Asha", "Juma"):
@@ -295,7 +298,7 @@ def test_an_approved_month_is_read_in_a_few_queries_and_writes_nothing(
     with shop_context(shop_a), CaptureQueriesContext(connection) as queries:
         answer = pay_month(shop_a, NOVEMBER)
     assert len(answer.workers) == 4
-    assert len(queries) <= 3
+    assert len(queries) <= 4
     assert all(query["sql"].startswith("SELECT") and "FOR NO KEY UPDATE" not in query["sql"] for query in queries)
 
 
