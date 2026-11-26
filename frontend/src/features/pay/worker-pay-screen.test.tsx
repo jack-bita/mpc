@@ -1,7 +1,13 @@
 // worker-pay-screen.test.tsx — one worker's pay of a month, line by line (WAGE-2): the lines as Jack drew them, a raise,
 // what they were given before payday (WAGE-8), today once they tapped Toka, what isn't paid, a month gone by, and what the
-// page says with no worker or no pay.
-import { act, screen, waitFor, within } from "@testing-library/react";
+// page says with no worker or no pay. And at the foot of a payslip, how it was handed out, Lipa and Batilisha (WAGE-9).
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { answer, refusal, sent } from "@/test/fake-server";
@@ -9,6 +15,8 @@ import {
   NO_PAY,
   OWNER,
   pay,
+  PAYER,
+  payment,
   payRoute,
   type WorkerPay,
   workerPay,
@@ -525,5 +533,232 @@ describe("a worker's pay", () => {
     act(() => screen.getByRole("button", { name: "Rudi ulipotoka" }).click());
 
     expect(router.push).toHaveBeenCalledWith("/pay/?month=2026-10");
+  });
+});
+
+describe("the payslip's foot (WAGE-9)", () => {
+  const SLIP = "019a8600-0000-7000-8000-0000000005c3";
+  const BY_BABA = { by: "Baba", at: "2026-12-01T16:05:00Z" };
+  const KEPT = { approval: BY_BABA, payslip: SLIP, total: "132000.00" };
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2026-12-02T06:00:00Z"));
+  });
+
+  function jumasPayslip(
+    worker: Partial<WorkerPay>,
+    me = PAYER,
+    fields: Partial<WorkerPayMonth> = {},
+  ) {
+    answer("GET", ME, { status: 200, body: me });
+    answer("GET", payRoute(JUMA), {
+      status: 200,
+      body: workerPayMonth(workerPay({ staff: JUMA, ...KEPT, ...worker }), {
+        today: "2026-12-02",
+        counted_to: "2026-11-30",
+        ...fields,
+      }),
+    });
+  }
+
+  function foot(): HTMLElement {
+    return screen.getByRole("region", { name: "Malipo yake" });
+  }
+
+  it("says who paid it, how and when, with the signature, and offers Batilisha", async () => {
+    jumasPayslip({
+      payments: [payment({ amount: "132000.00" })],
+      to_hand_out: "0.00",
+    });
+    open();
+    expect(
+      await screen.findByText(
+        "Amelipwa taslimu na Baba · 02/12/2026 08:10 asubuhi",
+      ),
+    ).toBeTruthy();
+    const signature = within(foot()).getByRole("img", {
+      name: "Sahihi ya Juma",
+    });
+    expect(
+      new URL(signature.getAttribute("src") ?? "", "http://shop/").pathname,
+    ).toBe(
+      "/api/v1/control/attachments/019a8700-0000-7000-8000-0000000000a1/file/",
+    );
+    expect(
+      within(foot()).getByRole("button", { name: "Batilisha" }),
+    ).toBeTruthy();
+    expect(within(foot()).queryByRole("button", { name: "Lipa" })).toBeNull();
+  });
+
+  it("says the number of one paid by M-Pesa, with no signature", async () => {
+    jumasPayslip({
+      payments: [
+        payment({
+          method: "mobile_money",
+          reference: "QK7H2M9XPL",
+          signature: null,
+        }),
+      ],
+      to_hand_out: "0.00",
+    });
+    open();
+    expect(
+      await screen.findByText("Namba ya muamala: QK7H2M9XPL"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Amelipwa kwa M-Pesa na Baba · 02/12/2026 08:10 asubuhi",
+      ),
+    ).toBeTruthy();
+    expect(within(foot()).queryByRole("img")).toBeNull();
+  });
+
+  it("keeps one crossed out, struck through, with who and why, and offers Lipa again", async () => {
+    const struck = payment({
+      voided: {
+        by: "Baba",
+        at: "2026-12-02T06:00:00Z",
+        reason: "Nilibonyeza mfanyakazi mwingine",
+      },
+    });
+    jumasPayslip({ payments: [struck], to_hand_out: "132000.00" });
+    open();
+    const paid = await screen.findByText(
+      "Amelipwa taslimu na Baba · 02/12/2026 08:10 asubuhi",
+    );
+    expect(paid.tagName).toBe("S");
+    expect(
+      screen.getByText(
+        "Imebatilishwa na Baba · 02/12/2026 09:00 asubuhi: Nilibonyeza mfanyakazi mwingine",
+      ),
+    ).toBeTruthy();
+    // Its signature kept with it, and no Batilisha on what is crossed out already.
+    expect(
+      within(foot()).getByRole("img", { name: "Sahihi ya Juma" }),
+    ).toBeTruthy();
+    expect(
+      within(foot()).queryByRole("button", { name: "Batilisha" }),
+    ).toBeNull();
+    expect(within(foot()).getByText("Hajalipwa")).toBeTruthy();
+    expect(within(foot()).getByRole("button", { name: "Lipa" })).toBeTruthy();
+  });
+
+  it("offers neither Lipa nor Batilisha to whoever may not, nor on one's own", async () => {
+    jumasPayslip({ payments: [payment()], to_hand_out: "0.00" }, OWNER);
+    open();
+    await screen.findByText(
+      "Amelipwa taslimu na Baba · 02/12/2026 08:10 asubuhi",
+    );
+    expect(within(foot()).queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("offers neither on one's own payslip, paid or not", async () => {
+    jumasPayslip({ payments: [], to_hand_out: "132000.00", own: true });
+    const { unmount } = open();
+    expect(await screen.findByText("Hajalipwa")).toBeTruthy();
+    expect(within(foot()).queryAllByRole("button")).toHaveLength(0);
+    unmount();
+    jumasPayslip({ payments: [payment()], to_hand_out: "0.00", own: true });
+    open();
+    await screen.findByText(
+      "Amelipwa taslimu na Baba · 02/12/2026 08:10 asubuhi",
+    );
+    expect(within(foot()).queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("crosses a payment out with its reason, and lands on Hajalipwa", async () => {
+    let worker = workerPay({
+      staff: JUMA,
+      ...KEPT,
+      payments: [payment()],
+      to_hand_out: "0.00",
+    });
+    answer("GET", ME, { status: 200, body: PAYER });
+    answer("GET", payRoute(JUMA), () =>
+      Response.json(
+        workerPayMonth(worker, {
+          today: "2026-12-02",
+          counted_to: "2026-11-30",
+        }),
+      ),
+    );
+    const VOID =
+      "/api/v1/staffpay/payslip-payments/019a8700-0000-7000-8000-000000000001/void/";
+    answer("POST", VOID, () => {
+      const struck = payment({
+        voided: {
+          by: "Baba",
+          at: "2026-12-02T06:00:00Z",
+          reason: "Nilibonyeza mfanyakazi mwingine",
+        },
+      });
+      worker = { ...worker, payments: [struck], to_hand_out: "132000.00" };
+      return Response.json(struck);
+    });
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: "Batilisha" }));
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("heading").textContent).toBe(
+      "Batilisha malipo ya Juma",
+    );
+    // No reason: said beside the box, nothing sent.
+    fireEvent.click(within(sheet).getByRole("button", { name: "Batilisha" }));
+    expect(await within(sheet).findByText("Andika sababu.")).toBeTruthy();
+    expect(
+      sent.filter((request) => new URL(request.url).pathname === VOID),
+    ).toHaveLength(0);
+    fireEvent.change(within(sheet).getByLabelText("Sababu"), {
+      target: { value: "Nilibonyeza mfanyakazi mwingine" },
+    });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Batilisha" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const [request] = sent.filter((one) => new URL(one.url).pathname === VOID);
+    expect(await request?.clone().json()).toEqual({
+      reason: "Nilibonyeza mfanyakazi mwingine",
+    });
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe("Hajalipwa"),
+    );
+  });
+
+  it("on the demo, offers the ready reason, and says it in words once crossed out", async () => {
+    const struck = payment({
+      signature: null,
+      no_signature: "demo",
+      voided: {
+        by: "Meneja",
+        at: "2026-12-02T06:00:00Z",
+        reason: "marked_by_mistake",
+      },
+    });
+    jumasPayslip(
+      {
+        payments: [
+          struck,
+          payment({
+            id: "019a8700-0000-7000-8000-000000000002",
+            signature: null,
+            no_signature: "demo",
+          }),
+        ],
+        to_hand_out: "0.00",
+      },
+      PAYER,
+      { void_reasons: ["marked_by_mistake"], keeps_signatures: false },
+    );
+    open();
+    expect(
+      await screen.findByText(
+        "Imebatilishwa na Meneja · 02/12/2026 09:00 asubuhi: Niliweka kwa makosa",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(foot()).getAllByText("Kwenye demo, sahihi haihifadhiwi."),
+    ).toHaveLength(2);
+    fireEvent.click(within(foot()).getByRole("button", { name: "Batilisha" }));
+    const sheet = await screen.findByRole("dialog");
+    expect(
+      within(sheet).getByRole("radio", { name: "Niliweka kwa makosa" }),
+    ).toBeTruthy();
   });
 });

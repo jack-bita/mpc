@@ -949,7 +949,26 @@
       "signatureHint": "{name} signs with a finger.",
       "reference": "Transaction number",
       "action": "I have paid",
-      "demoSignature": "On the demo, the signature isn't kept."
+      "demoSignature": "On the demo, the signature isn't kept.",
+      "section": "Their payment",
+      "paidBy": "Paid {how} by {by} · {date} {time}",
+      "how": {
+        "cash": "in cash",
+        "mobile_money": "by M-Pesa",
+        "bank": "by bank"
+      },
+      "number": "Transaction number: {reference}",
+      "signatureFailed": "The signature couldn't open.",
+      "voidedBy": "Crossed out by {by} · {date} {time}: {reason}",
+      "batilisha": "Cross out",
+      "void": {
+        "title": "Cross out {name}'s payment",
+        "reason": "Reason",
+        "action": "Cross out"
+      },
+      "readyReason": {
+        "marked_by_mistake": "Marked by mistake"
+      }
     }
   },
   "attendanceWorker": {

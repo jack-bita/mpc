@@ -949,7 +949,26 @@
       "signatureHint": "{name} achore sahihi yake kwa kidole.",
       "reference": "Namba ya muamala",
       "action": "Nimemlipa",
-      "demoSignature": "Kwenye demo, sahihi haihifadhiwi."
+      "demoSignature": "Kwenye demo, sahihi haihifadhiwi.",
+      "section": "Malipo yake",
+      "paidBy": "Amelipwa {how} na {by} · {date} {time}",
+      "how": {
+        "cash": "taslimu",
+        "mobile_money": "kwa M-Pesa",
+        "bank": "kwa benki"
+      },
+      "number": "Namba ya muamala: {reference}",
+      "signatureFailed": "Sahihi haikuweza kufunguka.",
+      "voidedBy": "Imebatilishwa na {by} · {date} {time}: {reason}",
+      "batilisha": "Batilisha",
+      "void": {
+        "title": "Batilisha malipo ya {name}",
+        "reason": "Sababu",
+        "action": "Batilisha"
+      },
+      "readyReason": {
+        "marked_by_mistake": "Niliweka kwa makosa"
+      }
     }
   },
   "attendanceWorker": {
