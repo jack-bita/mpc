@@ -19,6 +19,7 @@ in the change log: no laptop keeps a payslip (03 §6.1).
 import re
 import uuid
 
+import psycopg
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -31,7 +32,7 @@ from apps.core.tenancy import ShopMismatch
 from apps.people.models import StaffMember
 from apps.people.permissions import require
 from apps.staffpay.calculations import cash_to_pay
-from apps.staffpay.models import NoSignature, PaymentMethod, Payslip, PayslipPayment
+from apps.staffpay.models import NUMBER_COUNTED_ONCE, NoSignature, PaymentMethod, Payslip, PayslipPayment
 
 # The keys whoever hands out pay must hold, on the whole shop: `pay.run`, every manager's, as handing out is a job of
 # its own, apart from approving (`pay.approve`, the owner's); and the two keys of pay, as nobody hands out what they may
@@ -186,7 +187,12 @@ def _insert(row: PayslipPayment) -> None:
         with transaction.atomic():
             row.save(force_insert=True)
     except IntegrityError as clash:
-        if "staffpay_payslippayment_number_counted_once" not in str(clash):
+        # Found by the rule's own name, as PostgreSQL names the broken rule (as id_taken does, apps/core/api/ids.py),
+        # never by the words of its message, which a new version may say otherwise.
+        cause = clash.__cause__
+        if not (
+            isinstance(cause, psycopg.errors.UniqueViolation) and cause.diag.constraint_name == NUMBER_COUNTED_ONCE
+        ):
             raise
         refusal = ValidationError("This transaction number is used already.", code="payment.reference_used")
         raise ValidationError({"reference": [refusal]}) from None

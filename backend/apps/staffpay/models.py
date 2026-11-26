@@ -893,6 +893,10 @@ class NoSignature(models.TextChoices):
     DEMO = "demo", "On the demo, none is kept"
 
 
+# The rule that a transaction number counts once, by its name: the service tells its refusal by it (_insert,
+# apps/staffpay/services/payment.py), as PostgreSQL names the rule a refused insert broke.
+NUMBER_COUNTED_ONCE = "staffpay_payslippayment_number_counted_once"
+
 # The longest transaction number kept: an M-Pesa code is 10 characters, a bank's reference rarely past 20. More is a
 # paste of the whole message by mistake, not a number.
 LONGEST_REFERENCE = 30
@@ -1047,7 +1051,7 @@ class PayslipPayment(AppendOnly):
             models.UniqueConstraint(
                 fields=["shop", "method", "reference"],
                 condition=Q(voided_at__isnull=True) & ~Q(reference=""),
-                name="staffpay_payslippayment_number_counted_once",
+                name=NUMBER_COUNTED_ONCE,
                 violation_error_code="payment.reference_used",
             ),
             # Money was handed over, so it is more than nothing: a payslip of 0 is paid by nobody (WAGE-9).
