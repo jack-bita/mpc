@@ -166,7 +166,12 @@ export function PaySheet({
           label: t(`methods.${way}`),
         }))}
         value={method}
-        onValueChange={(way) => setMethod(way as PaymentMethod)}
+        onValueChange={(way) => {
+          setMethod(way as PaymentMethod);
+          // Another way of paying takes the signature box away, and Taslimu brings back an empty one: what was drawn
+          // is gone with it, so Nimemlipa waits for a new signature (Jack: A; WAGE-9's review).
+          setDrawn(false);
+        }}
         disabled={pay.isPending}
       />
       {method === "cash" ? (

@@ -95,6 +95,17 @@ describe("PaySheet", () => {
     expect(nimemlipa(sheet).disabled).toBe(true);
   });
 
+  it("waits for a new signature once another way was picked and Taslimu again", () => {
+    // Asha signs, Baba taps M-Pesa by mistake, then Taslimu: the box is back empty, and so Nimemlipa is off.
+    const { sheet } = open();
+    signOn(within(sheet).getByRole("img", { name: "Sahihi ya Asha" }));
+    fireEvent.click(within(sheet).getByRole("radio", { name: "M-Pesa" }));
+    fireEvent.click(within(sheet).getByRole("radio", { name: "Taslimu" }));
+    expect(nimemlipa(sheet).disabled).toBe(true);
+    signOn(within(sheet).getByRole("img", { name: "Sahihi ya Asha" }));
+    expect(nimemlipa(sheet).disabled).toBe(false);
+  });
+
   it("sends the drawing as the body, with its two ids, and closes once the pay is read again", async () => {
     answer("PUT", IN_CASH, { status: 200, body: payment() });
     const { sheet, onDone } = open();
