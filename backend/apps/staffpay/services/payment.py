@@ -8,6 +8,9 @@ marked paid, with its proof, and a payment marked by mistake crossed out.
     08:20, Baraka is paid by M-Pesa:
         PayslipPayment  Baraka, Novemba  148,000  mobile_money QK7H2M9XPL, by Baba
 
+    09:00, he sees he tapped Lipa beside Juma, not Baraka, and crosses it out: "Nilibonyeza mfanyakazi mwingine"; the
+    payment and its signature stay, struck through, and Juma's payslip waits for Lipa again.
+
 The whole amount, at once (Jack: A), and only once a payslip says what it is: approving and paying are two moments
 (WAGE-3). Who may: whoever holds `pay.run` with the two keys of pay, on the whole shop, never on their own pay. No line
 in the change log: no laptop keeps a payslip (03 §6.1).
@@ -19,6 +22,7 @@ import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from apps.control.models import AttachmentKind
 from apps.control.services import adding_attachment
@@ -74,7 +78,7 @@ def pay_payslip(
     reference = "".join(reference.split()).upper()
     # Not a recording_changes block: a payment writes no line in the change log, as no laptop gets one (03 §6.1).
     with transaction.atomic():
-        by, slip = _locked(payslip, by)
+        by, slip = _locked(payslip.pk, by)
         # Sent twice, its first answer lost: the payment it made, as it is now, whatever came since.
         made = PayslipPayment.objects.filter(pk=payment_id, payslip=slip).first()
         if made is not None:
@@ -115,7 +119,7 @@ def pay_payslip(
     return row
 
 
-def _locked(payslip: Payslip, by: StaffMember) -> tuple[StaffMember, Payslip]:
+def _locked(payslip_id: uuid.UUID, by: StaffMember) -> tuple[StaffMember, Payslip]:
     # Who pays, asked before anything is locked, so someone without a key sets nothing to work and holds nobody up; and
     # asked again of their own row, locked: Baba takes Meneja's key away while Meneja taps Nimemlipa. Taking a key holds
     # Meneja's job's row, which this waits for, so asked only before it, a key he no longer holds would mark the payment
@@ -125,7 +129,7 @@ def _locked(payslip: Payslip, by: StaffMember) -> tuple[StaffMember, Payslip]:
     _ask_who_pays(by)
     by = StaffMember.objects.select_for_update(no_key=True).get(pk=by.pk)
     _ask_who_pays(by)
-    return by, Payslip.objects.select_for_update(no_key=True).get(pk=payslip.pk)
+    return by, Payslip.objects.select_for_update(no_key=True).get(pk=payslip_id)
 
 
 def _ask_who_pays(by: StaffMember) -> None:
@@ -177,3 +181,53 @@ def _insert(row: PayslipPayment) -> None:
             raise
         refusal = ValidationError("This transaction number is used already.", code="payment.reference_used")
         raise ValidationError({"reference": [refusal]}) from None
+
+
+# The ready reason a payment is crossed out with on the demo, where every visitor is the same Meneja, so typed words
+# would show to the next one (as an advance's, WAGE-8); the page says it in words. Elsewhere the reason is typed.
+DEMO_PAYMENT_VOID_REASONS = ("marked_by_mistake",)
+
+
+def ready_payment_void_reasons() -> list[str]:
+    """The ready reason a payment may be crossed out with, for the sheet to offer: the demo's, or none elsewhere, where
+    it is typed."""
+    return list(DEMO_PAYMENT_VOID_REASONS) if settings.DEMO_SEED else []
+
+
+def void_payslip_payment(payment: PayslipPayment, *, reason: str, by: StaffMember) -> PayslipPayment:
+    """Cross out a payment marked by mistake (WAGE-9, 02 §12, T2): Baba tapped Lipa beside Juma when he paid Asha. The
+    row stays, voided once with who, when and why, and counts for nothing, its signature kept with it; the payslip waits
+    for Lipa again. Never brought back. `by`: who crosses it out, with pay.run and the two keys of pay on the whole
+    shop, whoever marked it, and never the worker it paid. A payment crossed out already, by this request sent twice or
+    by someone a moment before, is answered as it was crossed out, never stamped again. Refuses: one's own
+    (payment.own); and, beside the reason's box, no reason (payment.reason_missing), or on the demo a reason not the
+    ready one (demo.ready_reasons). Returns the row as saved."""
+    # Who voids is a staff member of the row's own shop (T1): the void rule in the database checks only that the stamp
+    # is filled whole, so this is the check it can't make with one column.
+    if by.shop_id != payment.shop_id:
+        raise ShopMismatch("void_payslip_payment was given a person of another shop.")
+    reason = reason.strip()
+    with transaction.atomic():
+        # The same locks as paying, in the same order: the person, asked again under theirs, then the payslip, so a
+        # crossing out and a new payment of the same payslip take turns, and the new one finds the old one gone.
+        by, _ = _locked(payment.payslip_id, by)
+        # Never one's own (02 A5): crossing out his own payment would let Juma be paid twice. By the person, as paying.
+        if StaffMember.objects.get(pk=payment.staff_id).user_id == by.user_id:
+            raise ValidationError("Nobody crosses out their own payment.", code="payment.own")
+        if not reason:
+            raise ValidationError(
+                {"reason": [ValidationError("A payment crossed out says why.", code="payment.reason_missing")]}
+            )
+        if settings.DEMO_SEED and reason not in DEMO_PAYMENT_VOID_REASONS:
+            raise ValidationError(
+                {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
+            )
+        # The stamp, filled once, by one guarded UPDATE, as an advance's (void_advance): only while the row counts, so
+        # two crossings out never both write it. Never save(), which AppendOnly refuses; the void trigger lets this
+        # UPDATE change the stamp and nothing else (ADR-0021).
+        PayslipPayment.objects.filter(pk=payment.pk, voided_at__isnull=True).update(
+            voided_at=timezone.now(), voided_by=by, void_reason=reason
+        )
+        # Read back as it is now: crossed out by this request, by the same one sent before, its answer lost, or by
+        # someone a moment before, whose stamp the page is then shown.
+        return PayslipPayment.objects.get(pk=payment.pk)
