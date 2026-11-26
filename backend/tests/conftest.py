@@ -52,10 +52,12 @@ from apps.staffpay.models import (
     ClockKind,
     MealMoney,
     NoPhoto,
+    PaymentMethod,
     PayRun,
     Payslip,
     PayslipLine,
     PayslipLineKind,
+    PayslipPayment,
     TimeCheck,
 )
 from apps.staffpay.services import set_pay_rate, work_out_days
@@ -85,7 +87,7 @@ def sweep_shops(
     # pay rates route lists (WAGE-1), a worker's days in the book, which the month page lists (ATT-5), a flag with its
     # note, which the flags' page lists (CTRL-4), a day's meal money, which Hela ya chakula lists (WAGE-7), money given
     # before payday, which Advansi lists (WAGE-8), and an approved month and a payslip, which the pay's routes show
-    # (WAGE-3).
+    # (WAGE-3), with its payment, crossed out through its own route (WAGE-9).
     return sweep_sides
 
 
@@ -269,12 +271,13 @@ def sweep_payslips(
     sweep_attendance: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember
 ) -> tuple[Shop, Shop]:
     # Each shop's worker paid by the day (sweep_attendance) with a payslip of yesterday's month, of a total only that
-    # shop holds (WAGE-3): the pay's routes show it as it was kept. With no run, as one approved alone, so the month
-    # stays open and the rest of it is worked out beside it, as every month's draft is. And the approval of a month long
-    # gone, so both tables hold a row of each shop. Written past the services, whose maker would need the keys.
-    for shop, staff, name, total in (
-        (sweep_attendance[0], staff_a, "Mhudhuriaji Mfano", "18391"),
-        (sweep_attendance[1], staff_b, "Mhudhuriaji Jirani", "93181"),
+    # shop holds (WAGE-3): the pay's routes show it as it was kept, with its payment (WAGE-9). With no run, as one
+    # approved alone, so the month stays open and the rest of it is worked out beside it, as every month's draft is. And
+    # the approval of a month long gone, so both tables hold a row of each shop. Written past the services, whose maker
+    # would need the keys.
+    for shop, staff, name, total, reference in (
+        (sweep_attendance[0], staff_a, "Mhudhuriaji Mfano", "18391", "MFANO7Q2K9"),
+        (sweep_attendance[1], staff_b, "Mhudhuriaji Jirani", "93181", "JIRANI3X8W"),
     ):
         with shop_context(shop):
             month = (shop_today(shop) - timedelta(days=1)).replace(day=1)
@@ -291,6 +294,17 @@ def sweep_payslips(
                 created_by=staff,
             )
             PayRun.objects.create(shop=shop, month=month.replace(year=month.year - 2), created_by=staff)
+            # Handed out by M-Pesa (WAGE-9), with a number only that shop holds, which the pay's routes show beside the
+            # payslip; and the sweep sends shop A's to be crossed out.
+            PayslipPayment.objects.create(
+                shop=shop,
+                payslip=slip,
+                staff=worker,
+                amount=Decimal(total),
+                method=PaymentMethod.MOBILE_MONEY,
+                reference=reference,
+                created_by=staff,
+            )
     return sweep_attendance
 
 

@@ -36,6 +36,31 @@ export const APPROVER: components["schemas"]["WhoIsHere"] = {
   permissions: { ...OWNER.permissions, whole_shop: [...KEYS, "pay.approve"] },
 };
 
+/** The owner who may hand out pay too: pay.run, on the whole shop (WAGE-9). */
+export const PAYER: components["schemas"]["WhoIsHere"] = {
+  ...OWNER,
+  permissions: { ...OWNER.permissions, whole_shop: [...KEYS, "pay.run"] },
+};
+
+export type PaymentLine = components["schemas"]["PaymentLine"];
+
+/** A payment of a payslip: Asha's 152,000, in cash, by Baba at 08:10 on 2 December in Arusha, signed, unless told
+ * otherwise. */
+export function payment(fields: Partial<PaymentLine> = {}): PaymentLine {
+  return {
+    id: "019a8700-0000-7000-8000-000000000001",
+    method: "cash",
+    reference: "",
+    amount: "152000.00",
+    by: "Baba",
+    at: "2026-12-02T05:10:00Z",
+    signature: "019a8700-0000-7000-8000-0000000000a1",
+    no_signature: "",
+    voided: null,
+    ...fields,
+  };
+}
+
 export type ToApprove = components["schemas"]["ToApprove"];
 
 /** What an approval waits for and warns of: nothing, unless told otherwise. */
@@ -100,6 +125,11 @@ export function workerPay(fields: Partial<WorkerPay> = {}): WorkerPay {
     total: "132000.00",
     carried_from: null,
     approval: null,
+    // A draft: no payslip keeps it yet, so nothing is handed out, and it is nobody's own (WAGE-9).
+    payslip: null,
+    payments: [],
+    to_hand_out: "0.00",
+    own: false,
     ...fields,
   };
 }
@@ -118,6 +148,10 @@ export function payMonth(
     workers,
     approval: null,
     to_approve: null,
+    // Open: no Bado kulipa until it is approved (WAGE-9).
+    still_to_pay: null,
+    // Off the demo: cash is sent with the worker's signature.
+    keeps_signatures: true,
     ...fields,
   };
 }
@@ -135,6 +169,9 @@ export function workerPayMonth(
     no_day_yet: false,
     worker,
     to_approve: null,
+    // No ready reason to cross a payment out with, as off the demo it is typed (WAGE-9).
+    void_reasons: [],
+    keeps_signatures: true,
     ...fields,
   };
 }

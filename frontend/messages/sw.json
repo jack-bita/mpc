@@ -147,6 +147,9 @@
   "passwordField": {
     "show": "Onyesha nenosiri"
   },
+  "signaturePad": {
+    "clear": "Futa sahihi"
+  },
   "sheet": {
     "cancel": "Ghairi"
   },
@@ -926,6 +929,46 @@
       "leaverTitle": "Idhinisha malipo ya {name}",
       "leaverAbout": "{month} · Jumla {total}",
       "leaverFinal": "Baada ya kuidhinisha, malipo yake ya {month} hayabadiliki tena."
+    },
+    "payment": {
+      "stillToPay": "Bado kulipa",
+      "allPaid": "Wote wamelipwa",
+      "paidOn": "Amelipwa {date}",
+      "notPaid": "Hajalipwa",
+      "lipa": "Lipa",
+      "lipaFor": "Lipa {name}",
+      "title": "Lipa {name}",
+      "about": "{month} · {total}",
+      "method": "Amelipwa kwa:",
+      "methods": {
+        "cash": "Taslimu",
+        "mobile_money": "M-Pesa",
+        "bank": "Benki"
+      },
+      "signature": "Sahihi ya {name}",
+      "signatureHint": "{name} achore sahihi yake kwa kidole.",
+      "reference": "Namba ya muamala",
+      "action": "Nimemlipa",
+      "demoSignature": "Kwenye demo, sahihi haihifadhiwi.",
+      "section": "Malipo yake",
+      "paidBy": "Amelipwa {how} na {by} · {date} {time}",
+      "how": {
+        "cash": "taslimu",
+        "mobile_money": "kwa M-Pesa",
+        "bank": "kwa benki"
+      },
+      "number": "Namba ya muamala: {reference}",
+      "signatureFailed": "Sahihi haikuweza kufunguka.",
+      "voidedBy": "Imebatilishwa na {by} · {date} {time}: {reason}",
+      "batilisha": "Batilisha",
+      "void": {
+        "title": "Batilisha malipo ya {name}",
+        "reason": "Sababu",
+        "action": "Batilisha"
+      },
+      "readyReason": {
+        "marked_by_mistake": "Niliweka kwa makosa"
+      }
     }
   },
   "attendanceWorker": {
@@ -1305,7 +1348,9 @@
       "disabled": "Kimezimwa",
       "search": "Tafuta bidhaa",
       "normal": "Kisanduku cha kawaida",
-      "password": "Nenosiri"
+      "password": "Nenosiri",
+      "signature": "Sahihi ya Asha",
+      "signatureHint": "Asha achore sahihi yake kwa kidole."
     },
     "choices": {
       "title": "Chaguo",
@@ -1498,7 +1543,8 @@
       "rules_from_tomorrow": "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
       "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi.",
       "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo.",
-      "ready_reasons": "Kwenye demo, chagua moja ya sababu zilizo tayari."
+      "ready_reasons": "Kwenye demo, chagua moja ya sababu zilizo tayari.",
+      "no_signature": "Kwenye demo, sahihi haihifadhiwi, ili sahihi ya mtu halisi isionekane kwa kila mgeni."
     },
     "closure": {
       "date_past": "Siku iliyoshapita haiwezi kubadilishwa.",
@@ -1565,6 +1611,16 @@
       "nothing": "Mfanyakazi huyu hana malipo katika mwezi huu.",
       "own": "Huwezi kuidhinisha malipo yako mwenyewe peke yake.",
       "still_clocked_in": "Mfanyakazi huyu bado hajabonyeza Toka leo."
+    },
+    "payment": {
+      "own": "Huwezi kuweka malipo yako mwenyewe kuwa umelipwa, wala kuyabatilisha.",
+      "nothing_to_pay": "Malipo haya ni sifuri, kwa hiyo hakuna cha kumkabidhi.",
+      "already_paid": "Mfanyakazi huyu ameshalipwa malipo haya.",
+      "signature_missing": "Mfanyakazi achore sahihi yake kwanza.",
+      "reference_missing": "Andika namba ya muamala.",
+      "reference_invalid": "Namba ya muamala ina herufi na tarakimu tu.",
+      "reference_used": "Namba hii ya muamala imeshatumika kwa malipo mengine.",
+      "reason_missing": "Andika sababu."
     },
     "flag": {
       "note_required": "Andika maelezo.",

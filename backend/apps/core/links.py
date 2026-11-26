@@ -63,6 +63,8 @@ LINK_TYPES: dict[str, str] = {
     # A photo or file on a record, such as a clock-in photo: the history of its edits, its file arriving and being
     # removed (CTRL-3).
     "attachment": "control.Attachment",
+    # A payslip handed out: the signature pinned to it (WAGE-9). A ledger, so it has no edit history to name it.
+    "payslip_payment": "staffpay.PayslipPayment",
 }
 
 

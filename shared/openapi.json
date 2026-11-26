@@ -3509,6 +3509,63 @@
                 }
             }
         },
+        "/api/v1/staffpay/payslip-payments/{id}/void/": {
+            "post": {
+                "operationId": "staffpay_payslip_payments_void_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this payslip payment.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VoidPaymentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaymentLine"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/staffpay/payslips/": {
             "post": {
                 "operationId": "staffpay_payslips_create",
@@ -3537,6 +3594,148 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/PayslipAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/staffpay/payslips/{id}/pay/": {
+            "post": {
+                "operationId": "staffpay_payslips_pay_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this payslip.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PayPayslipRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaymentLine"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/staffpay/payslips/{id}/pay-cash/": {
+            "put": {
+                "operationId": "staffpay_payslips_pay_cash_update",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this payslip.",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "The payment's id, a UUIDv7 made on the phone.",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "signature",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "The signature's id, a UUIDv7 made on the phone.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "image/jpeg": {
+                            "schema": {
+                                "type": "string",
+                                "format": "binary"
+                            }
+                        },
+                        "image/webp": {
+                            "schema": {
+                                "type": "string",
+                                "format": "binary"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaymentLine"
                                 }
                             }
                         },
@@ -4043,6 +4242,11 @@
                     "photo",
                     "time",
                     "voided"
+                ]
+            },
+            "BlankEnum": {
+                "enum": [
+                    ""
                 ]
             },
             "BootstrapAnswer": {
@@ -5676,6 +5880,13 @@
                 "type": "string",
                 "description": "* `no_camera` - No camera\n* `blocked` - Camera blocked\n* `failed` - Camera failed\n* `old_app` - App before photos\n* `demo` - Demo\n* `entered` - Entered in the office"
             },
+            "NoSignatureEnum": {
+                "enum": [
+                    "demo"
+                ],
+                "type": "string",
+                "description": "* `` - \n* `demo` - On the demo, none is kept"
+            },
             "NullEnum": {
                 "enum": [
                     null
@@ -6065,17 +6276,52 @@
                         ],
                         "nullable": true,
                         "description": "What its approval waits for, once it is over and open; else none (WAGE-3)."
+                    },
+                    "still_to_pay": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "nullable": true,
+                        "description": "Once approved: the cash still to hand out, 0 once each is paid; none while open (WAGE-9)."
+                    },
+                    "keeps_signatures": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9)."
                     }
                 },
                 "required": [
                     "approval",
                     "counted_to",
+                    "keeps_signatures",
                     "month",
                     "no_day_yet",
+                    "still_to_pay",
                     "to_approve",
                     "today",
                     "total",
                     "workers"
+                ]
+            },
+            "PayPayslipRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "method": {
+                        "$ref": "#/components/schemas/PaymentMethodEnum"
+                    },
+                    "reference": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 30
+                    }
+                },
+                "required": [
+                    "id",
+                    "method"
                 ]
             },
             "PayRate": {
@@ -6318,6 +6564,80 @@
                     "provider",
                     "sides"
                 ]
+            },
+            "PaymentLine": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "method": {
+                        "$ref": "#/components/schemas/PaymentMethodEnum"
+                    },
+                    "reference": {
+                        "type": "string",
+                        "description": "The transaction number; empty for cash."
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "signature": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "description": "The signature's attachment, for cash; else none."
+                    },
+                    "no_signature": {
+                        "description": "Why cash has no signature: on the demo, none is kept. Empty otherwise.\n\n* `` - \n* `demo` - On the demo, none is kept",
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/NoSignatureEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            }
+                        ]
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/VoidedPayment"
+                            }
+                        ],
+                        "nullable": true,
+                        "description": "Who crossed it out, or none while it counts."
+                    }
+                },
+                "required": [
+                    "amount",
+                    "at",
+                    "by",
+                    "id",
+                    "method",
+                    "no_signature",
+                    "reference",
+                    "signature",
+                    "voided"
+                ]
+            },
+            "PaymentMethodEnum": {
+                "enum": [
+                    "cash",
+                    "mobile_money",
+                    "bank"
+                ],
+                "type": "string",
+                "description": "* `cash` - Cash\n* `mobile_money` - Mobile money\n* `bank` - Bank"
             },
             "PayslipAnswer": {
                 "type": "object",
@@ -7969,6 +8289,18 @@
                     "reason"
                 ]
             },
+            "VoidPaymentRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "reason"
+                ]
+            },
             "VoidTapRequest": {
                 "type": "object",
                 "properties": {
@@ -8002,6 +8334,26 @@
                 ]
             },
             "VoidedMealMoney": {
+                "type": "object",
+                "properties": {
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "at",
+                    "by",
+                    "reason"
+                ]
+            },
+            "VoidedPayment": {
                 "type": "object",
                 "properties": {
                     "by": {
@@ -8319,6 +8671,28 @@
                         ],
                         "nullable": true,
                         "description": "Who approved it, once a payslip keeps it, or none."
+                    },
+                    "payslip": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "description": "The payslip, once approved."
+                    },
+                    "payments": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PaymentLine"
+                        }
+                    },
+                    "to_hand_out": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "own": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Whether it is the pay of the person looking, any job of theirs."
                     }
                 },
                 "required": [
@@ -8326,8 +8700,12 @@
                     "carried_from",
                     "display_name",
                     "left_on",
+                    "own",
                     "pay",
+                    "payments",
+                    "payslip",
                     "staff",
+                    "to_hand_out",
                     "today",
                     "total"
                 ]
@@ -8368,15 +8746,29 @@
                         ],
                         "nullable": true,
                         "description": "For one who left, with pay still open: what approving it alone waits for; else none (WAGE-3)."
+                    },
+                    "void_reasons": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "The ready reasons a payment is crossed out with, on the demo alone; empty where it is typed."
+                    },
+                    "keeps_signatures": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9)."
                     }
                 },
                 "required": [
                     "counted_to",
+                    "keeps_signatures",
                     "month",
                     "no_day_yet",
                     "paid_by_day",
                     "to_approve",
                     "today",
+                    "void_reasons",
                     "worker"
                 ]
             }

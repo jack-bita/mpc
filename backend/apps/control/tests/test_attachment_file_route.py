@@ -77,7 +77,9 @@ def photo(staff: Any, *, sent: bool = True) -> Attachment:
 def staff_photo_needs_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
     # For the length of a test, a worker's photo is opened as a clock-in photo is: with `attendance.manage`, on the
     # whole shop.
-    monkeypatch.setitem(ATTACHMENT_KINDS, AttachmentKind.STAFF_PHOTO, KindRule("staff", Permission.ATTENDANCE_MANAGE))
+    monkeypatch.setitem(
+        ATTACHMENT_KINDS, AttachmentKind.STAFF_PHOTO, KindRule("staff", frozenset({Permission.ATTENDANCE_MANAGE}))
+    )
 
 
 def code_of(answer: Any) -> tuple[int, str]:
@@ -196,11 +198,34 @@ def test_who_sees_no_side_opens_nothing(staff_a: Any, staff_a2: Any) -> None:
 
 def test_kinds_are_opened_with_their_keys() -> None:
     # Written out in full, so a change to who may open a kind is a change to this test too (CTRL-3's card): a clock-in
-    # photo with `attendance.manage` on the whole shop, a worker's face by anyone working at the shop.
+    # photo with `attendance.manage` on the whole shop, a worker's face by anyone working at the shop, and a worker's
+    # signature with the two keys of pay, never removed (WAGE-9).
     assert {
-        AttachmentKind.CLOCK_PHOTO: KindRule("attendance_event", Permission.ATTENDANCE_MANAGE),
-        AttachmentKind.STAFF_PHOTO: KindRule("staff", None),
+        AttachmentKind.CLOCK_PHOTO: KindRule("attendance_event", frozenset({Permission.ATTENDANCE_MANAGE})),
+        AttachmentKind.STAFF_PHOTO: KindRule("staff", frozenset()),
+        AttachmentKind.SIGNATURE: KindRule(
+            "payslip_payment", frozenset({Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE}), removable=False
+        ),
     } == ATTACHMENT_KINDS
+
+
+def test_a_kind_behind_two_keys_needs_both(
+    monkeypatch: pytest.MonkeyPatch, staff_a: Any, staff_a2: Any, give_role: GiveRole
+) -> None:
+    # A signature opens with both keys of pay, as the pay does (WAGE-9): one of them alone is refused. Shown with two
+    # keys a manager holds one of, as `control` may not make a payment (ADR-0035): he holds `attendance.manage` on the
+    # whole shop, not `pay.approve`, the owner's own (02 §5); the owner holds both.
+    monkeypatch.setitem(
+        ATTACHMENT_KINDS,
+        AttachmentKind.STAFF_PHOTO,
+        KindRule("staff", frozenset({Permission.ATTENDANCE_MANAGE, Permission.PAY_APPROVE})),
+    )
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    row = photo(staff_a)
+
+    assert code_of(client_for(staff_a2).get(address(row.pk))) == (403, "permission_denied")
+    assert client_for(staff_a).get(address(row.pk)).status_code == 200
 
 
 def test_file_served_from_the_demo_storage(settings: Settings, staff_a: Any, staff_client_a: APIClient) -> None:

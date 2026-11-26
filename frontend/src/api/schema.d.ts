@@ -1110,6 +1110,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staffpay/payslip-payments/{id}/void/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["staffpay_payslip_payments_void_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/payslips/": {
         parameters: {
             query?: never;
@@ -1129,6 +1145,56 @@ export interface paths {
          *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
          */
         post: operations["staffpay_payslips_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffpay/payslips/{id}/pay/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_payslips_pay_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffpay/payslips/{id}/pay-cash/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        put: operations["staffpay_payslips_pay_cash_update"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1280,6 +1346,8 @@ export interface components {
             entered: components["schemas"]["TapStamp"] | null;
             voided: components["schemas"]["TapStamp"] | null;
         };
+        /** @enum {unknown} */
+        BlankEnum: "";
         BootstrapAnswer: {
             /**
              * Format: uuid
@@ -1830,6 +1898,12 @@ export interface components {
          * @enum {string}
          */
         NoPhotoEnum: "no_camera" | "blocked" | "failed" | "old_app" | "demo" | "entered";
+        /**
+         * @description * `` -
+         *     * `demo` - On the demo, none is kept
+         * @enum {string}
+         */
+        NoSignatureEnum: "demo";
         /** @enum {unknown} */
         NullEnum: null;
         OpenDay: {
@@ -1988,6 +2062,20 @@ export interface components {
             approval: components["schemas"]["Approval"] | null;
             /** @description What its approval waits for, once it is over and open; else none (WAGE-3). */
             to_approve: components["schemas"]["ToApprove"] | null;
+            /**
+             * Format: decimal
+             * @description Once approved: the cash still to hand out, 0 once each is paid; none while open (WAGE-9).
+             */
+            still_to_pay: string | null;
+            /** @description Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9). */
+            readonly keeps_signatures: boolean;
+        };
+        PayPayslipRequest: {
+            /** Format: uuid */
+            id: string;
+            method: components["schemas"]["PaymentMethodEnum"];
+            /** @default  */
+            reference: string;
         };
         PayRate: {
             /** Format: uuid */
@@ -2065,6 +2153,39 @@ export interface components {
             readonly number: string;
             readonly sides: string[];
         };
+        PaymentLine: {
+            /** Format: uuid */
+            id: string;
+            method: components["schemas"]["PaymentMethodEnum"];
+            /** @description The transaction number; empty for cash. */
+            reference: string;
+            /** Format: decimal */
+            amount: string;
+            by: string;
+            /** Format: date-time */
+            at: string;
+            /**
+             * Format: uuid
+             * @description The signature's attachment, for cash; else none.
+             */
+            signature: string | null;
+            /**
+             * @description Why cash has no signature: on the demo, none is kept. Empty otherwise.
+             *
+             *     * `` -
+             *     * `demo` - On the demo, none is kept
+             */
+            no_signature: components["schemas"]["NoSignatureEnum"] | components["schemas"]["BlankEnum"];
+            /** @description Who crossed it out, or none while it counts. */
+            voided: components["schemas"]["VoidedPayment"] | null;
+        };
+        /**
+         * @description * `cash` - Cash
+         *     * `mobile_money` - Mobile money
+         *     * `bank` - Bank
+         * @enum {string}
+         */
+        PaymentMethodEnum: "cash" | "mobile_money" | "bank";
         PayslipAnswer: {
             /** Format: uuid */
             readonly id: string;
@@ -2626,6 +2747,9 @@ export interface components {
         VoidMealMoneyRequest: {
             reason: string;
         };
+        VoidPaymentRequest: {
+            reason: string;
+        };
         VoidTapRequest: {
             reason: string;
         };
@@ -2636,6 +2760,12 @@ export interface components {
             reason: string;
         };
         VoidedMealMoney: {
+            by: string;
+            /** Format: date-time */
+            at: string;
+            reason: string;
+        };
+        VoidedPayment: {
             by: string;
             /** Format: date-time */
             at: string;
@@ -2729,6 +2859,16 @@ export interface components {
             carried_from: string | null;
             /** @description Who approved it, once a payslip keeps it, or none. */
             approval: components["schemas"]["Approval"] | null;
+            /**
+             * Format: uuid
+             * @description The payslip, once approved.
+             */
+            payslip: string | null;
+            payments: components["schemas"]["PaymentLine"][];
+            /** Format: decimal */
+            to_hand_out: string;
+            /** @description Whether it is the pay of the person looking, any job of theirs. */
+            readonly own: boolean;
         };
         WorkerPayMonthAnswer: {
             /** @example 2026-11 */
@@ -2744,6 +2884,10 @@ export interface components {
             worker: components["schemas"]["WorkerPay"];
             /** @description For one who left, with pay still open: what approving it alone waits for; else none (WAGE-3). */
             to_approve: components["schemas"]["ToApprove"] | null;
+            /** @description The ready reasons a payment is crossed out with, on the demo alone; empty where it is typed. */
+            void_reasons: string[];
+            /** @description Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9). */
+            readonly keeps_signatures: boolean;
         };
     };
     responses: never;
@@ -4983,6 +5127,40 @@ export interface operations {
             };
         };
     };
+    staffpay_payslip_payments_void_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this payslip payment. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidPaymentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentLine"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     staffpay_payslips_create: {
         parameters: {
             query?: never;
@@ -5002,6 +5180,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PayslipAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_payslips_pay_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this payslip. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayPayslipRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentLine"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_payslips_pay_cash_update: {
+        parameters: {
+            query: {
+                /** @description The payment's id, a UUIDv7 made on the phone. */
+                id: string;
+                /** @description The signature's id, a UUIDv7 made on the phone. */
+                signature: string;
+            };
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this payslip. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "image/jpeg": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentLine"];
                 };
             };
             default: {

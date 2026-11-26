@@ -416,6 +416,9 @@ class AttachmentKind(models.TextChoices):
     CLOCK_PHOTO = "clock_photo", "Clock-in photo"
     # A worker's face, on their own page in the office (PPL-9) and on their tile on every laptop (PPL-14).
     STAFF_PHOTO = "staff_photo", "Staff photo"
+    # Asha's signature, drawn on the screen as she is paid in cash (WAGE-9): the proof she got her pay, as her signature
+    # on paper is at MPC today.
+    SIGNATURE = "signature", "Signature"
 
 
 class AttachmentType(models.TextChoices):
@@ -434,21 +437,30 @@ LARGEST_FILE = 1024 * 1024
 
 @dataclass(frozen=True)
 class KindRule:
-    # What one kind of attachment is pinned to, and who may open it.
+    # What one kind of attachment is pinned to, who may open it, and whether its file may ever be taken away.
     # The type code of the table its record is in (apps/core/links.py): "attendance_event" for a clock-in photo.
     subject_type: str
-    # The key that opens it, held on the whole shop (CTRL-3's office route); None when anyone working at the shop
-    # may, as for a face, which every laptop's PIN tiles show (PPL-14).
-    opened_with: Permission | None
+    # The keys that open it, each held on the whole shop (CTRL-3's office route); none when anyone working at the shop
+    # may, as for a face, which every laptop's PIN tiles show (PPL-14). A set, as a signature is part of the pay, which
+    # opens only with both of its keys (WAGE-1).
+    opened_with: frozenset[Permission]
+    # Whether its file may be removed: a photo's is, by its retention rule (ATT-7) or by a new one in its place (PPL-9);
+    # a signature's never is, as it is the proof that a worker was paid, kept for NSSF (WAGE-9). The table holds it too.
+    removable: bool = True
 
 
 # Kind → its rule (CTRL-3's defaults, kept by the cards that first used them, ATT-3 and PPL-9).
 ATTACHMENT_KINDS: dict[AttachmentKind, KindRule] = {
     # A clock-in photo proves who tapped Ingia: it is for whoever fixes attendance (the owner, a manager he gives the
     # key), not for the other workers. On the whole shop: a worker's attendance is the shop's, not a side's.
-    AttachmentKind.CLOCK_PHOTO: KindRule("attendance_event", Permission.ATTENDANCE_MANAGE),
+    AttachmentKind.CLOCK_PHOTO: KindRule("attendance_event", frozenset({Permission.ATTENDANCE_MANAGE})),
     # A worker's face is for the PIN tiles of every laptop of the shop (PPL-14), so anyone working there may see it.
-    AttachmentKind.STAFF_PHOTO: KindRule("staff", None),
+    AttachmentKind.STAFF_PHOTO: KindRule("staff", frozenset()),
+    # A worker's signature is on their payslip, so it opens for whoever sees the pay: the two keys of pay, as the pay's
+    # own routes ask (WAGE-1), not `pay.run`, which hands the pay out. Never removed (WAGE-9).
+    AttachmentKind.SIGNATURE: KindRule(
+        "payslip_payment", frozenset({Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE}), removable=False
+    ),
 }
 
 
@@ -551,6 +563,12 @@ class Attachment(ShopScoped):
                 | (models.Q(file="") & (models.Q(received_at__isnull=True) | models.Q(file_removed_at__isnull=False))),
                 name="control_attachment_file_once_received",
                 violation_error_code="attachment.file_state_invalid",
+            ),
+            # A signature's file is never removed (WAGE-9): it is the proof that a worker was paid. The service refuses
+            # first (remove_attachment_file), so this is for whatever writes past it. No code: no screen offers it.
+            models.CheckConstraint(
+                condition=~models.Q(kind=AttachmentKind.SIGNATURE, file_removed_at__isnull=False),
+                name="control_attachment_signature_kept",
             ),
             # Rule 7: a removal always says why, and only a removal has a why and a who.
             models.CheckConstraint(

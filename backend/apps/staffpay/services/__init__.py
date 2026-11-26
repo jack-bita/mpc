@@ -1,10 +1,12 @@
-"""apps/staffpay/services — the writes of attendance and pay, and the reads that go through them, in five files:
+"""apps/staffpay/services — the writes of attendance and pay, and the reads that go through them, in six files:
 
     book.py        the book of days: what each worker's day was, worked out and kept
     attendance.py  the month and a worker's month on the screen, a decision on a day, a tap added or crossed out
     money.py       what a person types for the pay: daily rates, the day's meal money, money given before payday
     pay.py         the month's pay, worked out from all of them, and read from its payslips once it is approved
     approval.py    approving a month's pay: the payslips kept, and their days marked as paid
+    payment.py     handing a payslip out, in cash with the worker's signature or with a transaction number, and
+                   crossing out one marked by mistake (WAGE-9)
 
 Each file says what it owns. They were one file until WAGE-3, which grew past what anyone reads in one sitting. The rest
 of the code takes what it needs from here (`from apps.staffpay.services import pay_month`), so a function can move from
@@ -60,20 +62,33 @@ from apps.staffpay.services.money import (
 from apps.staffpay.services.pay import (
     Approval,
     OpenDay,
+    PaymentLine,
     PayMonth,
     ToApprove,
+    VoidedPayment,
     WorkerPay,
     WorkerPayMonth,
     pay_month,
+    payment_line,
     worker_pay,
+)
+from apps.staffpay.services.payment import (
+    DEMO_PAYMENT_VOID_REASONS,
+    PAYS,
+    keeps_signatures,
+    pay_payslip,
+    ready_payment_void_reasons,
+    void_payslip_payment,
 )
 
 __all__ = [
     "APPROVES",
     "DEMO_ADD_REASONS",
     "DEMO_MONEY_VOID_REASONS",
+    "DEMO_PAYMENT_VOID_REASONS",
     "DEMO_REASONS",
     "DEMO_VOID_REASONS",
+    "PAYS",
     "SUNDAY",
     "AdvanceLine",
     "AdvanceWorker",
@@ -87,6 +102,7 @@ __all__ = [
     "MealMoneyLine",
     "OpenDay",
     "PayMonth",
+    "PaymentLine",
     "PhotoState",
     "TapLine",
     "TapPhoto",
@@ -94,6 +110,7 @@ __all__ = [
     "ToApprove",
     "VoidedAdvance",
     "VoidedMealMoney",
+    "VoidedPayment",
     "WorkerAttendance",
     "WorkerDay",
     "WorkerMonth",
@@ -107,16 +124,21 @@ __all__ = [
     "attendance_month",
     "decide_day",
     "decision_of",
+    "keeps_signatures",
     "meal_line",
     "meal_money_days",
     "pay_month",
+    "pay_payslip",
+    "payment_line",
     "ready_advance_void_reasons",
+    "ready_payment_void_reasons",
     "record_advance",
     "record_meal_money",
     "set_pay_rate",
     "tap_line",
     "void_advance",
     "void_meal_money",
+    "void_payslip_payment",
     "void_tap",
     "where_it_falls",
     "work_out_days",

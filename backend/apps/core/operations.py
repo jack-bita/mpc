@@ -2,21 +2,21 @@
 that may change no more (A3).
 
 A ledger keeps history (T2). The ledgers are listed in 03 §5.6: stock movements, balance entries,
-allocations, payments, money movements, meal money, advances, pay runs, payslips and their lines,
-attendance events, audit events, a flag's notes and the people it names, the change log, and the dated
+allocations, payments, money movements, meal money, advances, pay runs, payslips, their lines and their
+payments, attendance events, audit events, a flag's notes and the people it names, the change log, and the dated
 rules (prices, product costs, settings, pay rates). Their rows are written once and never changed or
 deleted; a mistake is fixed with a new row. The services only ever insert, but a bug, a bulk update() or
 SQL typed by hand would go straight past them. So each ledger's migration puts a trigger on its table: a
 rule stored in PostgreSQL that runs before every change, however it is sent, and refuses it.
 The database is the last line of defence (03 §5.6).
 
-Four rules, one operation each. AppendOnlyTrigger refuses every UPDATE and DELETE. VoidStampTrigger is
-for payments, money movements, meal money, advances and attendance events: it allows one change, filling the void
-stamp once, and then refuses everything, as the other does. NoDeleteTrigger is not for a ledger: it refuses
-only a DELETE, on an office table whose rows are changed but never deleted, and that no other row links
-to, so PROTECT can't guard it either (rule 7): a closure (ATT-8). FrozenTrigger is not for a ledger either: it
-lets a row change freely until one of its columns is filled, and then never again: an attendance day, once a
-payslip paid it (A3, WAGE-3).
+Four rules, one operation each. AppendOnlyTrigger refuses every UPDATE and DELETE. VoidStampTrigger is for
+payments, money movements, meal money, advances, payslip payments and attendance events: it allows one change,
+filling the void stamp once, and then refuses everything, as the other does. NoDeleteTrigger is not for a
+ledger: it refuses only a DELETE, on an office table whose rows are changed but never deleted, and that no
+other row links to, so PROTECT can't guard it either (rule 7): a closure (ATT-8). FrozenTrigger is not for a
+ledger either: it lets a row change freely until one of its columns is filled, and then never again: an
+attendance day, once a payslip paid it (A3, WAGE-3).
 
 Later migrations meet the trigger too. Django fills a column that becomes NOT NULL with an UPDATE, and
 a RunPython fix updates rows: on a ledger with rows, both are refused. A migration that truly needs
@@ -136,9 +136,9 @@ class AppendOnlyTrigger(Operation):
         return schema_editor.quote_name(model._meta.db_table)
 
 
-# The void rule, for payments, money movements, meal money, advances and attendance events (T2, 03 §5.6). They may
-# change once: the void stamp (`voided_at`, `voided_by`, `void_reason`, `void_approval`) is filled, and the row
-# is then frozen. A trigger runs it before each UPDATE or DELETE of a row, and it checks in order:
+# The void rule, for payments, money movements, meal money, advances, payslip payments and attendance events (T2,
+# 03 §5.6). They may change once: the void stamp (`voided_at`, `voided_by`, `void_reason`, `void_approval`) is
+# filled, and the row is then frozen. A trigger runs it before each UPDATE or DELETE of a row, and it checks in order:
 # - A DELETE is refused, with the plain rule's message: a voidable row is voided, never deleted (T3).
 #   It is checked first because a DELETE has no NEW row to look at.
 # - OLD is the row as it is in the table, NEW the row as the UPDATE wants it. A row whose stamp is
@@ -206,7 +206,8 @@ CREATE TRIGGER append_only
 
 
 class VoidStampTrigger(AppendOnlyTrigger):
-    # The step for payments, money movements, meal money, advances and attendance events: VoidStampTrigger("payment").
+    # The step for payments, money movements, meal money, advances, payslip payments and attendance events:
+    # VoidStampTrigger("payment").
     # The same as AppendOnlyTrigger, except for the rule it writes. Undoing it is the parent's
     # database_backwards: the trigger has the same name, so the same DROP takes it off.
 

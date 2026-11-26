@@ -58,11 +58,11 @@ KEY_COOKIE = "device_key"
 # A word that marks a secret, as a whole word of a name, plural too: `pin_hash`, `password`, `unit_cost`, `phones`,
 # never `monkey` or `costume`. The same idea as SECRET_COLUMN (backend/tests/test_edit_history.py), with a seller's
 # secrets added: what a sale cost the shop (cost, buying, profit, margin: `cost.view`'s, 02 §5), a phone and an email;
-# a worker's pay (rate, wage, salary, payslip: 03 §6.1, WAGE-1; meal: WAGE-7; advance: WAGE-8; pay_run: WAGE-3), never
-# `rated` or `separate`; and `key` kept apart, below.
+# a worker's pay (rate, wage, salary, payslip: 03 §6.1, WAGE-1; meal: WAGE-7; advance: WAGE-8; pay_run: WAGE-3;
+# signature, a worker's mark as they are paid: WAGE-9), never `rated` or `separate`; and `key` kept apart, below.
 SECRET_WORD = re.compile(
     r"(^|_)(hash|password|secret|token|pepper|cost|buying|profit|margin|phone|email|rate|wage|salary|payslip|meal"
-    r"|advance|pay_run)"
+    r"|advance|pay_run|signature)"
     r"(e?s)?(_|$)"
 )
 # `key` alone is a rule's name in the list in core ("attendance.late_fine"), which a setting's row must carry. Inside a
@@ -261,6 +261,7 @@ class _Planted(serializers.Serializer[Any]):
     advances = serializers.CharField()  # by what they were given before payday
     payslip_id = serializers.CharField()  # by what paid their day
     pay_run = serializers.CharField()  # by the approval it came with
+    signature = serializers.CharField()  # by the mark a worker drew as they were paid
     # By what a link shows of its row, alone and in a many-link.
     owner = serializers.SlugRelatedField[Any](source="user", slug_field="password", read_only=True)
     batches = serializers.SlugRelatedField[Any](many=True, slug_field="unit_cost", read_only=True)
@@ -295,6 +296,8 @@ def test_secret_check_finds_what_it_must() -> None:
         "payslip_id: reads payslip_id",
         "pay_run: its name",
         "pay_run: reads pay_run",
+        "signature: its name",
+        "signature: reads signature",
         "owner: shows password",
         "batches: shows unit_cost",
         "wrapped.api_key: its name",

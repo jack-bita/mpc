@@ -60,6 +60,15 @@ month's approval, with no run:
                                            Neema    —          62,000.00  6 full × 10,000 · 1 half × 5,000 · meals …
 
 Each day a payslip paid names it (AttendanceDay.payslip), and the database refuses any change of such a day (A3).
+
+And each payslip as it is handed out (PayslipPayment, WAGE-9), one more ledger: in cash with the worker's signature, an
+attachment pinned to the row, or by M-Pesa or a bank with its transaction number; crossed out with a reason when marked
+by mistake, and paid again:
+
+    payslip         amount      how           number      paid by  crossed out
+    Asha, Novemba   152,000.00  cash          —           Baba
+    Juma, Novemba   132,000.00  mobile_money  QK7H2M9XPL  Baba     by Baba: "Nilibonyeza mfanyakazi mwingine"
+    Juma, Novemba   132,000.00  mobile_money  QK7H2N4ZTR  Baba
 """
 
 from decimal import Decimal
@@ -868,6 +877,31 @@ class Payslip(AppendOnly):
         return f"{self.month:%Y-%m} {self.total}"
 
 
+class PaymentMethod(models.TextChoices):
+    # How a payslip was handed out (WAGE-9), the three ways the Lipa sheet offers (Jack, 26 Nov 2026): Taslimu, M-Pesa
+    # and Benki. M-Pesa is the name the shop says; the code names what it is, any mobile money, as a shop elsewhere may
+    # pay by another.
+    CASH = "cash", "Cash"
+    MOBILE_MONEY = "mobile_money", "Mobile money"
+    BANK = "bank", "Bank"
+
+
+class NoSignature(models.TextChoices):
+    # Why a payment in cash keeps no signature: only on the demo, where every visitor logs in as the same Meneja, so a
+    # signature kept would show to every visitor after, as a visitor's photo would (Jack, ATT-3 and PPL-9: none is
+    # kept). The same shape as a clock-in's `no_photo`. Empty everywhere else: a real shop's cash is never unsigned.
+    DEMO = "demo", "On the demo, none is kept"
+
+
+# The rule that a transaction number counts once, by its name: the service tells its refusal by it (_insert,
+# apps/staffpay/services/payment.py), as PostgreSQL names the rule a refused insert broke.
+NUMBER_COUNTED_ONCE = "staffpay_payslippayment_number_counted_once"
+
+# The longest transaction number kept: an M-Pesa code is 10 characters, a bank's reference rarely past 20. More is a
+# paste of the whole message by mistake, not a number.
+LONGEST_REFERENCE = 30
+
+
 class PayslipLineKind(models.TextChoices):
     # What a line of a payslip is (WAGE-3), in the order the payslip lists them. A correction (WAGE-9) will be one more.
     FULL = "full", "Full days"
@@ -958,3 +992,111 @@ class PayslipLine(AppendOnly):
 
     def __str__(self) -> str:
         return f"{self.position}. {self.kind} {self.amount}"
+
+
+class PayslipPayment(AppendOnly):
+    # A payslip handed out to its worker (WAGE-9, 02 §12): Asha's November, 152,000 in cash on 2 Dec. Who handed it out
+    # and when are the row's `created_by` and `created_at`: the moment of the tap, never a date typed, so nobody marks a
+    # payment for a day that suits them. The whole amount, at once (Jack: A): one row pays the payslip.
+    # The proof that the worker got it, as their signature on paper is at MPC today: in cash, their signature, drawn on
+    # the screen, an Attachment of kind `signature` pinned to this row (apps/control/models.py); by M-Pesa or a bank,
+    # the transaction number, which the owner can find on his statement. That a cash payment has its signature is the
+    # service's check (pay_payslip): an attachment is a generic link, which no rule of this table can see.
+    # Money, so a ledger (rule 2, T2): written once, never changed or deleted; the trigger in the table's migration
+    # refuses the same in PostgreSQL, all but the void stamp, filled once. A payment marked by mistake is crossed out,
+    # with who, when and why, and stays, with its signature; the payslip is then paid by a new row. Never on a laptop:
+    # pay never sits on a shared device (03 §6.1), so no line in the change log. Written only by pay_payslip and
+    # void_payslip_payment (apps/staffpay/services/payment.py), which ask who may.
+
+    # Which payslip it pays. No index of its own: the one below leads with `shop`, then the payslip.
+    payslip = models.ForeignKey(Payslip, on_delete=models.PROTECT, related_name="+", db_index=False)
+    # Whose pay it is: the payslip's job, copied, as an advance names its job, so the table itself refuses a payment
+    # made or crossed out by the job it pays (below). That it is the payslip's own job is the service's check (T1).
+    staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
+    # What was handed over: what the payslip pays, copied (T4), so the row says the money without reading another
+    # table; a payslip of 0, or below it, pays nothing, and has no payment. Money, so numeric(14,2) and a Decimal (rule
+    # 3).
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    method = models.CharField(max_length=20, choices=PaymentMethod)
+    # The transaction number, by M-Pesa or a bank: empty for cash, which has the signature instead.
+    reference = models.CharField(max_length=LONGEST_REFERENCE, blank=True)
+    # Why a payment in cash keeps no signature: only on the demo (NoSignature). Empty on every other row.
+    no_signature = models.CharField(max_length=10, choices=NoSignature, blank=True)
+    # The void stamp (03 §5.6), as on an advance: empty while the payment counts, filled once when it is crossed out,
+    # then frozen, as the trigger makes PostgreSQL hold it. That whoever voids is of this row's shop is the void
+    # service's check (T1).
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        "people.StaffMember", on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
+    void_reason = models.TextField(blank=True)
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). Two rules
+        # carry a code the page translates (ADR-0032), as two people may each meet them from the sheet: a payslip
+        # paid already, and a number counted already; the service refuses both first, under the payslip's lock, so
+        # the database's word is for what writes past it. The others have none: the service refuses first, in its
+        # own words, so such a row is a bug in our code, never a person's mistake.
+        constraints = [
+            # Nobody is paid a month twice: one payment counts per payslip. One crossed out counts for nothing, so the
+            # payslip may be paid again. Leads with `shop`, then the payslip.
+            models.UniqueConstraint(
+                fields=["shop", "payslip"],
+                condition=Q(voided_at__isnull=True),
+                name="staffpay_payslippayment_one_counted",
+                violation_error_code="payment.already_paid",
+            ),
+            # A transaction number proves one payment only: the same M-Pesa code typed on two payslips would let one
+            # real payment stand for two, as the spec refuses of a sale's (01 §7.5). Counted once per shop and way of
+            # paying, as a bank's numbering and M-Pesa's are not the same. Cash has none, so it is left out.
+            models.UniqueConstraint(
+                fields=["shop", "method", "reference"],
+                condition=Q(voided_at__isnull=True) & ~Q(reference=""),
+                name=NUMBER_COUNTED_ONCE,
+                violation_error_code="payment.reference_used",
+            ),
+            # Money was handed over, so it is more than nothing: a payslip of 0 is paid by nobody (WAGE-9).
+            models.CheckConstraint(condition=Q(amount__gt=0), name="staffpay_payslippayment_above_zero"),
+            # Each way of paying holds its own proof, and nothing else: cash, no number, and a signature unless on the
+            # demo; M-Pesa and a bank, a number with at least one character that isn't a space, and no word about a
+            # signature, as they never had one.
+            models.CheckConstraint(
+                condition=(
+                    Q(method=PaymentMethod.CASH, reference="")
+                    | Q(
+                        method__in=[PaymentMethod.MOBILE_MONEY, PaymentMethod.BANK],
+                        reference__regex=r"\S",
+                        no_signature="",
+                    )
+                ),
+                name="staffpay_payslippayment_proof_fits_its_way",
+            ),
+            # Handing out pay is somebody's word, never nobody's.
+            models.CheckConstraint(
+                condition=Q(created_by__isnull=False), name="staffpay_payslippayment_paid_by_someone"
+            ),
+            # Nobody marks their own pay paid, or crosses it out (02 A5): what one row can say, by the job. That a
+            # person hired again leaves their other job's alone too is the service's check, by the person.
+            models.CheckConstraint(condition=~Q(created_by=F("staff")), name="staffpay_payslippayment_paid_by_another"),
+            models.CheckConstraint(
+                condition=Q(voided_by__isnull=True) | ~Q(voided_by=F("staff")),
+                name="staffpay_payslippayment_voided_by_another",
+            ),
+            # A void says who and why (T2), as on an advance: all three empty, or all three filled, the reason with at
+            # least one character that isn't a space.
+            models.CheckConstraint(
+                condition=(
+                    Q(voided_at__isnull=True, voided_by__isnull=True, void_reason="")
+                    | Q(voided_at__isnull=False, voided_by__isnull=False, void_reason__regex=r"\S")
+                ),
+                name="staffpay_payslippayment_void_complete",
+            ),
+        ]
+        indexes = [
+            # How a payslip's payments are read, counted and crossed out alike: the pay page shows both (WAGE-9).
+            # Leads with `shop`, as every index does (03 §9).
+            models.Index(fields=["shop", "payslip"], name="staffpay_payment_by_payslip"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.method} {self.amount}"

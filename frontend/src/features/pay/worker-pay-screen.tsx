@@ -10,6 +10,10 @@
 // (WAGE-3). And of one who left, with pay still open, whoever may approve it (mayApprovePay) finds Idhinisha malipo ya
 // Neema under the lines, which opens a sheet (approve-leaver.tsx), as Jack pictured it (25 Nov 2026).
 //
+// And once a payslip keeps it, how it was handed out, at its foot (payslip-payments.tsx, WAGE-9): Amelipwa taslimu na
+// Baba, with the signature, and Batilisha; or Hajalipwa with Lipa, for whoever may hand out pay (mayPay), never on their
+// own. One who left is paid from here the evening they go, once theirs is approved alone.
+//
 // An office screen: it asks the server through the store of server answers (rule 5). Its route asks the two keys of pay
 // on the whole shop; someone without both sees the server's refusal.
 //
@@ -41,6 +45,8 @@ import {
 } from "./pay";
 import { PayLines } from "./pay-lines";
 import { useCountedTo } from "./pay-notes";
+import { mayPay } from "./payments";
+import { PayslipPayments } from "./payslip-payments";
 
 export function WorkerPayScreen({
   staff,
@@ -98,6 +104,7 @@ export function WorkerPayScreen({
           answer={answer.data}
           timezone={who.data.shop.timezone}
           mayApprove={mayApprovePay(who.data)}
+          mayPay={mayPay(who.data)}
           title={title}
         />
       ) : null}
@@ -111,12 +118,15 @@ function TheWorkersPay({
   answer,
   timezone,
   mayApprove,
+  mayPay,
   title,
 }: {
   answer: WorkerPayMonth;
   /** The shop's, for when it was approved. */
   timezone: string;
   mayApprove: boolean;
+  /** Whether Lipa and Batilisha are offered: the key of handing out pay, with the two of pay. */
+  mayPay: boolean;
   /** The page's title, which stays as the month moves. */
   title: RefObject<HTMLHeadingElement | null>;
 }) {
@@ -168,6 +178,15 @@ function TheWorkersPay({
           </CardContent>
         </Card>
       )}
+      {/* Once a payslip keeps it: how it was handed out, or Lipa (WAGE-9). */}
+      <PayslipPayments
+        worker={answer.worker}
+        month={answer.month}
+        timezone={timezone}
+        mayPay={mayPay}
+        keepsSignatures={answer.keeps_signatures}
+        readyReasons={answer.void_reasons}
+      />
       {/* Only of one who left, with pay still open, as the server says (to_approve), and only for whoever may. */}
       {mayApprove && answer.to_approve !== null ? (
         <Button

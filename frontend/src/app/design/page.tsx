@@ -33,6 +33,7 @@ import {
 import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
 import { PasswordField } from "@/components/design/password-field";
+import { SignaturePad } from "@/components/design/signature-pad";
 import { Input } from "@/components/design/input";
 import { PageHeader } from "@/components/design/page-header";
 import { Sheet } from "@/components/design/sheet";
@@ -309,6 +310,11 @@ export default function DesignPage() {
           <Field label={t("fields.normal")} size="normal" />
           {/* A password box: its eye shows and hides what is typed (UI-5). */}
           <PasswordField label={t("fields.password")} />
+          {/* A box a worker signs in, with a finger or the mouse, as they are paid in cash (WAGE-9). */}
+          <SignaturePad
+            label={t("fields.signature")}
+            hint={t("fields.signatureHint")}
+          />
           {/* A box with no visible label, like a search box: it still has a name for screen readers. */}
           <Input
             aria-label={t("fields.search")}

@@ -147,6 +147,9 @@
   "passwordField": {
     "show": "Show password"
   },
+  "signaturePad": {
+    "clear": "Clear the signature"
+  },
   "sheet": {
     "cancel": "Cancel"
   },
@@ -926,6 +929,46 @@
       "leaverTitle": "Approve {name}'s pay",
       "leaverAbout": "{month} · Total {total}",
       "leaverFinal": "Once approved, their pay of {month} never changes again."
+    },
+    "payment": {
+      "stillToPay": "Still to pay",
+      "allPaid": "Everyone is paid",
+      "paidOn": "Paid {date}",
+      "notPaid": "Not paid",
+      "lipa": "Pay",
+      "lipaFor": "Pay {name}",
+      "title": "Pay {name}",
+      "about": "{month} · {total}",
+      "method": "Paid by:",
+      "methods": {
+        "cash": "Cash",
+        "mobile_money": "M-Pesa",
+        "bank": "Bank"
+      },
+      "signature": "{name}'s signature",
+      "signatureHint": "{name} signs with a finger.",
+      "reference": "Transaction number",
+      "action": "I have paid",
+      "demoSignature": "On the demo, the signature isn't kept.",
+      "section": "Their payment",
+      "paidBy": "Paid {how} by {by} · {date} {time}",
+      "how": {
+        "cash": "in cash",
+        "mobile_money": "by M-Pesa",
+        "bank": "by bank"
+      },
+      "number": "Transaction number: {reference}",
+      "signatureFailed": "The signature couldn't open.",
+      "voidedBy": "Crossed out by {by} · {date} {time}: {reason}",
+      "batilisha": "Cross out",
+      "void": {
+        "title": "Cross out {name}'s payment",
+        "reason": "Reason",
+        "action": "Cross out"
+      },
+      "readyReason": {
+        "marked_by_mistake": "Marked by mistake"
+      }
     }
   },
   "attendanceWorker": {
@@ -1305,7 +1348,9 @@
       "disabled": "Switched off",
       "search": "Search products",
       "normal": "A normal-size box",
-      "password": "Password"
+      "password": "Password",
+      "signature": "Asha's signature",
+      "signatureHint": "Asha signs with her finger."
     },
     "choices": {
       "title": "Choices",
@@ -1498,7 +1543,8 @@
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
       "no_note": "On the demo, notes aren't kept. Leave this box empty.",
       "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is.",
-      "ready_reasons": "On the demo, pick one of the ready reasons."
+      "ready_reasons": "On the demo, pick one of the ready reasons.",
+      "no_signature": "On the demo, the signature isn't kept, so nobody's real signature is shown to every visitor."
     },
     "closure": {
       "date_past": "A day that has already passed can't be changed.",
@@ -1565,6 +1611,16 @@
       "nothing": "This worker has no pay in this month.",
       "own": "You can't approve your own pay alone.",
       "still_clocked_in": "This worker hasn't tapped Toka yet today."
+    },
+    "payment": {
+      "own": "You can't mark your own pay paid, or cross it out.",
+      "nothing_to_pay": "This payslip pays 0, so there is nothing to hand over.",
+      "already_paid": "This worker is already paid this pay.",
+      "signature_missing": "The worker must draw their signature first.",
+      "reference_missing": "Type the transaction number.",
+      "reference_invalid": "A transaction number has only letters and digits.",
+      "reference_used": "This transaction number is already used for another payment.",
+      "reason_missing": "Write why."
     },
     "flag": {
       "note_required": "Write a note.",

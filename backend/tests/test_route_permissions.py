@@ -66,6 +66,7 @@ from apps.staffpay.api.views import (
     MealMoneyViewSet,
     PayRateViewSet,
     PayRunViewSet,
+    PayslipPaymentViewSet,
     PayslipViewSet,
     PayViewSet,
 )
@@ -1357,10 +1358,16 @@ def test_approving_needs_all_three_keys(
 
 
 def test_approval_routes_name_their_permissions() -> None:
-    # Only a create, behind the approval's own key; the two of pay are asked for every action (the test above). Written
-    # out in full, as above.
-    for view in (PayRunViewSet, PayslipViewSet):
-        assert view.action_permissions == {"create": Permission.PAY_APPROVE}
+    # Only a create, behind the approval's own key; the two of pay are asked for every action (the test above). And a
+    # payslip's Lipa (WAGE-9), by number and in cash, behind `pay.run`, the key of handing out, never the approval's;
+    # crossing a payment out too. Written out in full, as above.
+    assert PayRunViewSet.action_permissions == {"create": Permission.PAY_APPROVE}
+    assert PayslipViewSet.action_permissions == {
+        "create": Permission.PAY_APPROVE,
+        "pay": Permission.PAY_RUN,
+        "pay_cash": Permission.PAY_RUN,
+    }
+    assert PayslipPaymentViewSet.action_permissions == {"void": Permission.PAY_RUN}
 
 
 def test_pay_route_names_its_permissions() -> None:

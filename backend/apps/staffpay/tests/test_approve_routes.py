@@ -97,7 +97,12 @@ def test_a_month_is_approved_as_it_was_read(
     after = staff_client_a.get(PAY, NOVEMBER).json()
     approval = {"by": staff_a.display_name, "at": AT}
     assert (after["approval"], after["to_approve"], after["counted_to"]) == (approval, None, "2026-11-30")
-    assert after["workers"] == [before["workers"][0] | {"approval": approval}]
+    # The line Baba read, now with who approved it, and its payslip, which waits for Lipa (WAGE-9).
+    with shop_context(shop_a):
+        slip = Payslip.objects.get()
+    kept = {"approval": approval, "payslip": str(slip.pk), "to_hand_out": "20000.00"}
+    assert after["workers"] == [before["workers"][0] | kept]
+    assert after["still_to_pay"] == "20000.00"
     with shop_context(shop_a):
         assert (PayRun.objects.count(), Payslip.objects.count()) == (1, 1)
 
