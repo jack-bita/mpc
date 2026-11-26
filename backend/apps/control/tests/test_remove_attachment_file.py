@@ -23,10 +23,19 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 from pytest_django import Settings
 
-from apps.control.models import Attachment, AttachmentKind, AttachmentType, EditEvent, attachment_file_name
+from apps.control.models import (
+    ATTACHMENT_KINDS,
+    Attachment,
+    AttachmentKind,
+    AttachmentType,
+    EditEvent,
+    KindRule,
+    attachment_file_name,
+)
 from apps.control.services import expect_attachment, receive_attachment_file, remove_attachment_file
 from apps.core.models import StoredFile
 from apps.core.storage import FolderStorage
@@ -49,12 +58,12 @@ JPEG = b"\xff\xd8\xff\xe0" + b"Asha at 07:55, made up " * 40
 REASON = "Siku 90 baada ya mshahara"
 
 
-def photo(staff: Any, *, sent: bool = True) -> Attachment:
+def photo(staff: Any, *, sent: bool = True, kind: AttachmentKind = AttachmentKind.STAFF_PHOTO) -> Attachment:
     # A worker's photo of `staff`: its row, and its file unless `sent` is False.
     with shop_context(staff.shop_id):
         row = expect_attachment(
             id=uuid.uuid7(),
-            kind=AttachmentKind.STAFF_PHOTO,
+            kind=kind,
             subject=staff,
             content_type=AttachmentType.JPEG,
             size=len(JPEG),
@@ -282,3 +291,20 @@ def test_removal_recorded_in_the_edit_history(staff_a: Any) -> None:
     assert removal.after["file_removed_reason"] == REASON
     assert removal.after["file"] in ("", None)
     assert removal.created_by_id == staff_a.pk
+
+
+def test_a_signature_is_never_removed(monkeypatch: pytest.MonkeyPatch, staff_a: Any) -> None:
+    # Asha's signature is the proof she was paid (WAGE-9), kept for NSSF: no nightly job and nobody takes it away. The
+    # service refuses, and the table refuses whatever writes past it. Pinned to a worker here, as `control` may not
+    # make the payment a signature is pinned to (ADR-0035); the rule is the kind's, whatever it is pinned to.
+    monkeypatch.setitem(ATTACHMENT_KINDS, AttachmentKind.SIGNATURE, KindRule("staff", frozenset(), removable=False))
+    row = photo(staff_a, kind=AttachmentKind.SIGNATURE)
+    with shop_context(staff_a.shop_id):
+        with pytest.raises(ValueError, match="kept for good"):
+            remove_attachment_file(row, reason=REASON, by=None)
+        with pytest.raises(IntegrityError, match="control_attachment_signature_kept"), transaction.atomic():
+            Attachment.objects.filter(pk=row.pk).update(
+                file="", file_removed_at=timezone.now(), file_removed_reason=REASON
+            )
+        row.refresh_from_db()
+    assert row.file and row.file_removed_at is None

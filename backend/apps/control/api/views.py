@@ -135,11 +135,11 @@ class AttachmentViewSet(ShopViewSet[Attachment]):
         # The row through the guard and the person's sides (get_object): another shop's photo, or an id no shop has, is
         # "not found", alike.
         attachment = self.get_object()
-        # The kind's key, on the whole shop: a clock-in photo is for whoever fixes attendance; a worker's face, for
-        # anyone working here. Asked before the file's state, so someone without the key can't even learn whether a
-        # photo came.
+        # The kind's keys, each on the whole shop: a clock-in photo is for whoever fixes attendance; a worker's face,
+        # for anyone working here; a signature, for whoever sees the pay (WAGE-9). Asked before the file's state, so
+        # someone without the key can't even learn whether a photo came.
         needed = ATTACHMENT_KINDS[AttachmentKind(attachment.kind)].opened_with
-        if needed is not None and needed not in self.held.on(None):
+        if not needed <= self.held.on(None):
             # English for the logs; the screens translate the code (ADR-0032). The message travels in the answer too,
             # so it names nothing of the photo, not even its kind: someone without the key learns only that they may
             # not open it.

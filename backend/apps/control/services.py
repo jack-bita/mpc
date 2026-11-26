@@ -379,6 +379,10 @@ def remove_attachment_file(attachment: Attachment, *, reason: str, by: Actor | N
     # A device alone is no person: the row would keep a remover with no name for good.
     if by is not None and by.staff_id is None:
         raise ValueError("A file is removed by a person, or by the system: a device alone is no person.")
+    # A signature is never removed, by a nightly job or anyone (WAGE-9): it is the proof that a worker was paid, kept
+    # for NSSF. A bug, not a person's mistake, as no screen offers it, so no code; the table refuses it too.
+    if not ATTACHMENT_KINDS[AttachmentKind(attachment.kind)].removable:
+        raise ValueError(f"A {attachment.kind} is kept for good: its file is never removed.")
     # Rule 7: always why. Trimmed first: spaces alone say no more than nothing. Filed under the reason's field, as the
     # database's own rule would be.
     reason = reason.strip()
