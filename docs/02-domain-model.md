@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.71 · 25 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.72 · 26 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.72** (26 Nov 2026, WAGE-9): §12, a new append-only record, `PayslipPayment`, a payslip handed out: the whole amount, at once (Jack: A), in cash with the worker's signature drawn on the screen (Jack: A), or by M-Pesa or a bank with its transaction number; voided only, never one's own. §13, a new kind of attachment, `signature`, never removed. §5 says what `pay.run` opens; §3, §14, §16 (T2, a new A5), §19 and §21 name it. A mistake found after an approval is WAGE-10's now (04 v1.209, 01 v1.13). Marked **(v1.72)**.
 
 **Changes in v1.71** (25 Nov 2026, WAGE-3's review): §12, an approval closes the months before it too; a month's whole is what it pays, with those approved alone in it; one who left may still be given the rate of a day of theirs until their pay is approved. Marked **(v1.71)**.
 
@@ -263,7 +265,7 @@ Shop
 │   └── Job, Exchange, ProductionRun, Transfer, BagOpening   (R2)
 ├── Product ─ SellingUnit ─ Price;  ProductSide;  Batch;  ProductCost
 ├── Contact ─ BalanceEntry* ─ Allocation;  ContactBalance
-├── StaffMember ─ RoleAssignment;  AttendanceEvent*;  PayRate;  Advance*;  Payslip* ─ PayslipLine*
+├── StaffMember ─ RoleAssignment;  AttendanceEvent*;  PayRate;  Advance*;  Payslip* ─ PayslipLine*, PayslipPayment* **(v1.72)**
 └── Device ─ DeviceOutage;  Setting, Flag, AuditEvent, EditEvent, Attachment, ImportJob
 
 * = ledger (append-only)
@@ -353,7 +355,7 @@ A full diagram for GitHub is in Appendix A.
 **What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again. A role or a permission that ended counts nowhere; a record made offline is checked against what its maker held when it was made, by the device's clock, as their status is (X2), so a sale made before a role was taken away, and synced after, breaks no rule **(v1.39)**. A key given after the record counts for it, as only a slow laptop clock could put a record before its key, unless that key had been taken away by then: a sale made between a key's end and its return breaks the rule, whichever role or extra key gives it back **(v1.41)**.
 
 **Permissions** are fixed codes in code (not a table). A new code reaches the shops that already have their roles through a data migration: their Owner gets it, and their Manager unless it is one of the owner's own (03 §5.8) **(v1.10)**, five of them since `meals.record`: the day's final approval, the pay's approval, the shop's rules, who works there, and the meal money **(v1.64)**:
-`sale.write` · `sale.take_payment` · `sale.hand_over` · `sale.bargain` (down to the floor) · `sale.below_floor_approve` · `sale.jumla_switch` · `sale.cancel` · `sale.refund` · `credit.give` · `credit.approve` · `debt.view` · `debt.adjust` · `price.change` · `cost.view` (buying prices, profit) · `product.manage` · `contact.manage` · `stock.receive` (complete a delivery, with its buying prices) · `stock.weigh` (weigh goods as they arrive: any role may have it, and it shows no buying price) **(v1.10)** · `stock.loss` · `stock.count` · `stock.count_approve` · `stock.transfer` · `money.expense` · `money.advance` (type an advance, and cross out a wrong one, on the whole shop, never one's own) **(v1.68)** · `money.withdraw` · `drawer.count` · `drawer.confirm` · `drawer.approve` (approve the day) · `staff.manage` · `attendance.manage` · `meals.record` (type the day's meal money, and cross out a wrong one, on the whole shop) **(v1.64)** · `pay.run` · `pay.approve` · `settings.manage` · `device.manage` · `flag.review` (resolve or dismiss a side's flags) **(v1.8)** · `report.view` · `job.manage` (R2) · `production.run` (R2)
+`sale.write` · `sale.take_payment` · `sale.hand_over` · `sale.bargain` (down to the floor) · `sale.below_floor_approve` · `sale.jumla_switch` · `sale.cancel` · `sale.refund` · `credit.give` · `credit.approve` · `debt.view` · `debt.adjust` · `price.change` · `cost.view` (buying prices, profit) · `product.manage` · `contact.manage` · `stock.receive` (complete a delivery, with its buying prices) · `stock.weigh` (weigh goods as they arrive: any role may have it, and it shows no buying price) **(v1.10)** · `stock.loss` · `stock.count` · `stock.count_approve` · `stock.transfer` · `money.expense` · `money.advance` (type an advance, and cross out a wrong one, on the whole shop, never one's own) **(v1.68)** · `money.withdraw` · `drawer.count` · `drawer.confirm` · `drawer.approve` (approve the day) · `staff.manage` · `attendance.manage` · `meals.record` (type the day's meal money, and cross out a wrong one, on the whole shop) **(v1.64)** · `pay.run` (hand out an approved month's pay, and cross out a payment marked by mistake, on the whole shop, with the two keys of pay, never one's own) **(v1.72)** · `pay.approve` · `settings.manage` · `device.manage` · `flag.review` (resolve or dismiss a side's flags) **(v1.8)** · `report.view` · `job.manage` (R2) · `production.run` (R2)
 
 **Approval** [R1] ✚ → Shop — a permitted person says yes on the spot.
 - `action`, `subject`, `requested_by`, `approved_by`, `method`: `pin_here` (they type their PIN on the same device; works offline) | [Later] `remote`; `note`
@@ -544,7 +546,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - Opening the drawer works offline ✚; two openings of one drawer → a `drawer_conflict` flag **(v1.1)**
 
 **MoneyMovement** [R1] → PaymentAccount (+ DrawerSession for cash) — every other money in or out.
-- `kind`: `expense` | `staff_advance` | `withdrawal` (owner takes cash, bank deposit) | `float_in` | `refund` | `supplier_payment` (R1: paying for a delivery; R2: also clears supplier credit) | `salary_payment` (R1b) | `side_transfer` (R2: cash handed from one side's drawer to the other's)
+- `kind`: `expense` | `staff_advance` | `withdrawal` (owner takes cash, bank deposit) | `float_in` | `refund` | `supplier_payment` (R1: paying for a delivery; R2: also clears supplier credit) | `salary_payment` (R1b: money handed out from a drawer for a payslip, beside its `PayslipPayment`, §12, WAGE-6 **(v1.72)**) | `side_transfer` (R2: cash handed from one side's drawer to the other's)
 - `amount` (positive; the kind sets the direction), `category` (expenses), `staff` (advances, salaries), `contact`, `description`, `photo`, `recorded_by`, `approval`
 - Expense categories are a shop list.
 
@@ -626,13 +628,20 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 
 **PayRun** → Shop — one month. Its draft is no row: the month's pay is worked out each time it is asked for, from the book's days, the rates, the meals and the advances **(v1.69)**, and never kept, as a kept draft is old as soon as a day is decided (Jack, WAGE-2) **(v1.66)**. The row is made at the approval, which freezes payslips, attendance days, advances and meal money **(v1.29)**. It holds the shop, its `month` and who approved it (its `created_by`), and no status: a run is approved by being a row, and paid once each of its payslips is (WAGE-9) **(v1.70)**.
 - **Approving** **(v1.70)**: `pay.approve` on the whole shop, with the two keys of pay (§5), as whoever approves must read what they approve. Once the month is over, by the shop's own today; once the month before holds no pay still open, or a debt would be lost; with no day of it waiting for a decision (Jack: A) and no paid day with no rate; and only the totals the person saw: if one moved since, the new ones are shown first. Active laptops that have sent nothing since the month ended are named, and stop nothing (Jack: A). Never undone (A3).
-- **What it freezes** **(v1.70)**: every day, clock event, decision, rate, advance and meal money of the month, for every job, and of every month before it, as months are approved in order and nobody is paid for one again **(v1.71)**; a clock event a laptop sends late is still kept, and moves no day already paid. A mistake is an adjustment in a later month (A3, WAGE-9).
+- **What it freezes** **(v1.70)**: every day, clock event, decision, rate, advance and meal money of the month, for every job, and of every month before it, as months are approved in order and nobody is paid for one again **(v1.71)**; a clock event a laptop sends late is still kept, and moves no day already paid. A mistake is an adjustment in a later month (A3, WAGE-10 **(v1.72)**).
 - **The day still running** **(v1.66)**: the pay counts the days that are over; today is added, apart and never kept, once the worker taps Toka, judged by the same rule (one with a tap of no trusted time waits at once, whatever else is tapped **(v1.67)**), and less today's share of the meals: today's money ÷ those who have tapped today and share them (Jack: A). So one who leaves tonight is paid for today; the book's own split, once the day is over, may differ by a little.
 
 **Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, meal shares **(v1.29)**, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own. One per job and month, with its `total`; its run is empty for one approved alone **(v1.70)**.
 - **PayslipLine** **(v1.70)**: the lines, in order, each with its amount, plus or minus, so they add up to the total: full days and half days, each `days` × `each`; fines and meals, with how many days; each advance, with its date; and a debt carried from an earlier month, with that month. Append-only, as the payslip and the run are (T2).
 - **A total below 0** **(v1.70)**: the payslip pays 0 (Jack: A), and the next payslip of the same job starts with the debt, a line of its own. The debt is the job's: one hired again starts clean, and a leaver's stays on their last payslip. A month's whole counts each total below 0 as 0, so it is what the month pays, with those approved alone in it; what is still to hand over is WAGE-9's *Bado kulipa* **(v1.71)**.
 - **Leaving mid-month** **(v1.29)**: a worker who leaves gets their payslip up to `left_on`, approved and paid on its own, before the month's run: the owner reads it and pays, with nothing to count by hand (Jack, 15 Nov 2026). The month's run then holds it as it was approved. Alone only once they have left and tapped Toka, or never tapped that day; today is kept with their other days, its share of the meals as they were paid it, though the date may be split again among more; their own days, rates and advances are locked from then on, the shop's meal money isn't **(v1.70)**.
+
+**PayslipPayment** **(v1.72)** → Payslip — a payslip handed out (WAGE-9). Asha's November, 152,000 in cash on 2 Dec: she signs on the screen, and her payslip says *Amelipwa taslimu na Baba · 2/12/2026 08:10*.
+- `payslip`, `staff` (its job), `amount` (what the payslip pays, copied: its total, as one below 0 pays nothing), `method`: `cash` | `mobile_money` | `bank`, `reference` (the transaction number: for M-Pesa and a bank, and only for them), `no_signature` (`demo`, or empty), and the void stamp. Who paid it and when are the row's `created_by` and `created_at` (§1): the moment of the tap, never a date typed.
+- The whole amount, at once (Jack: A): paying in parts is a card of its own, if the owner needs it. Only of a payslip that pays something: one of 0 has nothing to hand over, and counts as paid. One payment counted per payslip, so nobody is paid twice; a transaction number counted once per shop and method, as a sale's is (01 §7.5).
+- **Its signature**: in cash, the worker draws it on the screen, with a finger, or a mouse on a laptop, and the payment is saved only with it (Jack: A), as they sign on paper today: an Attachment of kind `signature` pinned to the payment (§13), kept for ever, the proof for NSSF and the month's sheet (WAGE-5). On the demo none is kept, as every visitor is the same manager and a signature kept would show to the next: the payment says `no_signature: demo`.
+- Who may: `pay.run` with the two keys of pay (§5), on the whole shop, as whoever hands it out must read what they hand out; not `pay.approve`, as approving and handing out are two jobs, and the signature is the proof. Never on one's own pay, by the person, not the job. On an office page, online; never on a laptop's copy (03 §6.1).
+- Append-only (T2): a wrong one is voided, with who, when and why, by the same keys, never one's own; it and its signature stay, struck through, and the payslip is paid again by a new one.
 
 **Advance** **(v1.68)** → StaffMember — money given to a worker before payday, whether called mid-month money or asked of the owner (Jack, WAGE-1). Juma asks for 20,000 on 10 Nov: it comes off Juma's November pay.
 - `staff` (the job), `date`, `amount` (positive), `note`; who typed it is the row's `created_by` (§1). Typed on the day it is given, so the pay so far is right every day.
@@ -663,7 +672,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 **EditEvent** [R1] — one change to an office record (a staff member, a side, a payment account, a stock location; later products, contacts, roles and devices), written by the database itself, so no change can skip it: who (`created_by`), from which device (`device`, as an AuditEvent's) **(v1.18)**, when (`created_at`), the record (`subject`), and the fields that changed, `before` and `after`. No reason: an action that needs one also writes an AuditEvent. A PIN hash is never copied. Append-only **(v1.9)**.
 
 **Attachment** [R1] — a photo or file on any record: supplier paper, expense receipt, clock-in photo. Photos taken offline upload later, Wi-Fi first.
-- **(v1.34)** Its `kind` (a clock-in photo, a worker's photo; a later kind comes with its record's card) names the table of the record it is pinned to (`subject`: a type code + UUID) and the key that opens it, on the whole shop. Its label, as the record brought it: `content_type` (JPEG or WebP), `size` (1 byte to 1 MB) and `sha256`; with `device` and `created_by`. Its file only moves forward: waiting → kept (`received_at`) → removed (`file_removed_at`, `file_removed_by`, `file_removed_reason`, always with a reason); a photo that never came may be removed too. The row is never deleted (rule 7): a removed photo's row says there was one, and who removed it.
+- **(v1.34)** Its `kind` (a clock-in photo, a worker's photo, a payment's signature **(v1.72)**; a later kind comes with its record's card) names the table of the record it is pinned to (`subject`: a type code + UUID) and the key that opens it, on the whole shop. Its label, as the record brought it: `content_type` (JPEG or WebP), `size` (1 byte to 1 MB) and `sha256`; with `device` and `created_by`. Its file only moves forward: waiting → kept (`received_at`) → removed (`file_removed_at`, `file_removed_by`, `file_removed_reason`, always with a reason); a photo that never came may be removed too. The row is never deleted (rule 7): a removed photo's row says there was one, and who removed it. A signature is never removed: it is the proof that a worker was paid (§12) **(v1.72)**.
 
 **ImportJob** [R1] — products and selling units, opening stock, contacts, open debts. `status`: `uploaded` → `checked` → `applied`; errors per row; created records point back at the import.
 
@@ -700,7 +709,7 @@ stateDiagram-v2
 - **DrawerSession:** `open` → `counted` → `confirmed` → `approved`; the owner can reopen with a reason.
 - **Transfer** [R2]: `sent` → `received` | `cancelled` (before received).
 - **Job** [R2]: `waiting` → `in_progress` → `ready` → `collected`; `cancelled` before ready (the customer's goods go back).
-- **PayRun** [R1b]: a draft worked out when it is asked for, no row → approved, a row made once; paid once every payslip of it is, worked out and never kept **(v1.70)**.
+- **PayRun** [R1b]: a draft worked out when it is asked for, no row → approved, a row made once; paid once every payslip of it is, worked out and never kept **(v1.70)**. A payslip is paid by its one counted `PayslipPayment`, and waits again once that is voided **(v1.72)**.
 - **Flag:** `open` → `explained` → `resolved` | `dismissed`; it may also close straight from `open` **(v1.8)**. A `device_gap` resolves itself when its missing records arrive (§13) **(v1.22)**.
 - **StaffMember:** `active` ⇄ `suspended` → `left`. **Product, Contact:** `active` ⇄ `archived`. **PaymentAccount:** `active` ⇄ `archived` **(v1.5)**. **Device:** `active` ⇄ `blocked` **(v1.11)**. **PairingRequest:** `waiting` → `confirmed` | `expired` **(v1.11)**.
 
@@ -727,7 +736,7 @@ These become database constraints and automated tests.
 
 **Tenancy and history**
 - **T1** Every record (except `User`, `Unit`, the `Shop` itself **(v1.3)** and a `PairingRequest` **(v1.11)**) has a shop, and only points at records of the same shop.
-- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)**, the offline periods devices report **(v1.22)**, meal money **(v1.29)**, advances **(v1.68)**, pay runs, payslips and their lines **(v1.70)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements, meal money **(v1.29)**, advances **(v1.68)** and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
+- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)**, the offline periods devices report **(v1.22)**, meal money **(v1.29)**, advances **(v1.68)**, pay runs, payslips and their lines **(v1.70)**, payslip payments **(v1.72)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements, meal money **(v1.29)**, advances **(v1.68)**, payslip payments **(v1.72)** and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
 - **T3** Nothing is deleted: cancel, void, suspend, archive — always with who, when and why.
 - **T4** Copied values (price, floor, factor, cost, rate, rules, formula version) never change once the record is confirmed.
 
@@ -762,6 +771,7 @@ These become database constraints and automated tests.
 - **A2** Manual fixes never hide the original clock events.
 - **A3** An approved pay run is frozen; later fixes are adjustments in the next run. The database refuses a change of a day a payslip paid **(v1.70)**.
 - **A4** Workers see only their own attendance, payslips and cash-ups.
+- **A5** Nobody marks their own pay paid, or crosses it out; pay handed out in cash holds the worker's signature **(v1.72)**.
 
 **Access and devices**
 - **X1** Permissions are checked per side.
@@ -817,7 +827,7 @@ Opening count 20 bags +1,000 · sell 3 bags −150 · sell 12.5 kg −12.5 · de
 | sales | Sale, SaleLine, PaymentAllocation, Return, PrintLog | | Bill, phone orders, handover per line | online orders, proforma |
 | money | Payment, DrawerSession, MoneyMovement | salary payments | side transfers, supplier credit payments | statement matching |
 | services | | | Formula, FormulaVersion, Job, Exchange | machines |
-| staffpay | | AttendanceEvent, AttendanceDay, PayRate, MealMoney **(v1.29)**, Advance **(v1.68)**, PayRun, Payslip, PayslipLine **(v1.70)** | | |
+| staffpay | | AttendanceEvent, AttendanceDay, PayRate, MealMoney **(v1.29)**, Advance **(v1.68)**, PayRun, Payslip, PayslipLine **(v1.70)**, PayslipPayment **(v1.72)** | | |
 | control | Flag, AuditEvent, EditEvent **(v1.9)**, Attachment, ImportJob | | Notification | message log |
 
 ## 20. Parking lot
@@ -865,6 +875,8 @@ One word per idea, the same in code, docs and UI. The Swahili is a draft — Jac
 | `clock` `in` · `out` | Ingia kazini · Toka kazini | One tap at a shop laptop as a worker arrives or leaves; *Toka* alone is logging out, *Ingia* logging in **(v1.24)** |
 | PayRun | Mishahara | One month's pay for everyone |
 | Approving a month | Idhinisha | Its numbers are final; not the same as paying (*Lipa*) **(v1.70)** |
+| PayslipPayment | Lipa · Amelipwa · Hajalipwa | A payslip handed out to its worker; *Bado kulipa*, what is still to hand out **(v1.72)** |
+| `signature` | Sahihi | A worker's signature, drawn on the screen as they are paid in cash **(v1.72)** |
 | Job | Kazi ya mashine | A grinding or mixing order |
 | Flag | Tofauti | A difference someone must explain |
 | Document | Kumbukumbu | A record a device saves at the counter and sends to the server: a sale, a clock-in; English screens say *record* **(v1.21)** |
