@@ -151,7 +151,8 @@
     "clear": "Clear the signature"
   },
   "sheet": {
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "close": "Close"
   },
   "password": {
     "chooseTitle": "Choose your password",
@@ -1141,6 +1142,20 @@
     },
     "save": "Save the decision"
   },
+  "mine": {
+    "title": "My days and pay",
+    "intro": "Your days and your pay.",
+    "days": "Days",
+    "pay": "Pay",
+    "notApproved": "Not approved yet: it may still change.",
+    "noRate": "You have no daily pay in this month.",
+    "totalToday": "Total to be paid today",
+    "owes": "You are paid 0. You owe {amount}, which comes off your next pay.",
+    "owesLeft": "You are paid 0. You owe {amount}.",
+    "owed": "You were paid 0. You were left owing {amount}.",
+    "paidBy": "Paid {how} by {by} · {date} {time}",
+    "notPaid": "Not paid yet."
+  },
   "flags": {
     "title": "Flags",
     "intro": "What the system found, and a person must look into.",
@@ -1666,6 +1681,10 @@
       "amount_invalid": "Type a whole number of shillings, not 0.",
       "amount_too_big": "This amount is too big. Check its zeros.",
       "reason_missing": "Write why."
+    },
+    "mine": {
+      "before_job": "You hadn't started work here yet in this month.",
+      "month_to_come": "This month hasn't come yet."
     },
     "flag": {
       "note_required": "Write a note.",

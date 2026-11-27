@@ -151,7 +151,8 @@
     "clear": "Futa sahihi"
   },
   "sheet": {
-    "cancel": "Ghairi"
+    "cancel": "Ghairi",
+    "close": "Funga"
   },
   "password": {
     "chooseTitle": "Chagua nenosiri lako",
@@ -1141,6 +1142,20 @@
     },
     "save": "Hifadhi uamuzi"
   },
+  "mine": {
+    "title": "Siku na malipo yangu",
+    "intro": "Siku zako na malipo yako.",
+    "days": "Siku",
+    "pay": "Malipo",
+    "notApproved": "Bado hayajaidhinishwa, yanaweza kubadilika.",
+    "noRate": "Huna malipo kwa siku mwezi huu.",
+    "totalToday": "Jumla ya kulipwa leo",
+    "owes": "Unalipwa 0. Unadaiwa {amount}, zitakatwa kwenye malipo yako yajayo.",
+    "owesLeft": "Unalipwa 0. Unadaiwa {amount}.",
+    "owed": "Ulilipwa 0. Ulibaki unadaiwa {amount}.",
+    "paidBy": "Umelipwa {how} na {by} · {date} {time}",
+    "notPaid": "Bado hujalipwa."
+  },
   "flags": {
     "title": "Tofauti",
     "intro": "Mambo ambayo mfumo umeyaona, na mtu anapaswa kuyaangalia.",
@@ -1666,6 +1681,10 @@
       "amount_invalid": "Andika kiasi cha shilingi nzima, kisicho sifuri.",
       "amount_too_big": "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
       "reason_missing": "Andika sababu."
+    },
+    "mine": {
+      "before_job": "Ulikuwa bado hujaanza kazi mwezi huu.",
+      "month_to_come": "Mwezi huu bado haujafika."
     },
     "flag": {
       "note_required": "Andika maelezo.",

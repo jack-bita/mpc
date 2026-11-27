@@ -1,6 +1,8 @@
 // month-switch.tsx — ‹ Novemba 2026 ›, the month a page shows and the two arrows that move it, and the clock that page
 // keeps, so › stops at this month (ATT-5). Mahudhurio ya mwezi wears it, Hela ya chakula (WAGE-7), Mishahara, the month's
-// pay on a worker's page (WAGE-2), and Advansi (WAGE-8): one switch, so they all move a month the same way.
+// pay on a worker's page (WAGE-2), and Advansi (WAGE-8): one switch, so they all move a month the same way. And Siku na
+// malipo yangu (WAGE-4), whose ‹ also stops, at the month the worker's job began: the server refuses a month before it
+// (mine.before_job).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and keeps the page's clock.
 "use client";
@@ -35,15 +37,19 @@ export function usePagesClock(): { openedAt: number; now: number } {
   return { openedAt, now };
 }
 
-/** ‹ Novemba 2026 ›: the month's name between its two arrows, › only before this month. */
+/** ‹ Novemba 2026 ›: the month's name between its two arrows, › only before this month, and ‹ only after the first
+ * month, where the page names one. */
 export function MonthSwitch({
   month,
   thisMonth,
+  firstMonth,
   onChoose,
   heading: Heading = "h2",
 }: {
   month: string;
   thisMonth: string;
+  /** The earliest month the page may show, "2026-09"; none where any month gone by may be shown. */
+  firstMonth?: string;
   onChoose: (month: string) => void;
   /** The month's heading: under a card's own (h2), an h3, so a screen reader's list of headings nests as the page does
    * (a worker's page, WAGE-2). */
@@ -63,6 +69,9 @@ export function MonthSwitch({
         size="normal"
         aria-label={t("before")}
         className="w-(--control-normal) px-0"
+        // Greyed out on the first month, as › is on this one, for the same reasons: kept in the Tab order.
+        disabled={firstMonth !== undefined && month <= firstMonth}
+        focusableWhenDisabled
         onClick={() => onChoose(monthBefore(month))}
       >
         <ChevronLeft aria-hidden className="size-6" />

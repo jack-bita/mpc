@@ -1,6 +1,6 @@
 // sheet.test.tsx — the sheet piece: a short task over its own page, named for a screen reader, closed by Ghairi or
 // Esc but never by a tap on the dimmed page (UI-10), sent by its main button or Enter, and held while its action is on
-// its way (ADR-0039, ATT-6).
+// its way (ADR-0039, ATT-6); and one that only shows, with Funga alone (WAGE-4).
 //
 // jsdom paints nothing, so where the sheet sits (the bottom, a phone's width on a wide screen) is checked by its
 // classes here, and by eye on /design and a phone.
@@ -200,6 +200,52 @@ describe("the sheet", () => {
       </Sheet>,
     );
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDefined();
+  });
+
+  // A sheet that only shows (WAGE-4): a worker's own day, with nothing to save.
+  function onlyShows() {
+    const onClose = vi.fn();
+    render(
+      <Sheet open onClose={onClose} title="Jumatano 04/11/2026">
+        <p>Amechelewa · faini 500</p>
+      </Sheet>,
+    );
+    return { onClose };
+  }
+
+  it("with nothing to save, has Funga alone, not Ghairi, and closes on it and on Esc (WAGE-4)", () => {
+    const { onClose } = onlyShows();
+    expect(
+      screen.getByRole("dialog", { name: "Jumatano 04/11/2026" }),
+    ).toBeDefined();
+    // One button, which closes: Ghairi would say something is given up, and there is nothing to give up.
+    expect(
+      screen.getAllByRole("button").map((button) => button.textContent),
+    ).toEqual(["Funga"]);
+    fireEvent.click(screen.getByRole("button", { name: "Funga" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("with nothing to save, sends nothing on Enter", () => {
+    const { onClose } = onlyShows();
+    // The form's own send, as Enter in it would make: no main action to run, and the sheet stays.
+    fireEvent.submit(
+      screen.getByRole("dialog").querySelector("form") as HTMLFormElement,
+    );
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeDefined();
+  });
+
+  it("says Funga in the open book's language", () => {
+    setLanguage("en");
+    render(
+      <Sheet open onClose={() => undefined} title="Wednesday 04/11/2026">
+        <p>Late · fine 500</p>
+      </Sheet>,
+    );
+    expect(screen.getByRole("button", { name: "Close" })).toBeDefined();
   });
 
   it("comes from the bottom, rounded at the top, never taller than most of the screen", () => {

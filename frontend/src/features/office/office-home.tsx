@@ -14,8 +14,9 @@
 // with settings.manage and staff.manage on the whole shop (WAGE-2). Tofauti is for whoever holds flag.review on some
 // side, as a flag shows only to whoever may close it (CTRL-4).
 // A button for a screen someone may not use stays off the page; the server still checks every change
-// itself (PPL-5), so this only keeps a door nobody may use out of sight. Under them, for everyone,
-// Mipangilio yangu: a person's own language and font need no key (UI-9).
+// itself (PPL-5), so this only keeps a door nobody may use out of sight. Under them, for everyone, the person's own:
+// Siku na malipo yangu, their own days and pay, which need no key (Jack: A, WAGE-4), so a manager paid by the day reads
+// them on their own phone; and Mipangilio yangu, their own language and font, which need none either (UI-9).
 //
 // "use client": it asks use-intl for words, and the server who is here.
 "use client";
@@ -35,6 +36,7 @@ import { ADVANCES_PAGE, mayGiveAdvances } from "@/features/advances/advances";
 import { mayManageAttendance } from "@/features/attendance/attendance-month";
 import { FLAGS_PAGE, mayReviewFlags } from "@/features/flags/flags";
 import { MEAL_MONEY_PAGE, mayRecordMeals } from "@/features/meals/meal-money";
+import { MY_DAYS_AND_PAY_PAGE } from "@/features/mine/mine";
 import { PAY_PAGE } from "@/features/pay/pay";
 import { maySeePay } from "@/features/workers/pay-rates";
 import { mayManageStaff } from "@/features/workers/workers";
@@ -53,6 +55,7 @@ export function OfficeHome() {
   const advances = useTranslations("advances");
   const pay = useTranslations("pay");
   const flags = useTranslations("flags");
+  const mine = useTranslations("mine");
   const me = useWhoIsHere();
   // Focus on the welcome as each person arrives: after a login, or Chagua nenosiri lako's Hifadhi, the
   // button that had it is gone. A screen reader then says where the person is, and Tab goes on to the
@@ -175,8 +178,12 @@ export function OfficeHome() {
         ) : (
           <p>{t("nothingYet")}</p>
         )}
-        {/* Apart from the office's work, and the second kind: it is the person's own, not a job. */}
-        <div>
+        {/* Apart from the office's work, and the second kind: they are the person's own, not a job. Their days and pay
+            first, as on the laptop's welcome (WAGE-4). */}
+        <div className="flex flex-wrap gap-3">
+          <ButtonLink href={MY_DAYS_AND_PAY_PAGE} kind="second" size="normal">
+            {mine("title")}
+          </ButtonLink>
           <ButtonLink href="/my-settings/" kind="second" size="normal">
             {settings("title")}
           </ButtonLink>

@@ -938,6 +938,19 @@ describe("with no network (SYNC-10)", () => {
     ).toBeDefined();
   });
 
+  it("doesn't offer Siku na malipo yangu in a local session: it reads the server, and the laptop keeps no pay (WAGE-4)", async () => {
+    await aLaptopWithNoNetwork(null);
+    await attendanceSwitchedOn();
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+
+    // Mahudhurio, beside it, shows: the welcome has drawn, with no server.
+    await screen.findByRole("link", { name: "Mahudhurio" });
+    expect(
+      screen.queryByRole("link", { name: "Siku na malipo yangu" }),
+    ).toBeNull();
+  });
+
   it("sends the logout of a counter's Toka with no answer about her at all, so she never comes back (SYNC-11)", async () => {
     // Neema came in by the server, then stayed over 5 minutes on a counter screen: the store forgot `me`'s
     // answer about her (TanStack's gcTime), and the network is gone. Her Toka there must still end her
@@ -1042,6 +1055,45 @@ describe("the way to Mahudhurio (SYNC-11)", () => {
 
     await screen.findByRole("heading", { name: "Karibu, Neema" });
     expect(mahudhurio()).toBeNull();
+  });
+});
+
+describe("the way to Siku na malipo yangu (WAGE-4)", () => {
+  const mine = () =>
+    screen.queryByRole("link", { name: "Siku na malipo yangu" });
+
+  it("is on her welcome, under Mahudhurio, and opens her own days and pay", async () => {
+    // Neema, a seller with no key to anyone's attendance or pay: her own need none (Jack's screen 1).
+    await attendanceSwitchedOn("2026-11-01");
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    await waitFor(() => expect(mine()).not.toBeNull());
+    expect(mine()?.getAttribute("href")).toMatch(/^\/my-days-and-pay\/?$/);
+    // Second, right under Mahudhurio, as Jack drew it.
+    const links = screen.getAllByRole("link").map((link) => link.textContent);
+    expect(links.indexOf("Siku na malipo yangu")).toBe(
+      links.indexOf("Mahudhurio") + 1,
+    );
+  });
+
+  it("isn't there before the shop switches attendance on: there are no days to show", async () => {
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    await screen.findByRole("link", { name: "Kompyuta hii" });
+    expect(mine()).toBeNull();
+  });
+
+  it("isn't there while nobody is logged in", async () => {
+    await attendanceSwitchedOn("2026-11-01");
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" });
+    expect(mine()).toBeNull();
   });
 });
 

@@ -81,6 +81,7 @@ def sweep_shops(
     sweep_advances: tuple[Shop, Shop],
     sweep_payslips: tuple[Shop, Shop],
     sweep_corrections: tuple[Shop, Shop],
+    sweep_own_days_and_pay: tuple[Shop, Shop],
 ) -> tuple[Shop, Shop]:
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
     # sides, a paired device each, which the office device list shows (AUTH-5), with an offline period the health page
@@ -90,7 +91,7 @@ def sweep_shops(
     # note, which the flags' page lists (CTRL-4), a day's meal money, which Hela ya chakula lists (WAGE-7), money given
     # before payday, which Advansi lists (WAGE-8), and an approved month and a payslip, which the pay's routes show
     # (WAGE-3), with its payment, crossed out through its own route (WAGE-9), and a correction of a worker's pay, which
-    # their pay shows (WAGE-10).
+    # their pay shows (WAGE-10); and the visitor's own days and pay, which Siku na malipo yangu shows (WAGE-4).
     return sweep_sides
 
 
@@ -409,6 +410,60 @@ def sweep_device_clients(sweep_device_keys: tuple[str, str]) -> tuple[APIClient,
 
 
 @pytest.fixture
+def sweep_own_days_and_pay(
+    sweep_attendance: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember
+) -> tuple[Shop, Shop]:
+    # The sweep's own look is made as each shop's staff member, and Siku na malipo yangu reads only the job a login
+    # names (WAGE-4): so each shop's staff member gets, in their own month, this month, a tap of today entered in the
+    # office, and a correction of their pay, each with a reason only that shop holds, for the routes to show. Entered
+    # and typed by the shop's worker paid by the day (sweep_attendance), as nobody adds their own tap or corrects their
+    # own pay. At one minute past midnight, the day's first minute: ahead of the clock only while the sweep runs in
+    # that one minute, which no route minds, as none reads a tap's time against the clock. Written past add_tap and
+    # record_correction, whose makers would need the keys.
+    for shop, staff, name, why, amount, reason in (
+        (
+            sweep_attendance[0],
+            staff_a,
+            "Mhudhuriaji Mfano",
+            "Sababu yangu ya Mfano",
+            "31427",
+            "Marekebisho yangu ya Mfano",
+        ),
+        (
+            sweep_attendance[1],
+            staff_b,
+            "Mhudhuriaji Jirani",
+            "Sababu yangu ya Jirani",
+            "-72413",
+            "Marekebisho yangu ya Jirani",
+        ),
+    ):
+        with shop_context(shop):
+            today = shop_today(shop)
+            maker = StaffMember.objects.get(display_name=name)
+            AttendanceEvent.objects.create(
+                shop=shop,
+                received_at=timezone.now(),
+                created_by=maker,
+                staff=staff,
+                kind=ClockKind.IN,
+                trusted_time=datetime.combine(today, time(0, 1), tzinfo=ZoneInfo(shop.timezone)),
+                time_check=TimeCheck.ENTERED,
+                no_photo=NoPhoto.ENTERED,
+                entry_reason=why,
+            )
+            PayCorrection.objects.create(
+                shop=shop,
+                staff=staff,
+                month=today.replace(day=1),
+                amount=Decimal(amount),
+                reason=reason,
+                created_by=maker,
+            )
+    return sweep_attendance
+
+
+@pytest.fixture
 def sweep_queries(shop_a: Shop, staff_a: StaffMember) -> dict[str, dict[str, str]]:
     # The query parameters a GET route can't answer without, by the route's name. They must be ones under which
     # shop A's rows show: a day's report asks for the day the rows above are made on, the test's today, as in
@@ -420,6 +475,7 @@ def sweep_queries(shop_a: Shop, staff_a: StaffMember) -> dict[str, dict[str, str
     # month would list nobody. A worker's month names its month the same way (ATT-12); its worker is in the address,
     # each of shop A's in turn, as for any route of one row. The meal money names its days (WAGE-7): yesterday's, which
     # sweep_meal_money types. The pay names its month as the attendance does (WAGE-2), and so do the advances (WAGE-8).
+    # A worker's own days and pay name this month, as below (WAGE-4).
     yesterday = shop_today(shop_a) - timedelta(days=1)
     return {
         "pay-rate-list": {"staff": str(staff_a.pk)},
@@ -429,4 +485,8 @@ def sweep_queries(shop_a: Shop, staff_a: StaffMember) -> dict[str, dict[str, str
         "advance-list": {"month": yesterday.strftime("%Y-%m")},
         "pay-list": {"month": yesterday.strftime("%Y-%m")},
         "pay-detail": {"month": yesterday.strftime("%Y-%m")},
+        # A worker's own days and pay (WAGE-4) name this month: the sweep's own look is made as staff_a, whose job
+        # starts today, and a month before it is refused (mine.before_job), on the 1st too.
+        "mine-attendance": {"month": shop_today(shop_a).strftime("%Y-%m")},
+        "mine-pay": {"month": shop_today(shop_a).strftime("%Y-%m")},
     }

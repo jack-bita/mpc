@@ -3265,6 +3265,102 @@
                 }
             }
         },
+        "/api/v1/staffpay/mine/attendance/": {
+            "get": {
+                "operationId": "staffpay_mine_attendance_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                            "example": "2026-11"
+                        },
+                        "description": "The month, as 2026-11.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OwnAttendanceAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/staffpay/mine/pay/": {
+            "get": {
+                "operationId": "staffpay_mine_pay_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                            "example": "2026-11"
+                        },
+                        "description": "The month, as 2026-11.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OwnPayAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/staffpay/pay/": {
             "get": {
                 "operationId": "staffpay_pay_list",
@@ -6154,6 +6250,290 @@
                     "started_at"
                 ]
             },
+            "OwnAttendanceAnswer": {
+                "type": "object",
+                "properties": {
+                    "month": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11"
+                    },
+                    "today": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "worker": {
+                        "$ref": "#/components/schemas/WorkerMonth"
+                    },
+                    "started_on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "left_on": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "days": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OwnDay"
+                        }
+                    },
+                    "taps": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OwnTap"
+                        }
+                    },
+                    "ready_reasons": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ReadyReasonsEnum"
+                        }
+                    },
+                    "ready_add_reasons": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ReadyAddReasonsEnum"
+                        }
+                    },
+                    "ready_void_reasons": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TapVoidReasonEnum"
+                        }
+                    }
+                },
+                "required": [
+                    "days",
+                    "left_on",
+                    "month",
+                    "ready_add_reasons",
+                    "ready_reasons",
+                    "ready_void_reasons",
+                    "started_on",
+                    "taps",
+                    "today",
+                    "worker"
+                ]
+            },
+            "OwnDay": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/DayStatusEnum"
+                    },
+                    "reason": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/ReasonEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "fine": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "meal_share": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "first_in": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "first_out": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "decision": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DayDecision"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "date",
+                    "decision",
+                    "fine",
+                    "first_in",
+                    "first_out",
+                    "meal_share",
+                    "reason",
+                    "status"
+                ]
+            },
+            "OwnPayAnswer": {
+                "type": "object",
+                "properties": {
+                    "month": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11"
+                    },
+                    "today": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "counted_to": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "paid_by_day": {
+                        "type": "boolean"
+                    },
+                    "no_day_yet": {
+                        "type": "boolean"
+                    },
+                    "line": {
+                        "$ref": "#/components/schemas/OwnPayLine"
+                    },
+                    "corrections": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CorrectionLine"
+                        }
+                    },
+                    "void_reasons": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "corrections",
+                    "counted_to",
+                    "line",
+                    "month",
+                    "no_day_yet",
+                    "paid_by_day",
+                    "today",
+                    "void_reasons"
+                ]
+            },
+            "OwnPayLine": {
+                "type": "object",
+                "properties": {
+                    "left_on": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "pay": {
+                        "$ref": "#/components/schemas/Pay"
+                    },
+                    "today": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Pay"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "total": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "carried_from": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11",
+                        "nullable": true
+                    },
+                    "approval": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Approval"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "to_hand_out": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "payments": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OwnPayment"
+                        }
+                    }
+                },
+                "required": [
+                    "approval",
+                    "carried_from",
+                    "left_on",
+                    "pay",
+                    "payments",
+                    "to_hand_out",
+                    "today",
+                    "total"
+                ]
+            },
+            "OwnPayment": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "method": {
+                        "$ref": "#/components/schemas/PaymentMethodEnum"
+                    },
+                    "reference": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/VoidedPayment"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "amount",
+                    "at",
+                    "by",
+                    "id",
+                    "method",
+                    "reference",
+                    "voided"
+                ]
+            },
             "OwnSettingsAnswer": {
                 "type": "object",
                 "properties": {
@@ -6189,6 +6569,66 @@
                         "$ref": "#/components/schemas/FontEnum"
                     }
                 }
+            },
+            "OwnTap": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/ClockKindEnum"
+                    },
+                    "time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "laptop_time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "laptop": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "entered": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapStamp"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapStamp"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "after_approval": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "after_approval",
+                    "date",
+                    "entered",
+                    "id",
+                    "kind",
+                    "laptop",
+                    "laptop_time",
+                    "time",
+                    "voided"
+                ]
             },
             "PaginatedDeviceList": {
                 "type": "object",
@@ -8450,6 +8890,13 @@
                     "reason"
                 ]
             },
+            "TapVoidReasonEnum": {
+                "enum": [
+                    "wrong_tap"
+                ],
+                "type": "string",
+                "description": "* `wrong_tap` - wrong_tap"
+            },
             "TemporaryPasswordRequest": {
                 "type": "object",
                 "properties": {
@@ -8772,7 +9219,7 @@
                     "ready_void_reasons": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/WorkerAttendanceAnswerReadyVoidReasonsEnum"
+                            "$ref": "#/components/schemas/TapVoidReasonEnum"
                         },
                         "description": "On the demo, the ready reasons a tap crossed out may take, as codes; elsewhere none (ATT-13)."
                     }
@@ -8791,13 +9238,6 @@
                     "worker",
                     "yours"
                 ]
-            },
-            "WorkerAttendanceAnswerReadyVoidReasonsEnum": {
-                "enum": [
-                    "wrong_tap"
-                ],
-                "type": "string",
-                "description": "* `wrong_tap` - wrong_tap"
             },
             "WorkerDay": {
                 "type": "object",

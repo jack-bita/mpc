@@ -45,7 +45,11 @@ export function useCountedTo(answer: Counted): string | null {
 
 /** What the pay leaves out, a line each: the days that wait for a decision, the days with no daily pay, and today when
  * its Toka waits for a decision too. Nothing when all is paid. */
-export function NotPaid({ worker }: { worker: WorkerPay }) {
+export function NotPaid({
+  worker,
+}: {
+  worker: Pick<WorkerPay, "pay" | "today">;
+}) {
   const t = useTranslations("pay");
   return (
     <>
@@ -63,7 +67,7 @@ export function NotPaid({ worker }: { worker: WorkerPay }) {
 }
 
 /** "Aliondoka 14/11/2026", of one who left. */
-export function Left({ worker }: { worker: WorkerPay }) {
+export function Left({ worker }: { worker: Pick<WorkerPay, "left_on"> }) {
   const t = useTranslations("pay");
   return worker.left_on === null ? null : (
     <Note>{t("left", { date: formatDay(worker.left_on) })}</Note>

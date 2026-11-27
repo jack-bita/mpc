@@ -1,20 +1,21 @@
 """apps/staffpay/api/views.py — the staffpay routes an office screen calls, under /api/v1/staffpay/ (WAGE-1; 03 §5.10).
 
-Twelve: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
-read on Mahudhurio ya mwezi (ATT-5); one worker's month, their calendar and its days' taps (ATT-12); a decision on one
-of their days, sent from the sheet under the calendar (ATT-6); a manager's fixes to the taps, a tap added and a tap
-crossed out, each sent from its sheet under the calendar (ATT-13); the day's meal money, read, typed and crossed out on
-Hela ya chakula (WAGE-7); money given before payday, read, typed and crossed out on Advansi (WAGE-8); and the month's
-pay, everyone's on Mishahara and one worker's on their page, read alone (WAGE-2); its approval, a month's and one
-worker's alone (WAGE-3); handing it out, and crossing out a payment marked by mistake (WAGE-9); and a correction of a
-later month, typed and crossed out on a worker's pay page (WAGE-10). Thin, as every route is (ADR-0015):
-who may set a rate, and what it may be, are set_pay_rate's (apps/staffpay/services/money.py); which rate is in force,
-the selectors'; what a month holds, attendance_month's; what a worker's month holds, worker_attendance's; who may decide
-a day, and how, decide_day's; who may fix a tap, and how, add_tap's and void_tap's; the meal money of any days,
-meal_money_days'; who may type it, and cross it out, and how, record_meal_money's and void_meal_money's; the advances of
-a month, advances_month's; who may type one, and cross it out, and how, record_advance's and void_advance's; what the
-month pays, pay_month's and worker_pay's; who may approve it, and when, approve_month's and approve_leaver's; and who
-may correct it, and how, record_correction's and void_correction's.
+Thirteen: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of
+attendance, read on Mahudhurio ya mwezi (ATT-5); one worker's month, their calendar and its days' taps (ATT-12); a
+decision on one of their days, sent from the sheet under the calendar (ATT-6); a manager's fixes to the taps, a tap
+added and a tap crossed out, each sent from its sheet under the calendar (ATT-13); the day's meal money, read, typed and
+crossed out on Hela ya chakula (WAGE-7); money given before payday, read, typed and crossed out on Advansi (WAGE-8); and
+the month's pay, everyone's on Mishahara and one worker's on their page, read alone (WAGE-2); its approval, a month's
+and one worker's alone (WAGE-3); handing it out, and crossing out a payment marked by mistake (WAGE-9); and a correction
+of a later month, typed and crossed out on a worker's pay page (WAGE-10); and a worker's own days and pay, read by
+themselves on Siku na malipo yangu (WAGE-4). Thin, as every route is (ADR-0015): who may set a rate, and what it may be,
+are set_pay_rate's (apps/staffpay/services/money.py); which rate is in force, the selectors'; what a month holds,
+attendance_month's; what a worker's month holds, worker_attendance's; who may decide a day, and how, decide_day's; who
+may fix a tap, and how, add_tap's and void_tap's; the meal money of any days, meal_money_days'; who may type it, and
+cross it out, and how, record_meal_money's and void_meal_money's; the advances of a month, advances_month's; who may
+type one, and cross it out, and how, record_advance's and void_advance's; what the month pays, pay_month's and
+worker_pay's; who may approve it, and when, approve_month's and approve_leaver's; and who may correct it, and how,
+record_correction's and void_correction's; and what a worker reads of their own, own_attendance's and own_pay's.
 """
 
 from collections.abc import Iterator
@@ -25,6 +26,8 @@ from typing import Any, cast
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.db.models import QuerySet
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
 from drf_spectacular.utils import extend_schema
 from rest_framework import exceptions
 from rest_framework.decorators import action
@@ -33,7 +36,7 @@ from rest_framework.response import Response
 
 from apps.control.api.uploads import PHOTO_BODY, photo_sent
 from apps.control.models import Attachment
-from apps.core.api.base import CreateOnceMixin, ShopViewSet
+from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, ShopViewSet
 from apps.core.api.ids import id_taken
 from apps.core.permissions import Permission
 from apps.people.models import StaffMember, StaffStatus
@@ -54,6 +57,8 @@ from apps.staffpay.api.serializers import (
     MealMoneyAnswer,
     MealMoneyDaysAnswer,
     MealMoneyQuery,
+    OwnAttendanceAnswer,
+    OwnPayAnswer,
     PayCashQuery,
     PaymentLineSerializer,
     PayMonthAnswer,
@@ -103,6 +108,8 @@ from apps.staffpay.services import (
     decide_day,
     decision_of,
     meal_money_days,
+    own_attendance,
+    own_pay,
     pay_month,
     pay_payslip,
     payment_line,
@@ -727,6 +734,54 @@ class PayCorrectionViewSet(CreateOnceMixin[PayCorrection]):
         sent.is_valid(raise_exception=True)
         voided = void_correction(row, reason=sent.validated_data["reason"], by=cast(StaffMember, self.actor))
         return Response(CorrectionAnswer(voided).data)
+
+
+# Never kept by a cache, the browser's or a proxy's on the way (Cache-Control: no-store, private), as the sync's answers
+# aren't: a shop's laptop is shared, and a worker's pay must never stay on it for the next person to find (03 §6.1).
+@method_decorator(never_cache, name="dispatch")
+class MineViewSet(ShopViewSet[StaffMember]):
+    # GET mine/attendance/?month=2026-11 and GET mine/pay/?month=2026-11: the worker's own month and pay (WAGE-4, A4),
+    # on Siku na malipo yangu, after any login, a PIN's on the shop's laptop or a password's on their phone. No id, in
+    # the path or the query: each reads only the job the visit's login names, so nobody can ask for anyone else's. A
+    # `?staff=` sent along is read by nothing.
+    model = StaffMember
+    # A worker belongs to the whole shop, as their days and pay do: no side.
+    side_field = None
+    # No key: everyone may read their own, as everyone may read who they are (`me`, MeViewSet in
+    # apps/people/api/views.py), so a worker who holds no role gets in. Only reads, so the base lets them through
+    # before any key is asked (ShopViewSet.initial); a change could never come this way.
+    action_permissions = {"attendance": SEES_THE_SIDE, "pay": SEES_THE_SIDE}
+    # One answer, not pages: a month of one person.
+    pagination_class = None
+
+    @extend_schema(parameters=[AttendanceMonthQuery], responses=OwnAttendanceAnswer)
+    @action(detail=False, methods=["get"])
+    def attendance(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # The month first, as the manager's routes read it: none, or one that is no month, is refused under `month`.
+        month = self._month(request)
+        return Response(OwnAttendanceAnswer(own_attendance(self._shop(), self._job(), month)).data)
+
+    @extend_schema(parameters=[AttendanceMonthQuery], responses=OwnPayAnswer)
+    @action(detail=False, methods=["get"])
+    def pay(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        month = self._month(request)
+        return Response(OwnPayAnswer(own_pay(self._shop(), self._job(), month)).data)
+
+    def _job(self) -> StaffMember:
+        # The job the login names, read afresh through the guard, inside the visit's shop: a PIN's session names its
+        # job, a password's the job it chose at this shop. One that isn't working now is refused by the reads themselves
+        # (own_attendance, own_pay), which keep that rule (X2). cast: an office visit's actor is always a staff member
+        # (perform_authentication refused any other).
+        return StaffMember.objects.get(pk=cast(StaffMember, self.actor).pk)
+
+    def _month(self, request: Request) -> date:
+        asked = AttendanceMonthQuery(data=request.query_params)
+        asked.is_valid(raise_exception=True)
+        return cast(date, asked.validated_data["month"])
+
+    def _shop(self) -> Shop:
+        # The visit's own shop, open already (ShopViewSet): everything below reads inside it, through the guard.
+        return Shop.objects.get(pk=self.actor.shop_id)
 
 
 @contextmanager

@@ -1,5 +1,5 @@
 """apps/staffpay/api/urls.py — the staffpay routes, mounted under /api/v1/staffpay/ by config/urls.py (WAGE-1,
-ATT-5, ATT-12, ATT-6, ATT-13, WAGE-7, WAGE-8, WAGE-2, WAGE-3, WAGE-9, WAGE-10)."""
+ATT-5, ATT-12, ATT-6, ATT-13, WAGE-7, WAGE-8, WAGE-2, WAGE-3, WAGE-9, WAGE-10, WAGE-4)."""
 
 from rest_framework.routers import SimpleRouter
 
@@ -10,6 +10,7 @@ from apps.staffpay.api.views import (
     AttendanceTapViewSet,
     AttendanceWorkerViewSet,
     MealMoneyViewSet,
+    MineViewSet,
     PayCorrectionViewSet,
     PayRateViewSet,
     PayRunViewSet,
@@ -42,5 +43,7 @@ router.register("pay-runs", PayRunViewSet, basename="pay-run")
 router.register("payslips", PayslipViewSet, basename="payslip")
 router.register("payslip-payments", PayslipPaymentViewSet, basename="payslip-payment")
 router.register("pay-corrections", PayCorrectionViewSet, basename="pay-correction")
+# A worker's own days and pay (WAGE-4): mine/attendance/ and mine/pay/, no id, as each reads the login's own job.
+router.register("mine", MineViewSet, basename="mine")
 
 urlpatterns = router.urls

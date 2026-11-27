@@ -64,6 +64,7 @@ from apps.staffpay.api.views import (
     AttendanceTapViewSet,
     AttendanceWorkerViewSet,
     MealMoneyViewSet,
+    MineViewSet,
     PayCorrectionViewSet,
     PayRateViewSet,
     PayRunViewSet,
@@ -98,6 +99,8 @@ PAY_WORKER = "/api/v1/staffpay/pay/{}/"
 PAY_RUNS = "/api/v1/staffpay/pay-runs/"
 PAYSLIPS = "/api/v1/staffpay/payslips/"
 PAY_CORRECTIONS = "/api/v1/staffpay/pay-corrections/"
+MY_DAYS = "/api/v1/staffpay/mine/attendance/"
+MY_PAY = "/api/v1/staffpay/mine/pay/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -645,6 +648,10 @@ def test_suspended_member_gets_nothing_from_routes(
     assert client.get(ATTENDANCE_MONTH, {"month": "2026-10"}).status_code == 403
     for whose in (juma, staff_a):
         assert client.get(ATTENDANCE_WORKER.format(whose.pk), {"month": "2026-10"}).status_code == 403
+    # Nor their own days and pay (WAGE-4), which need no key: refused all the same, as the job is read afresh.
+    this_month = shop_today(shop_a).strftime("%Y-%m")
+    for own in (MY_DAYS, MY_PAY):
+        assert client.get(own, {"month": this_month}).status_code == 403
     with shop_context(shop_a):
         assert Side.objects.get(pk=sides["F"].pk).is_live is False
         assert Side.objects.get(pk=sides["F"].pk).band == "blue"
@@ -1427,6 +1434,23 @@ def test_correction_route_names_its_permissions() -> None:
         "create": Permission.PAY_APPROVE,
         "void": Permission.PAY_APPROVE,
     }
+
+
+def test_own_days_and_pay_name_no_key() -> None:
+    # A worker's own days and pay, two reads that need only a login (WAGE-4, A4), as `me` does: each reads the login's
+    # own job, never one it is asked for. Written out in full, as above.
+    assert MineViewSet.action_permissions == {
+        "attendance": base.SEES_THE_SIDE,
+        "pay": base.SEES_THE_SIDE,
+    }
+
+
+@pytest.mark.django_db
+def test_own_days_and_pay_need_no_key(shop_a: Shop, staff_a: StaffMember) -> None:
+    # Asha holds no role at all: she still reads her own month and pay, and only those (test_mine_routes.py).
+    this_month = shop_today(shop_a).strftime("%Y-%m")
+    for own in (MY_DAYS, MY_PAY):
+        assert client_for(staff_a).get(own, {"month": this_month}).status_code == 200
 
 
 def test_pay_route_names_its_permissions() -> None:
