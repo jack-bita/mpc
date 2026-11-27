@@ -1142,6 +1142,10 @@
     },
     "save": "Hifadhi uamuzi"
   },
+  "mine": {
+    "title": "Siku na malipo yangu",
+    "intro": "Siku zako na malipo yako."
+  },
   "flags": {
     "title": "Tofauti",
     "intro": "Mambo ambayo mfumo umeyaona, na mtu anapaswa kuyaangalia.",

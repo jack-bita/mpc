@@ -1142,6 +1142,10 @@
     },
     "save": "Save the decision"
   },
+  "mine": {
+    "title": "My days and pay",
+    "intro": "Your days and your pay."
+  },
   "flags": {
     "title": "Flags",
     "intro": "What the system found, and a person must look into.",
