@@ -1622,6 +1622,16 @@
       "reference_used": "Namba hii ya muamala imeshatumika kwa malipo mengine.",
       "reason_missing": "Andika sababu."
     },
+    "correction": {
+      "own": "Huwezi kuandika wala kubatilisha marekebisho ya malipo yako mwenyewe.",
+      "left_paid": "Mfanyakazi huyu ameondoka, na malipo yake yamefungwa.",
+      "month_to_come": "Mwezi huu bado haujafika.",
+      "outside_job": "Mfanyakazi huyu hakuwa kazini mwezi huu.",
+      "not_paid_by_day": "Mfanyakazi huyu halipwi kwa siku mwezi huu.",
+      "amount_invalid": "Andika kiasi cha shilingi nzima, kisicho sifuri.",
+      "amount_too_big": "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
+      "reason_missing": "Andika sababu."
+    },
     "flag": {
       "note_required": "Andika maelezo.",
       "closed": "Tofauti hii imeshafungwa.",

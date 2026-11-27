@@ -377,7 +377,7 @@ def worker_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
         worker=_worker_pay(job, work_out_pay([]), None) if line is None else line,
         to_approve=alone,
         void_reasons=tuple(ready_payment_void_reasons()),
-        corrections=tuple(_correction_line(row) for row in corrections_of(shop, job.pk, whole.month)),
+        corrections=tuple(correction_line(row) for row in corrections_of(shop, job.pk, whole.month)),
         no_correction=why_no_correction(shop, job, whole.month),
     )
 
@@ -737,9 +737,9 @@ def _line_of(slip: Payslip, lines: list[PayslipLine], payments: tuple[PaymentLin
     )
 
 
-def _correction_line(row: PayCorrection) -> CorrectionLine:
-    # A correction as the worker's page lists it. Always somebody's, as the table holds; and a crossing out always says
-    # who and why.
+def correction_line(row: PayCorrection) -> CorrectionLine:
+    """A correction as the worker's page lists it (WAGE-10): the answer of the routes that type one or cross one out
+    too. Always somebody's, as the table holds; and a crossing out always says who and why."""
     voided = (
         None
         if row.voided_at is None

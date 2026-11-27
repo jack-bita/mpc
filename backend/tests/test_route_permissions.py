@@ -64,13 +64,14 @@ from apps.staffpay.api.views import (
     AttendanceTapViewSet,
     AttendanceWorkerViewSet,
     MealMoneyViewSet,
+    PayCorrectionViewSet,
     PayRateViewSet,
     PayRunViewSet,
     PayslipPaymentViewSet,
     PayslipViewSet,
     PayViewSet,
 )
-from apps.staffpay.models import Advance, AttendanceEvent, MealMoney, PayRate, PayRun, Payslip
+from apps.staffpay.models import Advance, AttendanceEvent, MealMoney, PayCorrection, PayRate, PayRun, Payslip
 from apps.staffpay.tests.days import job, kept_day, switch_on
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
@@ -96,6 +97,7 @@ PAY = "/api/v1/staffpay/pay/"
 PAY_WORKER = "/api/v1/staffpay/pay/{}/"
 PAY_RUNS = "/api/v1/staffpay/pay-runs/"
 PAYSLIPS = "/api/v1/staffpay/payslips/"
+PAY_CORRECTIONS = "/api/v1/staffpay/pay-corrections/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -1368,6 +1370,63 @@ def test_approval_routes_name_their_permissions() -> None:
         "pay_cash": Permission.PAY_RUN,
     }
     assert PayslipPaymentViewSet.action_permissions == {"void": Permission.PAY_RUN}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("missing", APPROVING)
+def test_correcting_needs_all_three_keys(
+    shop_a: Shop,
+    sides: dict[str, Side],
+    staff_a: StaffMember,
+    staff_a2: StaffMember,
+    give_role: GiveRole,
+    missing: Permission,
+) -> None:
+    # Only whoever approves pay types or crosses out a correction (WAGE-10, Jack: A): a Manager, who types advances,
+    # handed two of the three keys, types none and crosses out none, whichever is missing; nor is he handed back one
+    # somebody else typed, by sending its id as a new one's (CreateOnceMixin).
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    with shop_context(shop_a):
+        month = shop_today(shop_a).replace(day=1)
+        juma = job(shop_a, "Juma")
+        PayRate(shop=shop_a, staff=juma, daily_rate=Decimal("10000.00"), effective_from=juma.started_on).save()
+        row = PayCorrection(
+            shop=shop_a, staff=juma, month=month, amount=Decimal("12345.00"), reason="Kosa", created_by=staff_a
+        )
+        row.save()
+        for key in APPROVING:
+            if key != missing:
+                grant_permission(staff_a2, key, side=None, by=None)
+    sheet = {"staff": str(juma.pk), "month": f"{month:%Y-%m}", "amount": "9000.00", "reason": "Kosa"}
+
+    def asked() -> list[Any]:
+        client = client_for(staff_a2)
+        return [
+            client.post(PAY_CORRECTIONS, sheet | {"id": str(uuid.uuid7())}, format="json"),
+            client.post(PAY_CORRECTIONS, sheet | {"id": str(row.pk)}, format="json"),
+            client.post(f"{PAY_CORRECTIONS}{row.pk}/void/", {"reason": "Kosa"}, format="json"),
+        ]
+
+    for refused in asked():
+        assert (refused.status_code, refused.json()["code"]) == (403, "permission_denied")
+        assert "12345" not in refused.content.decode()
+    # On one side, the missing key is no key: a worker's pay is the whole shop's.
+    with shop_context(shop_a):
+        grant_permission(staff_a2, missing, side=sides["D"], by=None)
+    assert {refused.status_code for refused in asked()} == {403}
+    # With all three: a new one typed, the one somebody typed handed back, and crossed out.
+    with shop_context(shop_a):
+        grant_permission(staff_a2, missing, side=None, by=None)
+    assert [answer.status_code for answer in asked()] == [201, 201, 200]
+
+
+def test_correction_route_names_its_permissions() -> None:
+    # Typing one and crossing one out, both behind the approval's own key; the two of pay are asked for every action
+    # (the test above). Written out in full, as above.
+    assert PayCorrectionViewSet.action_permissions == {
+        "create": Permission.PAY_APPROVE,
+        "void": Permission.PAY_APPROVE,
+    }
 
 
 def test_pay_route_names_its_permissions() -> None:

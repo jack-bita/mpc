@@ -180,6 +180,18 @@ const CODES_THE_API_SENDS = [
   "payment.reference_used",
   "payment.reason_missing",
   "demo.no_signature",
+  // A correction of a later month, typed and crossed out (WAGE-10, apps/staffpay/services/correction.py): one's own; one
+  // who left whose pay is approved; a month to come, one the job didn't run in, one with no daily pay (and an approved
+  // one, pay.day_approved above); an amount of 0 or with cents, or of zeros too many; no reason. On the demo, a reason
+  // not a ready one is demo.ready_reasons.
+  "correction.own",
+  "correction.left_paid",
+  "correction.month_to_come",
+  "correction.outside_job",
+  "correction.not_paid_by_day",
+  "correction.amount_invalid",
+  "correction.amount_too_big",
+  "correction.reason_missing",
   // Explaining or closing a flag (CTRL-4, apps/control/services.py): no words; one closed already; one that names the
   // person closing it. On the demo, a note that isn't a ready one is demo.ready_reasons above.
   "flag.note_required",

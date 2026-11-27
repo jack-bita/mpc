@@ -90,6 +90,7 @@ export function pay(fields: Partial<Pay> = {}): Pay {
     meals: "16000.00",
     advances: "0.00",
     carried: "0.00",
+    corrections: "0.00",
     waiting: 0,
     no_rate: 0,
     total: "132000.00",
@@ -106,6 +107,7 @@ export const NO_PAY: Pay = {
   meals: "0.00",
   advances: "0.00",
   carried: "0.00",
+  corrections: "0.00",
   waiting: 0,
   no_rate: 0,
   total: "0.00",
@@ -172,6 +174,11 @@ export function workerPayMonth(
     // No ready reason to cross a payment out with, as off the demo it is typed (WAGE-9).
     void_reasons: [],
     keeps_signatures: true,
+    // No correction, and the month takes one; off the demo, their reasons are typed (WAGE-10).
+    corrections: [],
+    no_correction: null,
+    correction_reasons: [],
+    correction_void_reasons: [],
     ...fields,
   };
 }

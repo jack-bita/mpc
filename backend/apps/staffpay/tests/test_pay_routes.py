@@ -69,6 +69,7 @@ def ashas_line(staff: StaffMember) -> dict[str, object]:
             "meals": "1000.00",
             "advances": "0.00",
             "carried": "0.00",
+            "corrections": "0.00",
             "waiting": 1,
             "no_rate": 0,
             "total": "23500.00",
@@ -81,6 +82,7 @@ def ashas_line(staff: StaffMember) -> dict[str, object]:
             "meals": "0.00",
             "advances": "0.00",
             "carried": "0.00",
+            "corrections": "0.00",
             "waiting": 0,
             "no_rate": 0,
             "total": "10000.00",
@@ -130,6 +132,11 @@ def test_one_workers_pay_as_the_page_reads_it(staff_client_a: APIClient, asha: S
         # Off the demo, a payment is crossed out with the reason typed (WAGE-9).
         "void_reasons": [],
         "keeps_signatures": True,
+        # No correction yet, and November, still open, takes one; off the demo, its reasons are typed (WAGE-10).
+        "corrections": [],
+        "no_correction": None,
+        "correction_reasons": [],
+        "correction_void_reasons": [],
     }
 
 

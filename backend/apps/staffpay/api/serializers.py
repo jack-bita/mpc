@@ -59,6 +59,7 @@ from apps.staffpay.models import (
     MealMoney,
     NoPhoto,
     NoSignature,
+    PayCorrection,
     PaymentMethod,
     PayRate,
     PayRun,
@@ -73,8 +74,11 @@ from apps.staffpay.services import (
     DEMO_VOID_REASONS,
     PhotoState,
     advance_line,
+    correction_line,
     keeps_signatures,
     meal_line,
+    ready_correction_reasons,
+    ready_correction_void_reasons,
     tap_line,
 )
 
@@ -577,8 +581,9 @@ class PayLineSerializer(serializers.Serializer[Any]):
 class PaySerializer(serializers.Serializer[Any]):
     # A worker's pay over some days (Pay, apps/staffpay/calculations.py): the lines, the full days first; the fines and
     # the meals, each with how many days; the money given before payday (WAGE-8) and a debt carried from an earlier
-    # month (WAGE-3), on the days that are over and never on today's part; how many days wait for a decision, and how
-    # many paid days have no rate, neither paid; and what is left, which may be below 0.
+    # month (WAGE-3), on the days that are over and never on today's part; the corrections of mistakes found after an
+    # earlier month's approval, their sum, plus or minus (WAGE-10), on the same part; how many days wait for a decision,
+    # and how many paid days have no rate, neither paid; and what is left, which may be below 0.
     lines = PayLineSerializer(many=True)
     fined_days = serializers.IntegerField()
     fines = serializers.DecimalField(max_digits=14, decimal_places=2)
@@ -586,6 +591,7 @@ class PaySerializer(serializers.Serializer[Any]):
     meals = serializers.DecimalField(max_digits=14, decimal_places=2)
     advances = serializers.DecimalField(max_digits=14, decimal_places=2)
     carried = serializers.DecimalField(max_digits=14, decimal_places=2)
+    corrections = serializers.DecimalField(max_digits=14, decimal_places=2, help_text="Plus or minus (WAGE-10).")
     waiting = serializers.IntegerField()
     no_rate = serializers.IntegerField()
     total = serializers.DecimalField(max_digits=14, decimal_places=2)
@@ -709,6 +715,35 @@ class PayMonthAnswer(serializers.Serializer[Any]):
         return keeps_signatures()
 
 
+class VoidedCorrectionSerializer(serializers.Serializer[Any]):
+    # Who crossed out a correction, by nickname, when and why (WAGE-10). On the demo the reason is a ready one's code.
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+    reason = serializers.CharField()
+
+
+class CorrectionLineSerializer(serializers.Serializer[Any]):
+    # One correction of a worker's pay, as their page lists it (WAGE-10): what it adds or takes off, a string (rule 3),
+    # why, who typed it and when, and who crossed it out, or null while it counts. On the demo the reason is a ready
+    # one's code, which the page says in words.
+    id = serializers.UUIDField()
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2, help_text="Plus or minus.")
+    reason = serializers.CharField()
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+    voided = VoidedCorrectionSerializer(allow_null=True, help_text="Who crossed it out, or none while it counts.")
+
+
+# Why a month takes no correction for a worker (why_no_correction, apps/staffpay/selectors.py), as its code.
+NO_CORRECTION_CODES = [
+    "correction.left_paid",
+    "correction.month_to_come",
+    "correction.outside_job",
+    "correction.not_paid_by_day",
+    "pay.day_approved",
+]
+
+
 class WorkerPayMonthAnswer(serializers.Serializer[Any]):
     # One worker's pay of a month: their line of Mishahara, with its month and its days; and, for the page to say why
     # there is nothing, whether there is a line at all, and whether their first working day is to come. The line's field
@@ -735,9 +770,56 @@ class WorkerPayMonthAnswer(serializers.Serializer[Any]):
     keeps_signatures = serializers.SerializerMethodField(
         help_text="Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9)."
     )
+    # The month's corrections of the worker's pay, crossed out ones too, in the order typed (WAGE-10); why the month
+    # takes none, as its code, or null when it takes one, so the page offers Ongeza marekebisho only when the server
+    # would take it; and, on the demo alone, the ready reasons a correction is typed and crossed out with.
+    corrections = CorrectionLineSerializer(many=True)
+    no_correction = serializers.ChoiceField(
+        choices=[(code, code) for code in NO_CORRECTION_CODES],
+        allow_null=True,
+        help_text="Why this month takes no correction for the worker, or none when it takes one (WAGE-10).",
+    )
+    correction_reasons = serializers.SerializerMethodField(
+        help_text="The ready reasons a correction is typed with, on the demo alone; empty where it is typed."
+    )
+    correction_void_reasons = serializers.SerializerMethodField(
+        help_text="The ready reasons a correction is crossed out with, on the demo alone; empty where it is typed."
+    )
 
     def get_keeps_signatures(self, _answer: Any) -> bool:
         return keeps_signatures()
+
+    def get_correction_reasons(self, _answer: Any) -> list[str]:
+        return ready_correction_reasons()
+
+    def get_correction_void_reasons(self, _answer: Any) -> list[str]:
+        return ready_correction_void_reasons()
+
+
+class RecordCorrectionSerializer(serializers.Serializer[Any]):
+    # A correction as the sheet sends it (WAGE-10): its id, made on the phone (ADR-0007), required and a UUIDv7, as
+    # every create's; whose, a job of the visit's shop (WorkerField: another shop's "not found", as an id no shop has);
+    # the month whose pay takes it, the page's own; what it adds or takes off, a string, below 0 for Punguza malipo; and
+    # why. The amount's shape is checked here (a number, at most two places); the rest is record_correction's, each in
+    # its own code.
+    id = serializers.UUIDField(validators=[uuid7_only])
+    staff = WorkerField()
+    month = MonthField()
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    reason = serializers.CharField(max_length=200, allow_blank=True)
+
+
+class VoidCorrectionSerializer(serializers.Serializer[Any]):
+    # A correction crossed out, as the sheet sends it: why. Empty here is void_correction's to refuse, beside the box.
+    reason = serializers.CharField(max_length=200, allow_blank=True)
+
+
+class CorrectionAnswer(CorrectionLineSerializer):
+    # One typed or crossed out, answered as the page lists it (correction_line). The fields are
+    # CorrectionLineSerializer's own, so the schema describes the answer by itself, as an advance's does
+    # (AdvanceAnswer).
+    def to_representation(self, instance: PayCorrection) -> Any:
+        return super().to_representation(correction_line(instance))
 
 
 class SeenTotalSerializer(serializers.Serializer[Any]):

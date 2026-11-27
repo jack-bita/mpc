@@ -1622,6 +1622,16 @@
       "reference_used": "This transaction number is already used for another payment.",
       "reason_missing": "Write why."
     },
+    "correction": {
+      "own": "You can't add or cross out a correction of your own pay.",
+      "left_paid": "This worker has left, and their pay is closed.",
+      "month_to_come": "This month hasn't come yet.",
+      "outside_job": "This worker didn't work here in this month.",
+      "not_paid_by_day": "This worker has no daily pay in this month.",
+      "amount_invalid": "Type a whole number of shillings, not 0.",
+      "amount_too_big": "This amount is too big. Check its zeros.",
+      "reason_missing": "Write why."
+    },
     "flag": {
       "note_required": "Write a note.",
       "closed": "This flag is already closed.",
