@@ -318,6 +318,21 @@ describe("the office's home page", () => {
     expect(link.getAttribute("href")).toMatch(/^\/my-settings\/?$/);
   });
 
+  it("opens Siku na malipo yangu for everyone, beside Mipangilio yangu: their own need no key (Jack: A, WAGE-4)", async () => {
+    // Juma, a manager paid by the day, on his own phone with his password: his own days and pay are one tap away.
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["sale.create"] }]),
+    });
+
+    render(<OfficeHome />);
+
+    const link = await screen.findByRole("link", {
+      name: "Siku na malipo yangu",
+    });
+    expect(link.getAttribute("href")).toMatch(/^\/my-days-and-pay\/?$/);
+  });
+
   it("greets nobody the server refused since, though the store still holds their answer", async () => {
     // TanStack keeps the last answer beside a refusal: read first, it would greet a suspended person.
     const store = makeQueryClient();
