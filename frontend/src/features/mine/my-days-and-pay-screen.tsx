@@ -24,8 +24,10 @@
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "use-intl";
 
+import { ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { PageHeader } from "@/components/design/page-header";
 import { Tabs } from "@/components/design/tabs";
@@ -33,6 +35,7 @@ import { useTabInAddress, useWordInAddress } from "@/components/tab-in-address";
 import {
   isMonth,
   MONTH_PARAM,
+  monthBefore,
   monthOf,
 } from "@/features/attendance/attendance-month";
 import { MonthSwitch, usePagesClock } from "@/features/attendance/month-switch";
@@ -60,16 +63,31 @@ export function MyDaysAndPayScreen() {
     timezone === null ? null : monthOf(shopToday(timezone, openedAt));
   const thisMonth =
     timezone === null ? null : monthOf(shopToday(timezone, now));
-  // The month the address names, if it is one and not one to come; else the month the page opened on. One before the
-  // job began is the server's to refuse, with its words (mine.before_job): the page can't know the job's first day
-  // before its first answer.
+  // Whether the page stepped back a month by itself: a laptop's clock a few minutes fast, at 23:58 on 30 November, says
+  // December has come, and the server, whose clock decides, refuses it as still to come (the review). Opened with no
+  // month in the address, the page then shows the month before, once, rather than a refusal of a month nobody asked
+  // for. A month the address names is shown as asked, refusal and all.
+  const [stepBack, setStepBack] = useState(false);
+  // The month the address names, if it is one and not one to come; else the month the page opened on, or the one
+  // before it once stepped back. One before the job began is the server's to refuse, with its words (mine.before_job):
+  // the page can't know the job's first day before its first answer.
   const month =
     openedOn === null || thisMonth === null
       ? null
       : asked !== null && isMonth(asked) && asked <= thisMonth
         ? asked
-        : openedOn;
+        : stepBack
+          ? monthBefore(openedOn)
+          : openedOn;
   const days = useMyDays(month);
+  // Set while drawing, React's way to adjust to what a read answered, with no second draw of the refusal first; once.
+  if (
+    !stepBack &&
+    asked === null &&
+    days.error instanceof ApiRefusal &&
+    days.error.body.code === "mine.month_to_come"
+  )
+    setStepBack(true);
   const pay = useMyPay(month);
   const [askedTab, chooseTab] = useTabInAddress();
   const tab = TABS.find((each) => each === askedTab) ?? "siku";

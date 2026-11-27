@@ -140,6 +140,9 @@ const ASHAS_PAY: OwnPay = {
 };
 
 beforeEach(() => {
+  // A clean address for each test: the page keeps its tab and month there, and jsdom keeps the address between tests,
+  // so the Malipo tab's test would open the next one on Malipo.
+  window.history.replaceState(null, "", "/my-days-and-pay/");
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(NOW));
   answer("GET", ME, { status: 200, body: ASHA });
@@ -274,6 +277,25 @@ describe("my days and pay", () => {
     const said = await screen.findAllByText("Huna malipo kwa siku mwezi huu.");
     expect(said).toHaveLength(2);
     expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("steps back a month by itself when the laptop's clock is a little fast past midnight (the review)", async () => {
+    // The laptop says 00:02 on 1 December in Arusha; the server, whose clock decides, is still at 23:58 on 30 November,
+    // and refuses December as still to come. With no month in the address, the page shows November, not a refusal.
+    vi.setSystemTime(new Date("2026-11-30T21:02:00Z"));
+    answer("GET", MY_DAYS, (request) =>
+      new URL(request.url).searchParams.get("month") === "2026-12"
+        ? Response.json(refusal(400, "mine.month_to_come").body, {
+            status: 400,
+          })
+        : Response.json({ ...ASHAS_NOVEMBER, today: "2026-11-30" }),
+    );
+    render(<MyDaysAndPayScreen />);
+
+    expect(
+      await screen.findByRole("table", { name: "Siku za Asha, Novemba 2026" }),
+    ).toBeDefined();
+    expect(screen.queryByText("Mwezi huu bado haujafika.")).toBeNull();
   });
 
   it("says why a month is refused", async () => {
