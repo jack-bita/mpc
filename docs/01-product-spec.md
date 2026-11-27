@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.13 · 26 Nov 2026 · Portion 1 of the planning pack
+**Version:** 1.14 · 27 Nov 2026 · Portion 1 of the planning pack
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Open questions are collected in §14. Key decisions are recorded as ADRs in `docs/adr/`.
 
 **Changes in v1.1** (18 Oct 2026): applies the build plan's Appendix A (`04-build-plan.md`). Attendance (R1b) is built and switched on first, then the Drugs side (R1), then the Foods side (R2); every part lives in the one website and is switched on in settings (§7.8, §10, §11, §14 — 04 BP7, ADR-0033). §6 now states the side decision (02 D1, ADR-0001).
@@ -24,6 +24,8 @@
 **Changes in v1.9** (19 Nov 2026, ATT-11's review): §8.1, a tap the server timed itself, sent at once, is never in doubt for a later tap that disagrees with it, as no laptop's clock can make the server's time wrong (02 v1.47, 04 v1.144). Marked **(v1.9)**.
 
 **Changes in v1.10** (25 Nov 2026, from Jack, WAGE-2): §8.1, a fine never takes a day's pay below 0; half a day's pay is rounded once, by itself; and one who leaves is paid for the day they leave as soon as they clock out, with that day's meals (02 v1.66, 04 v1.197). Marked **(v1.10)**.
+
+**Changes in v1.14** (27 Nov 2026, from Jack, WAGE-10): §7.8 and §8.1, a mistake found after a month is approved is put right in a later month's pay, plus or minus, with its reason, a line of its own, typed only by whoever approves pay, never on their own; one who left, whose pay is approved, is paid by hand. A tap a laptop sends after its day's pay was approved is shown on *Tofauti* (02 v1.73, 04 v1.213). Marked **(v1.14)**.
 
 **Changes in v1.13** (26 Nov 2026, from Jack, WAGE-9): §7.8 and §8.1, an approved month's pay is handed out: the whole of it at once; in cash, the worker signs on the screen first; by M-Pesa or a bank, the transaction number is typed. Nobody marks their own pay paid, and one marked by mistake is crossed out, with a reason, and stays (02 v1.72, 04 v1.209). Marked **(v1.13)**.
 
@@ -210,6 +212,7 @@ Release tags: **R1** Drugs side live · **R1b** attendance and pay · **R2** Foo
 - Money given before payday (an advance), typed on the day it is given, by the owner or a manager, never their own **(v1.11)**
 - A month's pay approved once it is over, with one tap, by the owner or whoever he gives the key to: a payslip per worker is kept, and nothing of that month can change any more **(v1.12)**
 - Each worker signs for their pay on the screen, with a finger, as they sign on paper today, so a payment marked by one person alone proves nothing; paid by M-Pesa or a bank, its transaction number is typed instead **(v1.13)**; the month's sheet is printed with each name, amount and signature, for NSSF and the owner's file **(v1.12)**
+- A mistake found after a month is approved is put right in a later month's pay, by the owner or whoever approves pay, with its reason; a clock-in a laptop sends after the approval is shown on *Tofauti*, for someone to check **(v1.14)**
 - Each worker can see their own payslip
 - Rates, the fine and the cut-off times are settings with start dates
 - Offline clock-in is protected against changes to the device clock
@@ -250,6 +253,7 @@ In this order: a price list with in-stock status (browse by animal and problem) 
 - **Advances** **(v1.11)**: money given to a worker before payday is typed on the day it is given, and comes off the pay of that month, in full. One bigger than the pay so far is kept all the same, as the money was given. Nobody types or crosses out their own.
 - **Approving the month** **(v1.12)**: once a month is over, the owner reads *Mishahara* and approves it, once, for everyone. Each worker's payslip is kept as it was read, and no day, clock event, pay rate, meal money or advance of that month can be added, decided or crossed out any more; a mistake found later is put right in the next month's pay. A day that still waits for a decision refuses the approval, and is named. A shop laptop that has sent nothing since the month ended is named too, and stops nothing. Months are approved in order.
 - **Paying** **(v1.13)**: once a month is approved, each worker's pay is handed out, the whole of it at once (Jack: A). In cash, the worker draws their signature on the screen first, with a finger, or a mouse on a laptop; by M-Pesa or a bank, its transaction number is typed, and a number used already is refused. *Mishahara* then shows who is paid, and how much is still to hand out. Nobody marks their own pay paid. A payment marked by mistake is crossed out, with a reason, and stays, with its signature; the worker is then paid again. A mistake found after the approval is put right in a later month's pay (WAGE-10).
+- **Corrections** **(v1.14)**: a mistake found after a month is approved never changes that month. It is put right in a month still open: the owner adds a correction to the worker's pay, plus (*Ongeza malipo*) or minus (*Punguza malipo*), with its reason, and it is a line of its own on that month's payslip: Juma's November was 9,000 short, so his December pays + 9,000, *Novemba: siku ya 12/11 haikuhesabiwa*. Only whoever approves pay adds or crosses out one (Jack: A), never on their own pay; one crossed out stays, struck through. One who left, whose pay is approved, has no later pay, so the owner pays them by hand (Jack: A). A clock-in or clock-out a laptop sends after its day's pay was approved is kept, never counted, and shown on *Tofauti* with the worker's name, so nobody's pay is short without anyone knowing.
 - **A total below 0** **(v1.12)**: one who took more before payday than they earned is paid 0, and the debt comes off the next month they are paid in. The whole of a month counts them as 0, so it is what the month pays.
 - **Leaving mid-month** **(v1.2)**: a worker who leaves is paid up to their last day. The system already holds that pay, worked out day by day, so the owner reads it and pays. The day they leave counts as soon as they clock out, less their share of that day's meals, split among those who have come by then **(v1.10)**. They are approved alone, that evening, and the month's approval holds that payslip **(v1.12)**.
 
