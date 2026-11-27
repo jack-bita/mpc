@@ -69,6 +69,14 @@ by mistake, and paid again:
     Asha, Novemba   152,000.00  cash          —           Baba
     Juma, Novemba   132,000.00  mobile_money  QK7H2M9XPL  Baba     by Baba: "Nilibonyeza mfanyakazi mwingine"
     Juma, Novemba   132,000.00  mobile_money  QK7H2N4ZTR  Baba
+
+And a mistake found after a month's approval, put right in a later month's pay (PayCorrection, WAGE-10), a ledger too:
+plus or minus, with its reason, typed by whoever approves pay, and a line of its own on that month's payslip, so the
+approved month still says what it paid:
+
+    who    month     amount     reason                                     typed by  crossed out
+    Juma   Desemba   +90,000.00  Novemba: siku ya 12/11 haikuhesabiwa      Baba      by Baba: "Kiasi kimekosewa"
+    Juma   Desemba    +9,000.00  Novemba: siku ya 12/11 haikuhesabiwa      Baba
 """
 
 from decimal import Decimal
@@ -807,6 +815,114 @@ class Advance(AppendOnly):
 
     def __str__(self) -> str:
         return f"{self.date:%Y-%m-%d} {self.amount}"
+
+
+# The most one correction may add or take off (WAGE-10), as an advance (above): see its rule below.
+MOST_CORRECTION = Decimal("10000000.00")
+
+
+class PayCorrection(AppendOnly):
+    # A mistake found after a month's pay was approved, put right in a later month's pay (WAGE-10, 02 §12, A3): Baba
+    # finds on 3 December that Juma's November was 9,000 short, and adds + 9,000 to Juma's December, with its reason.
+    # The approved month is never changed, as Juma may already hold its cash: the next one pays the difference, a line
+    # of its own on its payslip (PayslipLine, below), so both months say what they paid. Typed and crossed out only by
+    # whoever approves pay (Jack: A), as a correction changes what a worker is owed with no cash to show for it, unlike
+    # an advance; never on their own pay. Who typed it is the row's `created_by` (ShopScoped). Money, so a ledger (rule
+    # 2, T2), as an advance is: written once, never changed or deleted, all but the void stamp, filled once, which the
+    # trigger in this table's migration holds in PostgreSQL (ADR-0021). Never on a laptop, as pay never sits on a shared
+    # device (03 §6.1): no line in the change log. Written only by record_correction and void_correction
+    # (apps/staffpay/services/money.py), which ask who may.
+
+    # Whose: a job, not a person, as an advance's is: a person hired again (PPL-11) has a new job, and a correction of
+    # the old job's pay goes on the old job's. PROTECT: nothing is deleted. No index of its own: every read starts
+    # from the month (below).
+    staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
+    # The month whose pay takes it, as its first day on the shop's own calendar, as a run's month is: 2026-12-01 is
+    # December. Not the month of the mistake, which the reason says: the month whose page it was typed on, one still
+    # open, which the service checks, as a month may be approved after the row is written.
+    month = models.DateField()
+    # What it adds (above 0) or takes off (below 0), as the payslip line it becomes holds it; never 0, which corrects
+    # nothing. Money, so numeric(14,2) and a Decimal, never a float (rule 3, 03 §9); in whole shillings, and at most ten
+    # million either way, as the rules below hold.
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    # Why, in the person's own words ("Novemba: siku ya 12/11 haikuhesabiwa"): always, as a payslip line nobody can
+    # explain would be a number the worker must take on trust. Copied onto the payslip's line at the approval (T4).
+    reason = models.CharField(max_length=200)
+    # The void stamp (03 §5.6), the same shape as an advance's: empty while the row counts, filled once when it is
+    # crossed out, then frozen. That whoever voids is of this row's shop is the void service's check (T1).
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        "people.StaffMember", on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
+    void_reason = models.TextField(blank=True)
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). The amount's
+        # and the reason's rules carry the codes the page translates (ADR-0032), as the model's own checks (full_clean)
+        # name them to the person who typed it; the database holds the same rules for whatever writes past them.
+        constraints = [
+            # A month is its first day, as a run's is: one month, one way to write it, so a month's corrections are
+            # read with one equality. No code: the service builds the date from the month asked, so another day here
+            # is a bug in our code.
+            models.CheckConstraint(condition=Q(month__day=1), name="staffpay_paycorrection_month_first_day"),
+            # A correction of 0 corrects nothing, and would be a line on the payslip saying nothing.
+            models.CheckConstraint(
+                condition=~Q(amount=0),
+                name="staffpay_paycorrection_not_zero",
+                violation_error_code="correction.amount_invalid",
+            ),
+            # Whole shillings, as every amount a person types (Jack, 16 Nov 2026). FLOOR of a whole amount is itself,
+            # below 0 too: FLOOR(-9000.50) is -9001.
+            models.CheckConstraint(
+                condition=Q(amount=Floor("amount")),
+                name="staffpay_paycorrection_whole_shillings",
+                violation_error_code="correction.amount_invalid",
+            ),
+            # No more than ten million either way: more than anyone's month, so a slip of the zeros, as an advance's
+            # rule says. More than that, truly owed, is typed in two rows.
+            models.CheckConstraint(
+                condition=Q(amount__lte=MOST_CORRECTION, amount__gte=-MOST_CORRECTION),
+                name="staffpay_paycorrection_at_most",
+                violation_error_code="correction.amount_too_big",
+            ),
+            # Always a reason, with at least one character that isn't a space.
+            models.CheckConstraint(
+                condition=Q(reason__regex=r"\S"),
+                name="staffpay_paycorrection_says_why",
+                violation_error_code="correction.reason_missing",
+            ),
+            # It changes a worker's pay, so it never stands with nobody's name on it. No code, here or on the rules
+            # below: the route always knows who sent the request, and the service refuses one's own first, in its own
+            # words, so such a row is a bug in our code, never a person's mistake.
+            models.CheckConstraint(
+                condition=Q(created_by__isnull=False), name="staffpay_paycorrection_typed_by_someone"
+            ),
+            # Never one's own, typed or crossed out (Jack: A): nobody raises their own pay, or takes back a deduction,
+            # on their own word. What one row can say: the job. That a person hired again leaves their other job's
+            # alone too is the services' check, which read the person behind each job.
+            models.CheckConstraint(condition=~Q(created_by=F("staff")), name="staffpay_paycorrection_typed_by_another"),
+            models.CheckConstraint(
+                condition=Q(voided_by__isnull=True) | ~Q(voided_by=F("staff")),
+                name="staffpay_paycorrection_voided_by_another",
+            ),
+            # A void says who and why (T2): all three empty, or all three filled, the reason with at least one
+            # character that isn't a space, as an advance's.
+            models.CheckConstraint(
+                condition=(
+                    Q(voided_at__isnull=True, voided_by__isnull=True, void_reason="")
+                    | Q(voided_at__isnull=False, voided_by__isnull=False, void_reason__regex=r"\S")
+                ),
+                name="staffpay_paycorrection_void_complete",
+            ),
+        ]
+        indexes = [
+            # How a month's are read: the pay's, every worker's at once, and the approval's. Leads with `shop`, as
+            # every index does (03 §9).
+            models.Index(fields=["shop", "month"], name="staffpay_correction_by_month"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.month:%Y-%m} {self.amount:+}"
 
 
 class PayRun(AppendOnly):

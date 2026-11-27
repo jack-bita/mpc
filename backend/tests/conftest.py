@@ -52,6 +52,7 @@ from apps.staffpay.models import (
     ClockKind,
     MealMoney,
     NoPhoto,
+    PayCorrection,
     PaymentMethod,
     PayRun,
     Payslip,
@@ -79,6 +80,7 @@ def sweep_shops(
     sweep_meal_money: tuple[Shop, Shop],
     sweep_advances: tuple[Shop, Shop],
     sweep_payslips: tuple[Shop, Shop],
+    sweep_corrections: tuple[Shop, Shop],
 ) -> tuple[Shop, Shop]:
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
     # sides, a paired device each, which the office device list shows (AUTH-5), with an offline period the health page
@@ -87,7 +89,8 @@ def sweep_shops(
     # pay rates route lists (WAGE-1), a worker's days in the book, which the month page lists (ATT-5), a flag with its
     # note, which the flags' page lists (CTRL-4), a day's meal money, which Hela ya chakula lists (WAGE-7), money given
     # before payday, which Advansi lists (WAGE-8), and an approved month and a payslip, which the pay's routes show
-    # (WAGE-3), with its payment, crossed out through its own route (WAGE-9).
+    # (WAGE-3), with its payment, crossed out through its own route (WAGE-9), and a correction of a worker's pay, which
+    # their pay shows (WAGE-10).
     return sweep_sides
 
 
@@ -305,6 +308,28 @@ def sweep_payslips(
                 reference=reference,
                 created_by=staff,
             )
+    return sweep_attendance
+
+
+@pytest.fixture
+def sweep_corrections(
+    sweep_attendance: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember
+) -> tuple[Shop, Shop]:
+    # A correction of the pay of each shop's worker paid by the day (sweep_attendance), in yesterday's month, still
+    # open, of an amount and with a reason only that shop holds (WAGE-10): a worker's pay lists it, and the sweep sends
+    # shop A's to be crossed out. Written past record_correction, whose maker would need the keys. And one crossed out,
+    # with a reason only that shop holds.
+    for shop, staff, name, amount, reason, why in (
+        (sweep_attendance[0], staff_a, "Mhudhuriaji Mfano", "27193", "Marekebisho ya Mfano", "Kosa la Mfano"),
+        (sweep_attendance[1], staff_b, "Mhudhuriaji Jirani", "-61729", "Marekebisho ya Jirani", "Kosa la Jirani"),
+    ):
+        with shop_context(shop):
+            month = (shop_today(shop) - timedelta(days=1)).replace(day=1)
+            worker = StaffMember.objects.get(display_name=name)
+            facts = {"shop": shop, "staff": worker, "month": month, "amount": Decimal(amount), "created_by": staff}
+            PayCorrection.objects.create(reason=reason, **facts)
+            crossed = {"voided_at": timezone.now(), "voided_by": staff, "void_reason": why}
+            PayCorrection.objects.create(reason=reason, **facts, **crossed)
     return sweep_attendance
 
 
