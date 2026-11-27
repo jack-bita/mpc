@@ -916,9 +916,11 @@ class VoidPaymentSerializer(serializers.Serializer[Any]):
 # what a worker is shown. Built from the manager's own parts wherever a part is the same (a decision, who added or
 # crossed out a tap, a pay's lines, an approval), so the app shows both with the same pieces. Left out, with why:
 # a tap's photo, which its route opens only for whoever fixes attendance, and its doubt, the shop's check on a
-# laptop; a day's choices and its id, the address a decision goes to; the payslip's id and the offer of Lipa; a
-# payment's signature; what the approval waits for, which names other workers and laptops; and why the month takes no
-# correction, an offer only whoever approves pay is made.
+# laptop; a day's choices and its id, which only a decision is sent to; the payslip's id, which only Lipa is sent to;
+# a payment's signature; what the approval waits for, which names other workers and laptops; and why the month takes
+# no correction, an offer only whoever approves pay is made. A tap's, a payment's and a correction's ids stay, though
+# a manager's action is sent to them too: the page keys its lists by them, and each route that acts on one asks its
+# own keys, which a worker doesn't hold (the review).
 
 
 class OwnDaySerializer(serializers.Serializer[Any]):

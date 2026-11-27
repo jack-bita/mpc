@@ -13,13 +13,14 @@
 //   Jumla ya kumlipa leo         TSh 102,000
 //   ! Siku 1 inasubiri uamuzi
 //
-// On the worker's pay page (worker-pay-screen.tsx) and in the card of their own page (worker-month-pay.tsx), so both show
-// the same; and on the worker's own Siku na malipo yangu (WAGE-4, my-pay.tsx), the same lines said to them (voice
-// "own": Jumla ya kulipwa leo, Unadaiwa), with no row to open. Today's lines, once they tapped Toka, are apart, as today isn't over: its meals are split so far (Jack: A).
-// Then what they were given before payday (WAGE-8), today's with it, and what an earlier month's pay left owed (WAGE-3),
-// just above the total; last, each correction of an earlier month's mistake, with its reason, plus or minus (WAGE-10).
-// A total below 0 pays nothing, and the page says what is owed (Jack: A). Every amount is the
-// server's; the page multiplies and adds up nothing. Once a payslip keeps the pay, these are its lines as they were kept.
+// On the worker's pay page (worker-pay-screen.tsx) and in the card of their own page (worker-month-pay.tsx), so both
+// show the same; and on the worker's own Siku na malipo yangu (WAGE-4, my-pay.tsx), the same lines said to them (voice
+// "own": Jumla ya kulipwa leo, Unadaiwa), with no row to open. Today's lines, once they tapped Toka, are apart, as
+// today isn't over: its meals are split so far (Jack: A). Then what they were given before payday (WAGE-8), today's
+// with it, and what an earlier month's pay left owed (WAGE-3), just above the total; last, each correction of an
+// earlier month's mistake, with its reason, plus or minus (WAGE-10). A total below 0 pays nothing, and the page says
+// what is owed (Jack: A). Every amount is the server's; the page multiplies and adds up nothing. Once a payslip keeps
+// the pay, these are its lines as they were kept.
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";

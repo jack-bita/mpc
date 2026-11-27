@@ -417,7 +417,8 @@ def sweep_own_days_and_pay(
     # names (WAGE-4): so each shop's staff member gets, in their own month, this month, a tap of today entered in the
     # office, and a correction of their pay, each with a reason only that shop holds, for the routes to show. Entered
     # and typed by the shop's worker paid by the day (sweep_attendance), as nobody adds their own tap or corrects their
-    # own pay. At one minute past midnight, so the tap is never ahead of the clock. Written past add_tap and
+    # own pay. At one minute past midnight, the day's first minute: ahead of the clock only while the sweep runs in
+    # that one minute, which no route minds, as none reads a tap's time against the clock. Written past add_tap and
     # record_correction, whose makers would need the keys.
     for shop, staff, name, why, amount, reason in (
         (
