@@ -17,7 +17,7 @@ import type {
 } from "@/features/attendance/attendance-month";
 import { useRefusedRecordWords } from "@/i18n/refused-record";
 import { Decimal } from "@/lib/decimal";
-import { dayPart, formatDayMonth, formatTime, weekdayOf } from "@/lib/format";
+import { clockPart, formatDayMonth, weekdayOf } from "@/lib/format";
 import { shopToday } from "@/offline/rules";
 
 import { type Flag, type FlagNote, isRaised } from "./flags";
@@ -98,24 +98,31 @@ export function useWhatHappened(timezone: string): (flag: Flag) => {
       }
       case "invalid_document":
         return said(t("recordRefused"));
-      case "late_record":
-        // Asha's Ingia of Monday 30/11 at 07:20, by the laptop's clock, the only time it has; sent on Wednesday 2/12,
-        // when the server saw it, after November's approval. Its month is the tap's own day's.
+      case "late_record": {
+        // Asha's Ingia of Monday 30/11 at 07:20, its day and minute by the time the server trusts, on the shop's clock,
+        // never the laptop's own beside it, as the two may disagree (WAGE-10's review); sent on Wednesday 2/12, when the
+        // server saw it, after November's approval. A tap whose time it trusts none says its day alone. Its month is
+        // the tap's own day's.
+        if (flag.tap === null) return said(t("lateRecord", { name }));
+        const words = {
+          name,
+          kind: tapKind(flag.tap.kind),
+          day: dayWords(flag.tap.day),
+          sent: dayWords(shopToday(timezone, Date.parse(flag.raised_at))),
+          month: months(flag.tap.day.slice(5, 7) as MonthNumber),
+        };
         return said(
-          flag.tap === null || flag.made_at === null
-            ? t("lateRecord", { name })
+          flag.tap.time === null
+            ? t("lateTapNoTime", words)
             : t("lateTap", {
-                name,
-                kind: tapKind(flag.tap.kind),
-                day: dayWords(flag.tap.day),
+                ...words,
                 time: attendance("timeOfDay", {
-                  time: formatTime(flag.made_at, timezone),
-                  part: dayPart(flag.made_at, timezone),
+                  time: flag.tap.time,
+                  part: clockPart(flag.tap.time),
                 }),
-                sent: dayWords(shopToday(timezone, Date.parse(flag.raised_at))),
-                month: months(flag.tap.day.slice(5, 7) as MonthNumber),
               }),
         );
+      }
     }
   };
 }

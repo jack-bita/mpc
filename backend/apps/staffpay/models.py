@@ -360,10 +360,14 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
         # What a flag about this tap says on its page (CTRL-4): whose, which, and the day to open, on the shop's own
         # calendar, by the book's own rule (tap_day): 00:30 on Monday in Arusha is still Sunday in UTC. Imported here,
         # not at the top: calculations.py imports this file, and each would wait for the other.
-        from apps.staffpay.calculations import tap_day
+        from apps.staffpay.calculations import shop_minute, tap_day
 
-        day = tap_day(self.trusted_time, self.client_time, ZoneInfo(self.shop.timezone))
-        return FlagFacts(tap=FlaggedTap(staff=self.staff_id, kind=self.kind, day=day))
+        zone = ZoneInfo(self.shop.timezone)
+        day = tap_day(self.trusted_time, self.client_time, zone)
+        # Its minute by the time the server trusts, on the shop's clock, or none when it trusts none: never the laptop's
+        # own beside a day the server placed, as the two may disagree (WAGE-10's review).
+        minute = None if self.trusted_time is None else shop_minute(self.trusted_time, zone)
+        return FlagFacts(tap=FlaggedTap(staff=self.staff_id, kind=self.kind, day=day, time=minute))
 
 
 class AttendanceDay(ShopScoped):

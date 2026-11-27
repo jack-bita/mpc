@@ -5501,12 +5501,19 @@
                         "type": "string",
                         "format": "date",
                         "description": "Its day on the shop's calendar."
+                    },
+                    "time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true,
+                        "description": "Its minute on the shop's clock, by the time the server trusts; none when it trusts none."
                     }
                 },
                 "required": [
                     "day",
                     "kind",
-                    "staff"
+                    "staff",
+                    "time"
                 ]
             },
             "FontEnum": {

@@ -47,6 +47,11 @@ class FlaggedTapSerializer(serializers.Serializer[Any]):
     # description gives both one name.
     kind = serializers.ChoiceField(choices=[("in", "In"), ("out", "Out")])
     day = serializers.DateField(help_text="Its day on the shop's calendar.")
+    time = serializers.TimeField(
+        format="%H:%M",
+        allow_null=True,
+        help_text="Its minute on the shop's clock, by the time the server trusts; none when it trusts none.",
+    )
 
 
 class FlagNoteSerializer(serializers.Serializer[Any]):

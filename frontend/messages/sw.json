@@ -1221,6 +1221,7 @@
       "numbersWentBack": "Namba za kumbukumbu za kompyuta hii zimerudi nyuma: seva ilisubiri namba {expected}, ikaja namba {actual}.",
       "recordRefused": "Seva haikuweza kuhifadhi kumbukumbu iliyotumwa na kompyuta hii.",
       "lateTap": "{name} alibonyeza {kind} {day}, saa {time}, lakini kompyuta iliituma {sent}, baada ya malipo ya {month} kuidhinishwa. Haikuhesabiwa kwenye malipo yake.",
+      "lateTapNoTime": "{name} alibonyeza {kind} {day}, lakini kompyuta iliituma {sent}, baada ya malipo ya {month} kuidhinishwa. Haikuhesabiwa kwenye malipo yake.",
       "lateRecord": "{name} aliandika kumbukumbu iliyofika baada ya malipo kuidhinishwa, kwa hiyo haikuhesabiwa kwenye malipo yake.",
       "another": "Mfumo umeona tofauti ambayo toleo hili la programu halijui kuieleza."
     },

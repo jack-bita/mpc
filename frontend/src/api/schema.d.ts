@@ -1802,6 +1802,11 @@ export interface components {
              * @description Its day on the shop's calendar.
              */
             day: string;
+            /**
+             * Format: time
+             * @description Its minute on the shop's clock, by the time the server trusts; none when it trusts none.
+             */
+            time: string | null;
         };
         /**
          * @description * `default` - Default
