@@ -146,9 +146,11 @@ function WhatHappened({ flag, me }: { flag: Flag; me: WhoIsHere }) {
           </div>
         ) : null}
         {/* A tap that came after its day's pay was approved (WAGE-10): its worker's pay of the shop's month, the sheet
-            open, for whoever approves pay. A worker who left and was paid takes none, and that page says why. */}
+            open, for whoever approves pay, never on a flag that names them, as nobody corrects their own pay (Jack: A).
+            A worker who left and was paid takes none, and that page says why. */}
         {flag.kind === "late_record" &&
         flag.tap !== null &&
+        !flag.names_you &&
         mayApprovePay(me) ? (
           <div>
             <ButtonLink

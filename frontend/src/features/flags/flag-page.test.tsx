@@ -132,6 +132,14 @@ describe("one flag's page", () => {
       ).toBeNull();
       second.unmount();
 
+      // Their own late tap: nobody corrects their own pay (Jack: A), so no way there from here (the review).
+      const own = show({ ...late, names_you: true }, APPROVES_PAY);
+      await screen.findByText("Hali");
+      expect(
+        screen.queryByRole("link", { name: "Ongeza marekebisho" }),
+      ).toBeNull();
+      own.unmount();
+
       // A flag of another kind about a tap: its day alone.
       show(flag({ kind: "unverified_time" }), APPROVES_PAY);
       await screen.findByText("Hali");
