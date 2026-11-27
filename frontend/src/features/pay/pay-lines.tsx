@@ -36,8 +36,14 @@ import { type CorrectionLine, useReasonWords } from "./corrections";
 import type { WorkerPay } from "./pay";
 import { type Counted, isThisMonth, Left, NotPaid } from "./pay-notes";
 
-/** One row: what, how many, and how much. */
-type Row = { key: string; what: string; many: string; amount: string };
+/** One row: what, how many, and how much; and, for a correction the page lets open, what a tap opens. */
+type Row = {
+  key: string;
+  what: string;
+  many: string;
+  amount: string;
+  open?: () => void;
+};
 
 /** An amount that may be either way, with its sign: "+ 9,000", "− 5,000" (WAGE-10). */
 export function useSignedAmount(): (amount: string) => string {
@@ -54,12 +60,16 @@ export function PayLines({
   answer,
   worker,
   corrections,
+  onCorrection,
 }: {
   /** The month the pay is of. */
   answer: Counted;
   worker: WorkerPay;
   /** The corrections that count, in the order typed: each its own line, with its reason (WAGE-10). */
   corrections: CorrectionLine[];
+  /** A correction's line tapped: the page opens its sheet, with Batilisha (WAGE-10). With none, the lines are only
+   * read, as on a month whose pay is approved, or for whoever may not cross one out. */
+  onCorrection?: (line: CorrectionLine) => void;
 }) {
   const t = useTranslations("pay");
   const monthWords = useTranslations("attendanceMonth");
@@ -142,6 +152,7 @@ export function PayLines({
       what: t("correction.line", { reason: reasonWords(line.reason) }),
       many: "",
       amount: signed(line.amount),
+      open: onCorrection === undefined ? undefined : () => onCorrection(line),
     });
 
   return (
@@ -153,7 +164,19 @@ export function PayLines({
           {rows.map((row) => (
             <tr key={row.key}>
               <th scope="row" className="py-1 text-left font-normal">
-                {row.what}
+                {/* A button where the page lets it open: its sheet says who typed it, and offers Batilisha. Still the
+                    row's name, so the table reads the same. */}
+                {row.open === undefined ? (
+                  row.what
+                ) : (
+                  <button
+                    type="button"
+                    onClick={row.open}
+                    className="text-left underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {row.what}
+                  </button>
+                )}
               </th>
               {/* Kept on one line: "14 × 10,000" cut in two reads as two numbers. */}
               <td className="px-3 py-1 text-right whitespace-nowrap">

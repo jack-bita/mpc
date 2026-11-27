@@ -988,6 +988,15 @@
         "dayNotCounted": "Siku haikuhesabiwa",
         "paidTooMuch": "Alilipwa zaidi",
         "wrongAmount": "Kiasi kimekosewa"
+      },
+      "reasonSaid": "Sababu: {reason}",
+      "typedBy": "Imeandikwa na {by} · {date} {time}",
+      "crossedOut": "Marekebisho yaliyobatilishwa",
+      "voidedBy": "Imebatilishwa na {by} · {date} {time}: {reason}",
+      "void": {
+        "title": "Marekebisho ya {name} · {amount}",
+        "reason": "Sababu ya kubatilisha",
+        "action": "Batilisha"
       }
     }
   },

@@ -988,6 +988,15 @@
         "dayNotCounted": "A day wasn't counted",
         "paidTooMuch": "Paid too much",
         "wrongAmount": "Wrong amount"
+      },
+      "reasonSaid": "Reason: {reason}",
+      "typedBy": "Typed by {by} · {date} {time}",
+      "crossedOut": "Corrections crossed out",
+      "voidedBy": "Crossed out by {by} · {date} {time}: {reason}",
+      "void": {
+        "title": "Correction of {name}'s pay · {amount}",
+        "reason": "Why it is crossed out",
+        "action": "Cross out"
       }
     }
   },
