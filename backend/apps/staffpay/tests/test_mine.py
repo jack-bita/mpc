@@ -13,11 +13,11 @@ import datetime as dt
 from decimal import Decimal
 
 import pytest
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember, User
-from apps.people.services import add_staff, hire_again, mark_left
+from apps.people.services import add_staff, hire_again, mark_left, suspend
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import ClockKind
@@ -145,6 +145,21 @@ def test_hired_again_reads_only_the_job_logged_in_as(shop_a: Shop, juma: StaffMe
     with shop_context(shop_a), pytest.raises(ValidationError) as refused:
         own_attendance(shop_a, again, dt.date(2026, 9, 1))
     assert refused.value.code == "mine.before_job"
+
+
+@pytest.mark.parametrize("how", ["suspended", "left"])
+def test_a_job_not_working_now_reads_nothing(how: str, shop_a: Shop, juma: StaffMember) -> None:
+    # Juma suspended while the shop looks into a loss, or gone: whoever asks, his own days and pay read nothing (X2),
+    # though the copy of his job the caller holds still says he works here, as a login loaded before he stopped would.
+    tapped(juma, (ClockKind.IN, 7, 50), date=MONDAY)
+    with shop_context(shop_a):
+        if how == "suspended":
+            suspend(juma, by=None, reason="Uchunguzi wa upotevu")
+        else:
+            mark_left(juma, left_on=TUESDAY, by=None, reason="Ameacha kazi")
+    for read in (own_attendance, own_pay):
+        with shop_context(shop_a), pytest.raises(PermissionDenied):
+            read(shop_a, juma, NOVEMBER)
 
 
 def test_another_shops_job_fails_loudly(shop_a: Shop, shop_b: Shop, juma: StaffMember) -> None:

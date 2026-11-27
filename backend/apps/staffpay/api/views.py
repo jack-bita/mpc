@@ -769,15 +769,10 @@ class MineViewSet(ShopViewSet[StaffMember]):
 
     def _job(self) -> StaffMember:
         # The job the login names, read afresh through the guard, inside the visit's shop: a PIN's session names its
-        # job, a password's the job it chose at this shop. One that isn't working now reads nothing (X2): a real login
-        # already refuses a suspended person (`staff.suspended`) and finds no job for one who left, so this stops a
-        # login that loaded the job before it stopped, as the tests' logins do, the status read here, never trusted.
-        # cast: an office visit's actor is always a staff member (perform_authentication refused any other).
-        job = StaffMember.objects.get(pk=cast(StaffMember, self.actor).pk)
-        if job.status != StaffStatus.ACTIVE:
-            # English for the logs; the screens translate the code (ADR-0032).
-            raise exceptions.PermissionDenied("This person is not working here now.")
-        return job
+        # job, a password's the job it chose at this shop. One that isn't working now is refused by the reads themselves
+        # (own_attendance, own_pay), which keep that rule (X2). cast: an office visit's actor is always a staff member
+        # (perform_authentication refused any other).
+        return StaffMember.objects.get(pk=cast(StaffMember, self.actor).pk)
 
     def _month(self, request: Request) -> date:
         asked = AttendanceMonthQuery(data=request.query_params)

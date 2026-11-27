@@ -16,9 +16,10 @@ reaches her by itself.
 import datetime as dt
 from dataclasses import replace
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 
-from apps.people.models import StaffMember
+from apps.core.tenancy import ShopMismatch
+from apps.people.models import StaffMember, StaffStatus
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_today
 from apps.staffpay.services.attendance import TapLine, WorkerAttendance, worker_attendance
@@ -30,7 +31,8 @@ def own_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAttend
     """The month of `month`, any day of it, of `job`, as its own worker reads it (WAGE-4): the manager's very answer
     (worker_attendance), worked out through the book as his is, so it writes as the book does, and asked twice writes
     nothing the second time. Asked as the worker, so no day of it offers a choice: nobody decides their own day (ATT-6).
-    A month before the job's first, or one still to come, is refused. The shop must be open, and the job one of it."""
+    A job not working now, or a month before the job's first, or one still to come, is refused. The shop must be open,
+    and the job one of it."""
     first = _check_own_month(shop, job, month)
     answer = worker_attendance(shop, job, first, viewer=job)
     return replace(answer, taps=[_as_own(tap) for tap in answer.taps])
@@ -38,12 +40,23 @@ def own_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAttend
 
 def own_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
     """The pay of `job` of the month of `month`, any day of it, as its own worker reads it (WAGE-4): the very line
-    Mishahara shows of them (worker_pay), so the two pages never say two totals. A month before the job's first, or one
-    still to come, is refused. The shop must be open, and the job one of it."""
+    Mishahara shows of them (worker_pay), so the two pages never say two totals. A job not working now, or a month
+    before the job's first, or one still to come, is refused. The shop must be open, and the job one of it."""
     return worker_pay(shop, job, _check_own_month(shop, job, month))
 
 
 def _check_own_month(shop: Shop, job: StaffMember, month: dt.date) -> dt.date:
+    # The job is the shop's (T1), asked first: the route finds it through the guard, so another shop's never comes
+    # here, but given one by a bug, this fails loudly, before the status below is read through a guard that hides it.
+    if job.shop_id != shop.pk:
+        raise ShopMismatch("A worker's own reads were given a job of another shop.")
+    # Only one working here now reads their own (X2): a suspended person, and one who left, read nothing, whoever asks.
+    # Its status read afresh, through the guard, never the copy the caller holds, which a login may have loaded before
+    # the job stopped. A real login already refuses both (`staff.suspended`, no job for one who left); this is the
+    # rule's own place, so no other caller can skip it (the review). A refusal of a person, as a missing key is.
+    if StaffMember.objects.values_list("status", flat=True).get(pk=job.pk) != StaffStatus.ACTIVE:
+        # English for the logs; the screens translate the code (ADR-0032).
+        raise PermissionDenied("This person is not working here now.")
     # The months a worker's own page offers, from the month of their job's first day up to the shop's own month, and the
     # first day of the one asked. Anything else is a slip of a typed address, said as one, never an empty month, which
     # would read as "you never came" (Asha in August, hired in September). A job's own first day, never the person's:
