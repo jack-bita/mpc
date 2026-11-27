@@ -11,6 +11,7 @@
 import type { Page } from "@playwright/test";
 
 import sw from "../messages/sw.json";
+import { Decimal } from "../src/lib/decimal";
 
 import {
   ASHA,
@@ -24,17 +25,18 @@ import {
 const PAY = sw.pay;
 const CORRECTION = sw.pay.correction;
 
-/** What the test adds to Asha's pay. Whole shillings, so a plain number is exact here, in a test's own sum. */
-const ADDED = 9_000;
+/** What the test adds to Asha's pay: money, so the shared Decimal, never a plain number (rule 3; the review). */
+const ADDED = new Decimal("9000");
 
-/** An amount as the page writes it, as a number: "TSh 152,000" → 152000, "− 2,000" → −2000. */
-function amount(text: string): number {
-  const figures = Number(text.replace(/[^\d]/g, ""));
-  return /[−-]/.test(text) ? -figures : figures;
+/** An amount as the page writes it, as the shared Decimal: "TSh 152,000" → 152000, "− 2,000" → −2000. */
+function amount(text: string): InstanceType<typeof Decimal> {
+  const figures = new Decimal(text.replace(/[^\d]/g, "") || "0");
+  return /[−-]/.test(text) ? figures.neg() : figures;
 }
 
-/** Asha's total on her pay page, or none when the page shows no lines yet. Read after the page shows. */
-async function total(phone: Page): Promise<number> {
+/** Asha's total on her pay page, as text, "141000", or "0" when the page shows no lines yet: a Decimal's own writing,
+ * which the test compares, never a number. Read after the page shows. */
+async function total(phone: Page): Promise<string> {
   const footer = phone
     .getByRole("table", { name: PAY.linesCaption })
     .getByRole("row")
@@ -42,8 +44,8 @@ async function total(phone: Page): Promise<number> {
       has: phone.getByRole("rowheader", { name: PAY.totalToday, exact: true }),
     });
   return (await footer.count()) === 0
-    ? 0
-    : amount(await footer.getByRole("cell").last().innerText());
+    ? "0"
+    : amount(await footer.getByRole("cell").last().innerText()).toFixed();
 }
 
 test("Meneja adds a correction to Asha's pay on the demo, and crosses it out", async ({
@@ -115,7 +117,7 @@ test("Meneja adds a correction to Asha's pay on the demo, and crosses it out", a
     await expect(
       phone.getByRole("button", { name: line, exact: true }),
     ).toHaveCount(1);
-    await expect.poll(() => total(phone)).toBe(before + ADDED);
+    await expect.poll(() => total(phone)).toBe(ADDED.plus(before).toFixed());
   });
 
   await test.step("its line crosses it out with the ready reason; it stays, struck through, and her pay is as it was", async () => {
