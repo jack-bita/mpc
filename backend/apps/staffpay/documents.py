@@ -166,7 +166,10 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
         # neither: too late for the approval's reads, too early to find the month approved. With it, one waits for the
         # other: the tap is counted by the approval, or finds the month approved and is flagged (WAGE-10). The light
         # lock (backend rules), after the laptop's row, as the push takes that first, and before the change numbers,
-        # taken last; the approval takes no laptop's row, so the two never wait for each other in a ring.
+        # taken last; the approval takes no laptop's row, so the two never wait for each other in a ring. Every run of
+        # the book takes the same rows (lock_jobs): so a tap also waits a moment while an office page works a month out,
+        # Mahudhurio ya mwezi, Mishahara or a worker's pay, or the night's job does, as it never did before (the
+        # review): a few hundred milliseconds, on a push no person waits on.
         job = StaffMember.objects.select_for_update(no_key=True).get(pk=document.created_by.pk)
         event = AttendanceEvent(
             id=document.id,
