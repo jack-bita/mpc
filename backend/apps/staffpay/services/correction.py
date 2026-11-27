@@ -4,7 +4,8 @@ month's pay (WAGE-10, 02 §12, A3): Marekebisho.
 Baba approves November on 1 December. On the 3rd he finds Juma's November was 9,000 short: a day he came was counted
 absent. November never changes (A3), as Juma may already hold its cash, so Baba opens Juma's December and adds + 9,000,
 "Novemba: siku ya 12/11 haikuhesabiwa" (record_correction). December's pay adds it, and its payslip keeps it as a line
-of its own once December is approved, so both months say what they paid.
+of its own once December is approved, so both months say what they paid. One typed wrong is crossed out, with who,
+when and why, and typed again (void_correction).
 
 Only whoever approves pay types or crosses out one (Jack: A): pay.approve with the two keys of pay, on the whole shop,
 the keys of the approval itself (APPROVES), as a correction changes what a worker is owed with no cash to show for it,
@@ -22,6 +23,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core.tenancy import ShopMismatch
 from apps.people.models import StaffMember
@@ -32,12 +34,14 @@ from apps.staffpay.models import MOST_CORRECTION, PayCorrection, PayRate
 from apps.staffpay.selectors import is_closed
 from apps.staffpay.services.approval import APPROVES
 from apps.staffpay.services.book import month_span, refuse_if_closed
+from apps.staffpay.services.money import DEMO_MONEY_VOID_REASONS
 
 # On the demo, the ready reasons a correction is typed with, kept as their codes, which the page says in words: *Siku
 # haikuhesabiwa* (a day the pay left out) and *Alilipwa zaidi* (paid too much). Every visitor logs in as the same
 # Meneja (OPS-3), so a reason typed would show to every visitor after, signed by the shared manager, until the
-# morning's seed.
+# morning's seed. One crossed out takes Advansi's ready reason, *Kiasi kimekosewa* (DEMO_MONEY_VOID_REASONS).
 DEMO_CORRECTION_REASONS = ("day_not_counted", "paid_too_much")
+DEMO_CORRECTION_VOID_REASONS = DEMO_MONEY_VOID_REASONS
 
 
 def record_correction(
@@ -107,9 +111,56 @@ def record_correction(
     return row
 
 
+def void_correction(correction: PayCorrection, *, reason: str, by: StaffMember) -> PayCorrection:
+    """Cross out a correction typed wrong (WAGE-10, 02 §12, T2): + 90,000 for + 9,000, "Kiasi kimekosewa". The row
+    stays, voided once with who, when and why, and counts for nothing; the right one is typed again. Never brought
+    back. `by`: who crosses it out, with the keys that type one, whoever typed it, and never the worker it corrects. A
+    row crossed out already, by this request sent twice or by someone a moment before, is answered as it was crossed
+    out, never stamped again (CORE-3's Watch out). Refuses: one's own (correction.own); one of a month whose pay is
+    approved (pay.day_approved), as its payslip holds it; and, beside the reason's box, no reason
+    (correction.reason_missing), or on the demo a reason not the ready one (demo.ready_reasons). Returns the row as
+    saved."""
+    # Who voids is a staff member of the row's own shop (T1): the void rule in the database checks only that the stamp
+    # is filled whole, so this is the check it can't make with one column.
+    if by.shop_id != correction.shop_id:
+        raise ShopMismatch("void_correction was given a person of another shop.")
+    reason = reason.strip()
+    with transaction.atomic():
+        by, staff = _locked(by, StaffMember.objects.get(pk=correction.staff_id))
+        # Never one's own (Jack: A): crossing out a deduction raises one's own pay. By the person, as typing one is.
+        if staff.user_id == by.user_id:
+            raise ValidationError("Nobody crosses out a correction of their own pay.", code="correction.own")
+        # Read afresh under the lock: one crossed out already is answered as it is, whatever was approved since. One
+        # still counting, of a month approved, is a line of its payslip now, and stays (A3).
+        if PayCorrection.objects.get(pk=correction.pk).voided_at is None:
+            refuse_if_closed(Shop.objects.get(pk=correction.shop_id), correction.month, correction.staff_id)
+        if not reason:
+            raise ValidationError(
+                {"reason": [ValidationError("A correction crossed out says why.", code="correction.reason_missing")]}
+            )
+        if settings.DEMO_SEED and reason not in DEMO_CORRECTION_VOID_REASONS:
+            raise ValidationError(
+                {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
+            )
+        # The stamp, filled once, by one guarded UPDATE, as an advance's (void_advance): only while the row is not
+        # crossed out, so two voids never both write it. Never save(), which AppendOnly refuses; the void trigger lets
+        # this UPDATE change the stamp and nothing else (ADR-0021).
+        PayCorrection.objects.filter(pk=correction.pk, voided_at__isnull=True).update(
+            voided_at=timezone.now(), voided_by=by, void_reason=reason
+        )
+        # Read back as it is now: crossed out by this request, or by the same one sent before, its answer lost, or by
+        # someone a moment before, whose stamp the page is then shown.
+        return PayCorrection.objects.get(pk=correction.pk)
+
+
 def ready_correction_reasons() -> list[str]:
     # The ready reasons a correction is typed with, on the demo alone; anywhere else the person's own words.
     return list(DEMO_CORRECTION_REASONS) if settings.DEMO_SEED else []
+
+
+def ready_correction_void_reasons() -> list[str]:
+    # The same for crossing one out.
+    return list(DEMO_CORRECTION_VOID_REASONS) if settings.DEMO_SEED else []
 
 
 def _locked(by: StaffMember, staff: StaffMember) -> tuple[StaffMember, StaffMember]:

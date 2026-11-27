@@ -39,7 +39,14 @@ from apps.staffpay.services.attendance import (
     worker_attendance,
 )
 from apps.staffpay.services.book import SUNDAY, where_it_falls, work_out_days
-from apps.staffpay.services.correction import DEMO_CORRECTION_REASONS, ready_correction_reasons, record_correction
+from apps.staffpay.services.correction import (
+    DEMO_CORRECTION_REASONS,
+    DEMO_CORRECTION_VOID_REASONS,
+    ready_correction_reasons,
+    ready_correction_void_reasons,
+    record_correction,
+    void_correction,
+)
 from apps.staffpay.services.money import (
     DEMO_MONEY_VOID_REASONS,
     AdvanceLine,
@@ -87,6 +94,7 @@ __all__ = [
     "APPROVES",
     "DEMO_ADD_REASONS",
     "DEMO_CORRECTION_REASONS",
+    "DEMO_CORRECTION_VOID_REASONS",
     "DEMO_MONEY_VOID_REASONS",
     "DEMO_PAYMENT_VOID_REASONS",
     "DEMO_REASONS",
@@ -135,6 +143,7 @@ __all__ = [
     "payment_line",
     "ready_advance_void_reasons",
     "ready_correction_reasons",
+    "ready_correction_void_reasons",
     "ready_payment_void_reasons",
     "record_advance",
     "record_correction",
@@ -142,6 +151,7 @@ __all__ = [
     "set_pay_rate",
     "tap_line",
     "void_advance",
+    "void_correction",
     "void_meal_money",
     "void_payslip_payment",
     "void_tap",
