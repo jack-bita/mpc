@@ -37,6 +37,7 @@ from apps.staffpay.models import (
     ClockKind,
     DayChoice,
     MealMoney,
+    PayCorrection,
     PayRate,
     PayRun,
     Payslip,
@@ -50,9 +51,11 @@ from apps.staffpay.services import (
     decide_day,
     pay_month,
     record_advance,
+    record_correction,
     record_meal_money,
     set_pay_rate,
     void_advance,
+    void_correction,
     void_meal_money,
     void_tap,
     work_out_days,
@@ -145,7 +148,22 @@ def advance(shop: Shop, staff: StaffMember, by: StaffMember, day: dt.date) -> An
     return record_advance(staff, advance_id=uuid.uuid7(), date=day, amount=Decimal("1000"), by=by)
 
 
-WRITES = {"decide": decide, "add": add, "cross_out": cross_out, "rate": rate, "meals": meals, "advance": advance}
+def correct(shop: Shop, staff: StaffMember, by: StaffMember, day: dt.date) -> Any:
+    # A correction in the pay of the day's month (WAGE-10).
+    return record_correction(
+        staff, correction_id=uuid.uuid7(), month=day, amount=Decimal("1000"), reason="Oktoba: kosa", by=by
+    )
+
+
+WRITES = {
+    "decide": decide,
+    "add": add,
+    "cross_out": cross_out,
+    "rate": rate,
+    "meals": meals,
+    "advance": advance,
+    "correct": correct,
+}
 
 
 def rows() -> tuple[int, ...]:
@@ -159,6 +177,8 @@ def rows() -> tuple[int, ...]:
         MealMoney.objects.filter(voided_at__isnull=False).count(),
         Advance.objects.count(),
         Advance.objects.filter(voided_at__isnull=False).count(),
+        PayCorrection.objects.count(),
+        PayCorrection.objects.filter(voided_at__isnull=False).count(),
     )
 
 
@@ -212,6 +232,8 @@ def test_each_refusal_is_said_where_its_day_is_picked(shop_a: Shop, baba: StaffM
         "rate": {"effective_from"},
         "meals": {"date"},
         "advance": {"date"},
+        # A correction's sheet has no month to pick: it is the page's, so its refusal is above the boxes (WAGE-10).
+        "correct": None,
     }
 
 
@@ -341,6 +363,17 @@ def test_one_approved_alone_takes_no_change(shop_a: Shop, baba: StaffMember, nee
         assert rows() == before
 
 
+def test_one_approved_alone_takes_no_correction(shop_a: Shop, baba: StaffMember, neema: StaffMember) -> None:
+    # Neema's pay is approved alone, and no later pay of hers will be made: whatever month is asked, the system says
+    # why, and Baba pays her by hand (WAGE-10, Jack: A).
+    with shop_context(shop_a):
+        for month in (NOVEMBER, DECEMBER):
+            with pytest.raises(ValidationError) as refusal:
+                correct(shop_a, neema, baba, month)
+            assert codes(refusal.value) == {"correction.left_paid"}
+        assert not PayCorrection.objects.exists()
+
+
 @pytest.mark.parametrize("by_the_system", [False, True])
 def test_a_rate_of_one_approved_alone_is_refused(
     shop_a: Shop, baba: StaffMember, neema: StaffMember, by_the_system: bool
@@ -465,8 +498,17 @@ def cross_out_advance(shop: Shop, staff: StaffMember, by: StaffMember, day: dt.d
     return void_advance(Advance.objects.get(staff=staff, date=day), reason="Kosa", by=by)
 
 
-# The eight services, each a write that waits for the approval's lock. The two that cross money out need some there.
-ALL_WRITES = WRITES | {"cross_out_meals": cross_out_meals, "cross_out_advance": cross_out_advance}
+def cross_out_correction(shop: Shop, staff: StaffMember, by: StaffMember, day: dt.date) -> Any:
+    return void_correction(PayCorrection.objects.get(staff=staff, month=day.replace(day=1)), reason="Kosa", by=by)
+
+
+# The ten services, each a write that waits for the approval's lock: a correction and its crossing out among them
+# (WAGE-10). The three that cross money out need some there.
+ALL_WRITES = WRITES | {
+    "cross_out_meals": cross_out_meals,
+    "cross_out_advance": cross_out_advance,
+    "cross_out_correction": cross_out_correction,
+}
 
 
 def with_money_to_cross_out(shop: Shop, staff: StaffMember, by: StaffMember, name: str) -> None:
@@ -475,6 +517,8 @@ def with_money_to_cross_out(shop: Shop, staff: StaffMember, by: StaffMember, nam
             meals(shop, staff, by, MON)
         elif name == "cross_out_advance":
             advance(shop, staff, by, MON)
+        elif name == "cross_out_correction":
+            correct(shop, staff, by, MON)
 
 
 @pytest.mark.django_db(transaction=True)

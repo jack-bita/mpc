@@ -44,8 +44,19 @@ from apps.people.models import Device, StaffMember
 from apps.people.services import change_worker, hire_again, mark_left
 from apps.shops.models import Closure, Shop, Side
 from apps.staffpay.calculations import PaidAs, Pay, PayLine
-from apps.staffpay.models import Advance, AttendanceDay, AttendanceEvent, ClockKind, DayChoice, MealMoney, PayRate
-from apps.staffpay.selectors import advances_between
+from apps.staffpay.models import (
+    Advance,
+    AttendanceDay,
+    AttendanceEvent,
+    ClockKind,
+    DayChoice,
+    MealMoney,
+    PayCorrection,
+    PayRate,
+    PayRun,
+    Payslip,
+)
+from apps.staffpay.selectors import advances_between, corrections_by_job
 from apps.staffpay.services import (
     PayMonth,
     WorkerPay,
@@ -53,9 +64,11 @@ from apps.staffpay.services import (
     decide_day,
     pay_month,
     record_advance,
+    record_correction,
     record_meal_money,
     set_pay_rate,
     void_advance,
+    void_correction,
     void_meal_money,
     void_tap,
     worker_pay,
@@ -464,9 +477,9 @@ def test_the_pay_is_never_kept(shop_a: Shop, asha: StaffMember) -> None:
 
 
 def test_the_month_is_read_in_a_few_queries(shop_a: Shop, baba: StaffMember) -> None:
-    # However many workers and days: the book's dozen queries, with the meals' two, one for the rates, one for the step
-    # and one for the advances; and today's five, its jobs, taps, closed days, rules and meal money. Counted on the
-    # second visit, as on the first every day is new (test_attendance_month.py).
+    # However many workers and days: the book's dozen queries, with the meals' two, one for the rates, one for the step,
+    # one for the advances and one for the corrections (WAGE-10); and today's five, its jobs, taps, closed days, rules
+    # and meal money. Counted on the second visit, as on the first every day is new (test_attendance_month.py).
     for name in ("Asha", "Baraka", "Juma", "Zawadi"):
         staff = paid(shop_a, name)
         for day in (MON, TUE, WED, THU, FRI):
@@ -480,7 +493,7 @@ def test_the_month_is_read_in_a_few_queries(shop_a: Shop, baba: StaffMember) -> 
     with shop_context(shop_a), CaptureQueriesContext(connection) as queries:
         answer = pay_month(shop_a, NOVEMBER)
     assert len(answer.workers) == 4
-    assert len(queries) <= 23
+    assert len(queries) <= 24
 
 
 # Money given before payday (WAGE-8).
@@ -634,6 +647,156 @@ def test_advances_are_read_inside_their_own_shop(
     moment = dt.datetime(2026, 11, 16, tzinfo=dt.UTC)
     with shop_context(shop_a), pytest.raises(TypeError):
         advances_between(shop_a, moment, moment)
+
+
+# Corrections of an earlier month (WAGE-10).
+
+
+def correct(
+    staff: StaffMember, by: StaffMember, amount: str, reason: str = "Oktoba: siku ya 7/10 haikuhesabiwa"
+) -> PayCorrection:
+    # In November, the month still open, a mistake of October's, approved (WAGE-10's default: any month still open).
+    with shop_context(staff.shop_id):
+        return record_correction(
+            staff, correction_id=uuid.uuid7(), month=NOVEMBER, amount=Decimal(amount), reason=reason, by=by
+        )
+
+
+def test_a_correction_goes_with_the_pay(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Three full days, 30,000, and Asha's October 9,000 short: 39,000, on her line and no other, and in the whole.
+    paid(shop_a, "Juma")
+    for day in (MON, TUE, WED):
+        kept_day(asha, *FULL, date=day)
+    row = correct(asha, baba, "9000")
+    answer = month(shop_a)
+    worker = line_of(answer, "Asha")
+    assert (worker.pay.lines, worker.pay.corrections, worker.total) == (
+        (full(3),),
+        Decimal("9000.00"),
+        Decimal("39000.00"),
+    )
+    assert (line_of(answer, "Juma").pay.corrections, answer.total) == (NOTHING, Decimal("39000.00"))
+    # Her own page says the very same, and lists it, with who typed it and when; and the month takes another.
+    with shop_context(shop_a):
+        page = worker_pay(shop_a, asha, NOVEMBER)
+    assert page.worker == worker
+    (listed,) = page.corrections
+    assert (listed.id, listed.amount, listed.reason) == (
+        row.pk,
+        Decimal("9000.00"),
+        "Oktoba: siku ya 7/10 haikuhesabiwa",
+    )
+    assert (listed.by, listed.at, listed.voided) == ("Baba", row.created_at, None)
+    assert page.no_correction is None
+
+
+def test_several_add_up_each_way(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # + 9,000 and − 2,000: + 7,000 on the pay, as each stands.
+    kept_day(asha, *FULL, date=MON)
+    correct(asha, baba, "9000")
+    correct(asha, baba, "-2000", reason="Oktoba: faini mara mbili")
+    worker = line_of(month(shop_a), "Asha")
+    assert (worker.pay.corrections, worker.total) == (Decimal("7000.00"), Decimal("17000.00"))
+
+
+def test_a_correction_crossed_out_counts_nothing_and_stays_listed(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember
+) -> None:
+    # Typed + 90,000 for + 9,000, crossed out: the pay follows at once, and her page lists it struck through, with who,
+    # when and why, above the right one typed after it.
+    kept_day(asha, *FULL, date=MON)
+    wrong = correct(asha, baba, "90000")
+    with shop_context(shop_a):
+        void_correction(wrong, reason="Kiasi kimekosewa", by=baba)
+    correct(asha, baba, "9000")
+    assert line_of(month(shop_a), "Asha").total == Decimal("19000.00")
+    with shop_context(shop_a):
+        first, second = worker_pay(shop_a, asha, NOVEMBER).corrections
+    assert (first.amount, second.amount, second.voided) == (Decimal("90000.00"), Decimal("9000.00"), None)
+    assert first.voided is not None
+    assert (first.voided.by, first.voided.reason) == ("Baba", "Kiasi kimekosewa")
+
+
+def test_a_workers_page_lists_their_own_months_in_the_order_typed(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Typed at 10:00, 10:05 and 10:10, the clock moving, with one of October's between them, still open: November's page
+    # lists its own two, the earlier first, never October's.
+    for minute, amount, of in ((0, "9000", NOVEMBER), (5, "500", OCTOBER), (10, "-2000", NOVEMBER)):
+        monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 11, 24, 10, minute)))
+        with shop_context(shop_a):
+            record_correction(
+                asha, correction_id=uuid.uuid7(), month=of, amount=Decimal(amount), reason="Kosa", by=baba
+            )
+    with shop_context(shop_a):
+        listed = [line.amount for line in worker_pay(shop_a, asha, NOVEMBER).corrections]
+        october = [line.amount for line in worker_pay(shop_a, asha, OCTOBER).corrections]
+    assert (listed, october) == ([Decimal("9000.00"), Decimal("-2000.00")], [Decimal("500.00")])
+
+
+def test_a_correction_bigger_than_the_pay_leaves_a_minus(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # 10,000 earned, 25,000 paid too much in October: − 15,000, which the whole counts as 0, as any total below 0.
+    kept_day(asha, *FULL, date=MON)
+    correct(asha, baba, "-25000", reason="Oktoba: alilipwa zaidi")
+    answer = month(shop_a)
+    assert (line_of(answer, "Asha").total, answer.total) == (Decimal("-15000.00"), NOTHING)
+
+
+def test_a_correction_lists_one_with_no_day_yet(shop_a: Shop, baba: StaffMember) -> None:
+    # Hamisi's first rate starts on the 28th, so no day of his is over: listed for his correction all the same, or the
+    # 9,000 would be on nobody's pay until then.
+    hamisi = paid(shop_a, "Hamisi", since=dt.date(2026, 11, 28))
+    assert [line.display_name for line in month(shop_a).workers] == []
+    correct(hamisi, baba, "9000")
+    worker = line_of(month(shop_a), "Hamisi")
+    assert (worker.pay.lines, worker.total) == ((), Decimal("9000.00"))
+
+
+def test_a_correction_is_taken_once_with_leo(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # In the evening, with Leo beside the days that are over: added once, never to each of the two parts.
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 11, 24, 19, 0)))
+    kept_day(asha, *FULL, date=YESTERDAY)
+    tapped(asha, *FULL, date=TODAY)
+    correct(asha, baba, "9000")
+    worker = line_of(month(shop_a), "Asha")
+    assert (worker.pay.corrections, todays(worker).corrections) == (Decimal("9000.00"), NOTHING)
+    assert worker.total == Decimal("29000.00")
+
+
+def test_a_correction_goes_with_its_own_month(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # November's, never October's or December's: each month's pay reads its own.
+    correct(asha, baba, "9000")
+    for of in (OCTOBER, dt.date(2026, 12, 1)):
+        worker = next((line for line in month(shop_a, of).workers if line.display_name == "Asha"), None)
+        assert worker is None or worker.pay.corrections == NOTHING
+
+
+def test_the_page_says_why_a_month_takes_none(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # The very rule record_correction refuses by (why_no_correction): so Ongeza marekebisho is offered only when the
+    # server would take it, and the page says why for one who left and was paid (Jack: A).
+    neema = paid(shop_a, "Neema")
+    with shop_context(shop_a):
+        neema = mark_left(neema, left_on=dt.date(2026, 11, 2), by=None, reason="Amehama")
+        Payslip.objects.create(shop=shop_a, staff=neema, month=NOVEMBER, total=Decimal("10000.00"), created_by=baba)
+        PayRun.objects.create(shop=shop_a, month=OCTOBER, created_by=baba)
+
+        def why(staff: StaffMember, of: dt.date = NOVEMBER) -> str | None:
+            return worker_pay(shop_a, staff, of).no_correction
+
+        assert why(asha) is None
+        assert why(neema) == "correction.left_paid"
+        assert why(baba) == "correction.not_paid_by_day"
+        assert why(asha, OCTOBER) == "pay.day_approved"
+        assert why(asha, dt.date(2026, 12, 1)) == "correction.month_to_come"
+
+
+def test_corrections_are_read_inside_their_own_shop(shop_a: Shop, shop_b: Shop) -> None:
+    # Asked inside another shop's visit, the guard would hide every row, and Juma would be 9,000 short a second time,
+    # without a word: so it fails loudly (ADR-0022).
+    with shop_context(shop_b), pytest.raises(ShopMismatch):
+        corrections_by_job(shop_a, NOVEMBER)
 
 
 # Leo: today, still running, once the worker taps Toka (Jack: A).

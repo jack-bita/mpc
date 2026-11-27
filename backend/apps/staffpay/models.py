@@ -1019,13 +1019,14 @@ LONGEST_REFERENCE = 30
 
 
 class PayslipLineKind(models.TextChoices):
-    # What a line of a payslip is (WAGE-3), in the order the payslip lists them. A correction (WAGE-9) will be one more.
+    # What a line of a payslip is (WAGE-3), in the order the payslip lists them, a correction last (WAGE-10).
     FULL = "full", "Full days"
     HALF = "half", "Half days"
     FINES = "fines", "Fines"
     MEALS = "meals", "Meals"
     ADVANCE = "advance", "Money given before payday"
     CARRIED = "carried", "A debt from an earlier month"
+    CORRECTION = "correction", "A mistake of an earlier month put right"
 
 
 class PayslipLine(AppendOnly):
@@ -1037,10 +1038,12 @@ class PayslipLine(AppendOnly):
     #     4  meals     16 days                      −16,000
     #     5  advance   of 10 Nov                    −20,000
     #     6  carried   of October                   −18,000
+    #     7  correction  Oktoba: siku ya 7/10 haikuhesabiwa   +9,000
     #
     # Each amount is added or taken off as it stands, so the lines add up to the total exactly, with nothing to know.
     # One line per advance, each with its day: a worker who says they were given two, not three, can be shown which
-    # (WAGE-5 prints them). The rate of a line is its `each` (T4). A ledger, as its payslip is, and written with it.
+    # (WAGE-5 prints them); and one per correction, with its reason (WAGE-10). The rate of a line is its `each` (T4). A
+    # ledger, as its payslip is, and written with it.
 
     payslip = models.ForeignKey(Payslip, on_delete=models.PROTECT, related_name="+", db_index=False)
     # The line's place on the payslip, from 1.
@@ -1053,6 +1056,9 @@ class PayslipLine(AppendOnly):
     date = models.DateField(null=True, blank=True)
     # What the line adds (above 0) or takes off (below 0). Money, so numeric(14,2) (rule 3).
     amount = models.DecimalField(max_digits=14, decimal_places=2)
+    # Why, on a correction's line alone: its reason, copied as it was typed (WAGE-10, T4), so the payslip says it a year
+    # from now, whatever came since. Empty on every other line.
+    note = models.CharField(max_length=200, blank=True)
 
     class Meta(AppendOnly.Meta):
         # No error codes, as on PayRun.
@@ -1064,7 +1070,8 @@ class PayslipLine(AppendOnly):
             # A line holds what its kind has, and nothing else, and adds or takes off as its kind does. Each part said
             # to be there, as a comparison with an empty value passes a rule. Days that pay: how many, at what, and the
             # two multiply to the amount; a half day of a small rate may round to 0 (round_money), so 0 passes. Fines
-            # and meals: how many days, and money off. An advance and a debt: a date, and money off.
+            # and meals: how many days, and money off. An advance and a debt: a date, and money off. A correction: its
+            # reason, and money either way, never 0 (WAGE-10); every other line has no note.
             models.CheckConstraint(
                 condition=(
                     Q(
@@ -1077,6 +1084,7 @@ class PayslipLine(AppendOnly):
                         amount=models.ExpressionWrapper(
                             F("days") * F("each"), output_field=models.DecimalField(max_digits=14, decimal_places=2)
                         ),
+                        note="",
                     )
                     | Q(
                         kind__in=[PayslipLineKind.FINES, PayslipLineKind.MEALS],
@@ -1085,6 +1093,7 @@ class PayslipLine(AppendOnly):
                         each__isnull=True,
                         date__isnull=True,
                         amount__lt=0,
+                        note="",
                     )
                     | Q(
                         kind=PayslipLineKind.ADVANCE,
@@ -1092,6 +1101,7 @@ class PayslipLine(AppendOnly):
                         each__isnull=True,
                         date__isnull=False,
                         amount__lt=0,
+                        note="",
                     )
                     | Q(
                         kind=PayslipLineKind.CARRIED,
@@ -1100,6 +1110,17 @@ class PayslipLine(AppendOnly):
                         date__isnull=False,
                         date__day=1,
                         amount__lt=0,
+                        note="",
+                    )
+                    | (
+                        Q(
+                            kind=PayslipLineKind.CORRECTION,
+                            days__isnull=True,
+                            each__isnull=True,
+                            date__isnull=True,
+                            note__regex=r"\S",
+                        )
+                        & ~Q(amount=0)
                     )
                 ),
                 name="staffpay_payslipline_fits_its_kind",

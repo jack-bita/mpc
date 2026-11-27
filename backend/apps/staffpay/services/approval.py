@@ -105,6 +105,7 @@ def approve_month(
             run,
             [(line, parts.over.get(line.staff_id, [])) for line in draft.workers if line.approval is None],
             advances_by_job(shop, first, last),
+            parts.corrections,
             by,
         )
     return run
@@ -168,11 +169,18 @@ def approve_leaver(
             # (Jack: A). Leo is a line of the page alone: on the payslip it is one of their days.
             days.append(tonight)
         # The very sum the page showed in two parts, in one: each day is paid alone, so the two add up to it.
-        pay = work_out_pay(parts.days_to_pay(staff.pk, days), advances=line.pay.advances, carried=line.pay.carried)
+        pay = work_out_pay(
+            parts.days_to_pay(staff.pk, days),
+            advances=line.pay.advances,
+            carried=line.pay.carried,
+            corrections=line.pay.corrections,
+        )
         # Its own total, never the two parts' again: should the two ever differ, the lines wouldn't add up to it, and
         # nothing is kept.
         whole = replace(line, pay=pay, today=None, total=pay.total)
-        (slip,) = _keep(first, None, [(whole, days)], advances_by_job(shop, first, last), by, ids=[payslip_id])
+        (slip,) = _keep(
+            first, None, [(whole, days)], advances_by_job(shop, first, last), parts.corrections, by, ids=[payslip_id]
+        )
     return slip
 
 
@@ -230,12 +238,14 @@ def _keep(
     run: PayRun | None,
     lines: list[tuple[WorkerPay, list[AttendanceDay]]],
     given: Mapping[uuid.UUID, list[tuple[dt.date, Decimal]]],
+    corrected: Mapping[uuid.UUID, list[tuple[Decimal, str]]],
     by: StaffMember,
     *,
     ids: Iterable[uuid.UUID] = (),
 ) -> list[Payslip]:
     # The payslips of a month, each worker's line with their days; their lines; and their days marked as paid. Each in
-    # one statement, but the marks, one a worker. `ids`: the payslips' own, where the client made them.
+    # one statement, but the marks, one a worker. `given`: each job's advances; `corrected`: its corrections, each a
+    # line of its own. `ids`: the payslips' own, where the client made them.
     made = iter(ids)
     slips = [
         Payslip(
@@ -255,7 +265,9 @@ def _keep(
     PayslipLine.objects.bulk_create(
         row
         for slip, (line, _) in zip(slips, lines, strict=True)
-        for row in _payslip_lines(slip, line.pay, line.carried_from, given.get(line.staff_id, []), by)
+        for row in _payslip_lines(
+            slip, line.pay, line.carried_from, given.get(line.staff_id, []), corrected.get(line.staff_id, []), by
+        )
     )
     for slip, (_, days) in zip(slips, lines, strict=True):
         # Every day the book answered of the job, the absent and the off ones too: they were paid nothing, and that is
@@ -271,11 +283,16 @@ def _keep(
 
 
 def _payslip_lines(
-    slip: Payslip, pay: Pay, carried_from: dt.date | None, given: list[tuple[dt.date, Decimal]], by: StaffMember
+    slip: Payslip,
+    pay: Pay,
+    carried_from: dt.date | None,
+    given: list[tuple[dt.date, Decimal]],
+    corrected: list[tuple[Decimal, str]],
+    by: StaffMember,
 ) -> list[PayslipLine]:
     # A worker's pay as the lines its payslip keeps, in the order the page lists them: what its days paid, then what
-    # comes off, each with its minus, an advance a line. copy_negate, never a minus, which rounds to the digits the
-    # thread keeps.
+    # comes off, each with its minus, an advance a line; and last each correction, as it stands, plus or minus, with its
+    # reason (WAGE-10). copy_negate, never a minus, which rounds to the digits the thread keeps.
     kinds = {PaidAs.FULL: PayslipLineKind.FULL, PaidAs.HALF: PayslipLineKind.HALF}
     parts: list[dict[str, Any]] = [
         {"kind": kinds[line.paid_as], "days": line.days, "each": line.each, "amount": line.amount} for line in pay.lines
@@ -287,6 +304,7 @@ def _payslip_lines(
     parts += [{"kind": PayslipLineKind.ADVANCE, "date": day, "amount": amount.copy_negate()} for day, amount in given]
     if carried_from is not None:
         parts.append({"kind": PayslipLineKind.CARRIED, "date": carried_from, "amount": pay.carried.copy_negate()})
+    parts += [{"kind": PayslipLineKind.CORRECTION, "amount": amount, "note": reason} for amount, reason in corrected]
     rows = [
         PayslipLine(shop_id=slip.shop_id, payslip=slip, position=position, created_by=by, **part)
         for position, part in enumerate(parts, start=1)

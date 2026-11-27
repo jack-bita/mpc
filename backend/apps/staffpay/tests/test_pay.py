@@ -194,6 +194,7 @@ def test_e10_payslip_194500() -> None:
         meals=NOTHING,
         advances=Decimal("20000.00"),
         carried=NOTHING,
+        corrections=NOTHING,
         waiting=0,
         no_rate=0,
         total=Decimal("194500.00"),
@@ -288,14 +289,15 @@ def test_the_total_may_be_below_0() -> None:
 
 
 def test_no_days_pay_nothing() -> None:
-    assert work_out_pay([]) == Pay((), 0, NOTHING, 0, NOTHING, NOTHING, NOTHING, 0, 0, NOTHING)
+    assert work_out_pay([]) == Pay((), 0, NOTHING, 0, NOTHING, NOTHING, NOTHING, NOTHING, 0, 0, NOTHING)
 
 
 def test_every_amount_has_two_places() -> None:
     # As every amount is stored and sent (numeric(14,2)): the same text, whatever the days.
     for days in ([], [a_day(DayStatus.HALF, fine="500.00", meal_share="1143.00")]):
         pay = work_out_pay(days)
-        amounts = [pay.fines, pay.meals, pay.advances, pay.carried, pay.total, *(line.amount for line in pay.lines)]
+        amounts = [pay.fines, pay.meals, pay.advances, pay.carried, pay.corrections, pay.total]
+        amounts += [line.amount for line in pay.lines]
         amounts += [cash_to_pay(pay.total), debt_left(pay.total)]
         assert all(amount.as_tuple().exponent == -2 for amount in amounts)
 
@@ -375,3 +377,43 @@ def test_a_debt_below_0_is_refused() -> None:
     # A debt is money the worker owes: below 0 it would pay them for owing, so it is a bug in our code.
     with pytest.raises(ValueError, match="below 0"):
         work_out_pay([], carried=Decimal("-1.00"))
+
+
+# Corrections (WAGE-10).
+
+
+def test_a_correction_adds_to_the_pay() -> None:
+    # Juma's November was 9,000 short: his December, 20 days at 10,000, pays 209,000, the + 9,000 apart on the pay.
+    pay = work_out_pay([a_day(DayStatus.ON_TIME)] * 20, corrections=Decimal("9000.00"))
+    assert (pay.corrections, pay.total) == (Decimal("9000.00"), Decimal("209000.00"))
+
+
+def test_a_correction_takes_off_too() -> None:
+    # Asha was paid 5,000 too much in November: − 5,000 in her December. The sum the pay hands in is the month's, plus
+    # or minus as each stands.
+    pay = work_out_pay([a_day(DayStatus.ON_TIME)] * 20, corrections=Decimal("-5000.00"))
+    assert (pay.corrections, pay.total) == (Decimal("-5000.00"), Decimal("195000.00"))
+
+
+def test_a_correction_with_no_day_yet_is_the_whole_pay() -> None:
+    # On 1 December, before any day of it is over: the + 9,000 alone, or a − 5,000 alone, below 0, which the next month
+    # takes as a debt, as any total below 0 (WAGE-3).
+    assert work_out_pay([], corrections=Decimal("9000.00")).total == Decimal("9000.00")
+    owed = work_out_pay([], corrections=Decimal("-5000.00")).total
+    assert (owed, cash_to_pay(owed), debt_left(owed)) == (Decimal("-5000.00"), NOTHING, Decimal("5000.00"))
+
+
+def test_a_correction_beside_every_other_part() -> None:
+    # E10, 194,500, with a debt of 14,500 and a correction of + 9,000: 189,000, each part apart on the pay.
+    days = (
+        [a_day(DayStatus.ON_TIME, rate="9000.00")] * 20
+        + [a_day(DayStatus.LATE, fine="500.00", rate="9000.00")] * 3
+        + [a_day(DayStatus.HALF, rate="9000.00")] * 2
+    )
+    pay = work_out_pay(days, advances=Decimal("20000.00"), carried=Decimal("14500.00"), corrections=Decimal("9000.00"))
+    assert (pay.advances, pay.carried, pay.corrections, pay.total) == (
+        Decimal("20000.00"),
+        Decimal("14500.00"),
+        Decimal("9000.00"),
+        Decimal("189000.00"),
+    )

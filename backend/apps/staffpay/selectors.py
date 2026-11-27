@@ -28,6 +28,12 @@ And the laptops that have sent nothing since a moment (quiet_laptops, WAGE-3), a
 And whether the pay of a day is approved (is_closed, WAGE-3), so nothing it is made of may change any more:
 
     November approved:   30 Nov and every day before it, for everyone        Neema approved alone: her days alone
+
+And the corrections of a month (WAGE-10): mistakes found after an earlier month's approval, put right in this one, by
+job (corrections_by_job), and one worker's, crossed out ones too, for their page (corrections_of); and why a month
+takes none for a job (why_no_correction):
+
+    Juma  Desemba  + 9,000 "Novemba: siku ya 12/11 haikuhesabiwa", + 90,000 crossed out      so December: + 9,000
 """
 
 import uuid
@@ -54,11 +60,11 @@ from apps.core.settings_registry import (
     SettingKey,
 )
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
-from apps.people.models import Device, DeviceStatus
+from apps.people.models import Device, DeviceStatus, StaffMember
 from apps.shops.models import Shop
-from apps.shops.selectors import shop_settings_between
+from apps.shops.selectors import shop_settings_between, shop_today
 from apps.staffpay.calculations import DayRules
-from apps.staffpay.models import Advance, MealMoney, PayRate, PayRun, Payslip
+from apps.staffpay.models import Advance, MealMoney, PayCorrection, PayRate, PayRun, Payslip
 
 # Each part of a day's rules, by its name in DayRules, and the setting it is read from: one list, so the rules read and
 # the copy a day keeps always name the same nine, and a rule added to DayRules without its setting fails at once
@@ -239,6 +245,63 @@ def is_closed(shop: Shop, day: date, job: uuid.UUID | None = None) -> bool:
     if PayRun.objects.filter(shop=shop, month__gte=month).exists():
         return True
     return job is not None and Payslip.objects.filter(shop=shop, staff_id=job, month__gte=month).exists()
+
+
+def corrections_by_job(shop: Shop, month: date) -> dict[uuid.UUID, list[tuple[Decimal, str]]]:
+    """Each correction that counts in the pay of the month of `month`, any day of it, by the job it corrects, in the
+    order typed: what it adds or takes off, and why (WAGE-10). The month's draft adds them up, and its payslip copies
+    them line by line, from the one read."""
+    # The same check as the advances', for the same reason (ADR-0022): a pay with no correction on it would leave Juma
+    # 9,000 short a second time, without a word.
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("corrections_by_job was given a shop that is not the one open.")
+    typed: dict[uuid.UUID, list[tuple[Decimal, str]]] = defaultdict(list)
+    for staff_id, amount, reason in (
+        PayCorrection.objects.filter(shop=shop, month=month.replace(day=1), voided_at__isnull=True)
+        # As they were typed; the id last, for two typed at the very same moment.
+        .order_by("created_at", "id")
+        .values_list("staff_id", "amount", "reason")
+    ):
+        typed[staff_id].append((amount, reason))
+    return typed
+
+
+def corrections_of(shop: Shop, job: uuid.UUID, month: date) -> list[PayCorrection]:
+    """One job's corrections in the pay of the month of `month`, crossed out ones too, in the order typed, with who
+    typed and who crossed out each (WAGE-10): what the worker's page lists, as a payslip's foot lists its payments."""
+    return list(
+        PayCorrection.objects.filter(shop=shop, staff_id=job, month=month.replace(day=1))
+        .select_related("created_by", "voided_by")
+        .order_by("created_at", "id")
+    )
+
+
+def why_no_correction(shop: Shop, job: StaffMember, month: date) -> str | None:
+    """Why the pay of the month of `month` takes no correction for `job` (WAGE-10), as its code, the first that holds;
+    or None when it takes one. The one rule for the page, which offers Ongeza marekebisho only then, and for
+    record_correction, which refuses with the code. Asked under the job's lock there, as an approval a moment later
+    closes the month."""
+    first = month.replace(day=1)
+    last = _months_end(first)
+    # One who left, whose pay is approved, first: no later pay of theirs will be made, so whatever month is asked, there
+    # is none to put it in (Jack: A). Paid alone the evening they left, or with the month: either closes their last day.
+    if job.left_on is not None and is_closed(shop, job.left_on, job.pk):
+        return "correction.left_paid"
+    # A month to come has no pay yet, so it is a slip: today's month is the latest a pay is worked out for.
+    if first > shop_today(shop):
+        return "correction.month_to_come"
+    # A month the job didn't run in is in no pay of it: before its first day, or after its last.
+    if job.started_on > last or (job.left_on is not None and job.left_on < first):
+        return "correction.outside_job"
+    # Only a worker the shop pays by the day in that month, from any day of it: a rate in force on one of its days, as
+    # the month's pay lists them. The owner, who has no rate, has no pay to put it in.
+    if not PayRate.objects.filter(shop=shop, staff=job, effective_from__lte=last).exists():
+        return "correction.not_paid_by_day"
+    # The month's pay is final (A3): it would be in no payslip. A later month takes it.
+    if is_closed(shop, first, job.pk):
+        return "pay.day_approved"
+    return None
 
 
 def closed_to(shop: Shop) -> date | None:

@@ -29,11 +29,10 @@ from apps.core.tenancy import ShopMismatch
 from apps.people.models import StaffMember
 from apps.people.permissions import require
 from apps.shops.models import Shop
-from apps.shops.selectors import shop_today
-from apps.staffpay.models import MOST_CORRECTION, PayCorrection, PayRate
-from apps.staffpay.selectors import is_closed
+from apps.staffpay.models import MOST_CORRECTION, PayCorrection
+from apps.staffpay.selectors import why_no_correction
 from apps.staffpay.services.approval import APPROVES
-from apps.staffpay.services.book import month_span, refuse_if_closed
+from apps.staffpay.services.book import refuse_if_closed
 from apps.staffpay.services.money import DEMO_MONEY_VOID_REASONS
 
 # On the demo, the ready reasons a correction is typed with, kept as their codes, which the page says in words: *Siku
@@ -62,7 +61,7 @@ def record_correction(
     # route finds both in the one shop open. A server error, before anything is read.
     if by.shop_id != staff.shop_id:
         raise ShopMismatch("record_correction was given a person of another shop.")
-    first, last = month_span(month)
+    first = month.replace(day=1)
     # Spaces around a reason say nothing, and "  " is no reason.
     reason = reason.strip()
     # Not a recording_changes block: a correction writes no line in the change log, as no laptop gets one (03 §6.1).
@@ -76,7 +75,7 @@ def record_correction(
         # What the page never offers, one at a time, the first that holds: each says the month takes no correction for
         # this worker, so there is no box to name. Read under the job's lock, one of those the approval takes: one
         # typed while Baba approves December waits, and then finds it approved.
-        _refuse_the_month(shop, staff, first, last)
+        _refuse_the_month(shop, staff, first)
         # The boxes, all together, so a person who got two wrong sees both at once, each beside its own (ADR-0040).
         errors: dict[str, list[ValidationError]] = {}
         # As the table's rules hold: named here, beside the amount's box, where the table's own would name the whole
@@ -188,20 +187,19 @@ def _ask_who_corrects(by: StaffMember) -> None:
         require(by, key, None)
 
 
-def _refuse_the_month(shop: Shop, staff: StaffMember, first: dt.date, last: dt.date) -> None:
-    # One who left, whose pay is approved, first: no later pay of theirs will be made, so whatever month is asked, there
-    # is none to put it in (Jack: A). Paid alone the evening they left, or with the month: either closes their last day.
-    if staff.left_on is not None and is_closed(shop, staff.left_on, staff.pk):
-        raise ValidationError("This worker left, and their pay is approved.", code="correction.left_paid")
-    # A month to come has no pay yet, so it is a slip: today's month is the latest a pay is worked out for.
-    if first > shop_today(shop):
-        raise ValidationError("A correction is never of a month to come.", code="correction.month_to_come")
-    # A month the job didn't run in is in no pay of it: before its first day, or after its last.
-    if staff.started_on > last or (staff.left_on is not None and staff.left_on < first):
-        raise ValidationError("A correction is of a month the worker had this job.", code="correction.outside_job")
-    # Only a worker the shop pays by the day in that month, from any day of it: a rate in force on one of its days, as
-    # the month's pay lists them. The owner, who has no rate, has no pay to put it in.
-    if not PayRate.objects.filter(shop=shop, staff=staff, effective_from__lte=last).exists():
-        raise ValidationError("This worker has no daily pay in this month.", code="correction.not_paid_by_day")
-    # The month's pay is final (A3): it would be in no payslip. A later month takes it.
-    refuse_if_closed(shop, first, staff.pk)
+def _refuse_the_month(shop: Shop, staff: StaffMember, first: dt.date) -> None:
+    # What the page never offers, the first that holds: the one rule the page reads too (why_no_correction), so the two
+    # never disagree.
+    code = why_no_correction(shop, staff, first)
+    if code is not None:
+        raise ValidationError(_WHY_NOT[code], code=code)
+
+
+# Each refusal's words, for the logs and the tests: the page says its own, by the code (ADR-0040).
+_WHY_NOT = {
+    "correction.left_paid": "This worker left, and their pay is approved.",
+    "correction.month_to_come": "A correction is never of a month to come.",
+    "correction.outside_job": "A correction is of a month the worker had this job.",
+    "correction.not_paid_by_day": "This worker has no daily pay in this month.",
+    "pay.day_approved": "The pay of this day is approved.",
+}

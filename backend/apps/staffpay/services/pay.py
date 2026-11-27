@@ -1,5 +1,6 @@
-"""apps/staffpay/services/pay.py — the month's pay: a draft, worked out from the days, the rates, the meals and the
-advances (WAGE-2), until the month is approved (WAGE-3), and from then on read from its payslips.
+"""apps/staffpay/services/pay.py — the month's pay: a draft, worked out from the days, the rates, the meals, the
+advances (WAGE-2) and the corrections of earlier months (WAGE-10), until the month is approved (WAGE-3), and from then
+on read from its payslips.
 
     pay_month(MPC, November), open       worked out now: Asha 152,000, Juma 132,000, and what stops the approval
     pay_month(MPC, November), approved   as it was kept: Asha 152,000, Juma 132,000, approved by Baba, 1/12 19:05
@@ -17,7 +18,9 @@ too, and the month with what is still to hand out, Bado kulipa:
     pay_month(MPC, November), approved, 2 Dec   Asha 152,000 paid in cash by Baba · Juma 132,000 not paid yet
                                                 Bado kulipa 132,000
 
-A debt a payslip left, a total below 0, comes off the job's next pay, as a line of its own (Jack: A). Approving is
+A debt a payslip left, a total below 0, comes off the job's next pay, as a line of its own (Jack: A); and a mistake
+found after a month's approval is put right in a later one, a correction (correction.py), which the pay adds up as it
+stands, plus or minus, and its payslip keeps a line each, with its reason (WAGE-10). Approving is
 approval.py's, which keeps exactly what this file answers; so is what stops it (ToApprove), as the page that shows the
 pay shows that too.
 """
@@ -58,6 +61,7 @@ from apps.staffpay.models import (
     Advance,
     AttendanceDay,
     DayStatus,
+    PayCorrection,
     PayRate,
     PayRun,
     Payslip,
@@ -69,10 +73,13 @@ from apps.staffpay.models import (
 from apps.staffpay.selectors import (
     QuietLaptop,
     advances_between,
+    corrections_by_job,
+    corrections_of,
     is_closed,
     meal_money_by_date,
     quiet_laptops,
     rates_between,
+    why_no_correction,
 )
 from apps.staffpay.services.book import answer_days, month_span, who_shares, work_out_days
 from apps.staffpay.services.money import NO_MONEY
@@ -152,6 +159,28 @@ class WorkerPay:
 
 
 @dataclass(frozen=True)
+class VoidedCorrection:
+    # Who crossed out a correction, by nickname; when; and why. On the demo the reason is a ready one's code
+    # (`wrong_amount`), which the page says in words.
+    by: str
+    at: dt.datetime
+    reason: str
+
+
+@dataclass(frozen=True)
+class CorrectionLine:
+    # One correction of a worker's pay of a month (WAGE-10), as their page lists it: "Marekebisho: Novemba: siku ya
+    # 12/11 haikuhesabiwa + 9,000", typed by Baba on 3/12/2026 10:05; and who crossed it out, or None while it counts.
+    # On the demo the reason is a ready one's code (`day_not_counted`), which the page says in words.
+    id: uuid.UUID
+    amount: Decimal
+    reason: str
+    by: str
+    at: dt.datetime
+    voided: VoidedCorrection | None
+
+
+@dataclass(frozen=True)
 class OpenDay:
     # A day that stops the approval, as the sheet names it: "Juma · Alhamisi 12/11".
     staff_id: uuid.UUID
@@ -225,14 +254,20 @@ class WorkerPayMonth:
     to_approve: ToApprove | None = None
     # The ready reasons a payment may be crossed out with, on the demo alone; empty where the reason is typed (WAGE-9).
     void_reasons: tuple[str, ...] = ()
+    # The corrections of the worker's pay of the month, crossed out ones too, in the order typed (WAGE-10); and why the
+    # month takes none for them, as its code, or None when it takes one (why_no_correction), so the page offers Ongeza
+    # marekebisho only when the server would take it, and says why for one who left and was paid (Jack: A).
+    corrections: tuple[CorrectionLine, ...] = ()
+    no_correction: str | None = None
 
 
 @dataclass(frozen=True)
 class MonthsParts:
     # What a month's draft is worked out from, each part read once, after the book worked its days out: each job's days
     # that are over, in their order; today's, by job, while the month runs; the rates and the settings on each day; what
-    # each was given before payday; the payslips already kept, of those approved alone; and who has a line. The approval
-    # keeps a month from the very parts the page showed it from (approval.py), read inside its lock.
+    # each was given before payday; the corrections of each, in the order typed (WAGE-10); the payslips already kept, of
+    # those approved alone; and who has a line. The approval keeps a month from the very parts the page showed it from
+    # (approval.py), read inside its lock.
     shop: Shop
     first: dt.date
     last: dt.date
@@ -242,6 +277,7 @@ class MonthsParts:
     rates: dict[tuple[uuid.UUID, dt.date], PayRate]
     settings_by_day: dict[dt.date, dict[str, Any]]
     advances: dict[uuid.UUID, Decimal]
+    corrections: dict[uuid.UUID, list[tuple[Decimal, str]]]
     kept: dict[uuid.UUID, WorkerPay]
     workers: dict[uuid.UUID, StaffMember]
     worked: frozenset[uuid.UUID]
@@ -341,6 +377,8 @@ def worker_pay(shop: Shop, job: StaffMember, month: dt.date) -> WorkerPayMonth:
         worker=_worker_pay(job, work_out_pay([]), None) if line is None else line,
         to_approve=alone,
         void_reasons=tuple(ready_payment_void_reasons()),
+        corrections=tuple(_correction_line(row) for row in corrections_of(shop, job.pk, whole.month)),
+        no_correction=why_no_correction(shop, job, whole.month),
     )
 
 
@@ -372,12 +410,15 @@ def read_parts(shop: Shop, first: dt.date, last: dt.date, today: dt.date) -> Mon
     # of today is worked yet (WAGE-8). None is of a day to come, so the whole month is asked for. Read after the book,
     # as the rates are, so one typed between the two is in this answer, and one typed after it in the next.
     advances = advances_between(shop, first, last)
+    # The corrections the month's pay takes (WAGE-10), each with its reason, which the approval copies line by line.
+    corrections = corrections_by_job(shop, first)
     # Those approved alone, the evening they left: their payslip is their line, whatever is worked out beside it.
     kept = _payslips_of(shop, first)
     # A worker given money is listed for it, though no working day of theirs has come, as on a 1st that is a Sunday, or
-    # their rate starts later: or the money would be on nobody's pay until then. And one whose payslip is kept is listed
-    # for it, though the book may no longer answer a day of theirs.
-    unlisted = (advances.keys() | kept.keys()) - workers.keys()
+    # their rate starts later: or the money would be on nobody's pay until then; and so is one with a correction, on the
+    # 1st of December before any day of it. And one whose payslip is kept is listed for it, though the book may no
+    # longer answer a day of theirs.
+    unlisted = (advances.keys() | corrections.keys() | kept.keys()) - workers.keys()
     if unlisted:
         workers |= {staff.pk: staff for staff in StaffMember.objects.filter(shop=shop, pk__in=unlisted)}
     # The book answers date by date, so each worker's days come in their order, and so do the lines of their pay.
@@ -394,6 +435,7 @@ def read_parts(shop: Shop, first: dt.date, last: dt.date, today: dt.date) -> Mon
         rates=rates,
         settings_by_day=settings_by_day,
         advances=advances,
+        corrections=corrections,
         kept=kept,
         workers=workers,
         worked=frozenset(day.staff_id for day in working),
@@ -413,10 +455,11 @@ def draft_of(shop: Shop, parts: MonthsParts) -> PayMonth:
         # Today, once it counts (Leo, Jack: A).
         tonight = parts.tonight(job)
         carried_from, carried = debts.get(job, (None, NO_PAY))
-        # The advances and the debt come off the days that are over, never off today's part too, or they would be taken
-        # twice.
+        # The advances, the debt and the corrections go with the days that are over, never with today's part too, or
+        # they would count twice.
         days = parts.days_to_pay(job, parts.over.get(job, []))
-        pay = work_out_pay(days, advances=parts.advances.get(job, NO_PAY), carried=carried)
+        corrected = add_up(amount for amount, _ in parts.corrections.get(job, []))
+        pay = work_out_pay(days, advances=parts.advances.get(job, NO_PAY), carried=carried, corrections=corrected)
         today = None if tonight is None else work_out_pay(parts.days_to_pay(job, [tonight]))
         paid = [(day.date, pay_day(to_pay)) for day, to_pay in zip(parts.over.get(job, []), days, strict=True)]
         lines.append(
@@ -518,8 +561,8 @@ def open_before(shop: Shop, month: dt.date) -> dict[uuid.UUID, dt.date]:
 
 def _first_month_to_ask(shop: Shop, month: dt.date) -> dt.date | None:
     # The month after the last one approved before `month`; or, with none approved yet, the first month that could hold
-    # any pay: from when attendance was on and someone had a rate, or the first money was given. None when nothing
-    # could.
+    # any pay: from when attendance was on and someone had a rate, or the first money was given, or the first month a
+    # correction went in (WAGE-10). None when nothing could.
     run = PayRun.objects.filter(shop=shop, month__lt=month).order_by("-month").first()
     if run is not None:
         return month_span(run.month)[1] + dt.timedelta(days=1)
@@ -528,8 +571,9 @@ def _first_month_to_ask(shop: Shop, month: dt.date) -> dt.date | None:
     ).aggregate(day=Min("effective_from"))["day"]
     rated = PayRate.objects.filter(shop=shop).aggregate(day=Min("effective_from"))["day"]
     given = Advance.objects.filter(shop=shop, voided_at__isnull=True).aggregate(day=Min("date"))["day"]
+    corrected = PayCorrection.objects.filter(shop=shop, voided_at__isnull=True).aggregate(month=Min("month"))["month"]
     worked_from = max(switched_on, rated) if switched_on is not None and rated is not None else None
-    days = [day for day in (worked_from, given) if day is not None]
+    days = [day for day in (worked_from, given, corrected) if day is not None]
     return min(days).replace(day=1) if days else None
 
 
@@ -671,6 +715,8 @@ def _line_of(slip: Payslip, lines: list[PayslipLine], payments: tuple[PaymentLin
         meals=off(PayslipLineKind.MEALS),
         advances=off(PayslipLineKind.ADVANCE),
         carried=off(PayslipLineKind.CARRIED),
+        # As they stand, plus or minus, as the draft adds them (WAGE-10).
+        corrections=add_up(line.amount for line in lines if line.kind == PayslipLineKind.CORRECTION),
         # Nothing waits on a payslip: the approval refuses a day that does.
         waiting=0,
         no_rate=0,
@@ -688,6 +734,26 @@ def _line_of(slip: Payslip, lines: list[PayslipLine], payments: tuple[PaymentLin
         approval=_approval_of(slip),
         payslip_id=slip.pk,
         payments=payments,
+    )
+
+
+def _correction_line(row: PayCorrection) -> CorrectionLine:
+    # A correction as the worker's page lists it. Always somebody's, as the table holds; and a crossing out always says
+    # who and why.
+    voided = (
+        None
+        if row.voided_at is None
+        else VoidedCorrection(
+            by=cast(StaffMember, row.voided_by).display_name, at=row.voided_at, reason=row.void_reason
+        )
+    )
+    return CorrectionLine(
+        id=row.pk,
+        amount=row.amount,
+        reason=row.reason,
+        by=cast(StaffMember, row.created_by).display_name,
+        at=row.created_at,
+        voided=voided,
     )
 
 
