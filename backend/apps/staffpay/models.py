@@ -831,7 +831,7 @@ class PayCorrection(AppendOnly):
     # 2, T2), as an advance is: written once, never changed or deleted, all but the void stamp, filled once, which the
     # trigger in this table's migration holds in PostgreSQL (ADR-0021). Never on a laptop, as pay never sits on a shared
     # device (03 §6.1): no line in the change log. Written only by record_correction and void_correction
-    # (apps/staffpay/services/money.py), which ask who may.
+    # (apps/staffpay/services/correction.py), which ask who may.
 
     # Whose: a job, not a person, as an advance's is: a person hired again (PPL-11) has a new job, and a correction of
     # the old job's pay goes on the old job's. PROTECT: nothing is deleted. No index of its own: every read starts
