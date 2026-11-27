@@ -17,6 +17,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.test import APIClient
 
@@ -27,8 +28,8 @@ from apps.people.services import confirm_pairing, set_pin, start_pairing
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.staffpay.api.serializers import OwnAttendanceAnswer, OwnPayAnswer
-from apps.staffpay.models import ClockKind, PayRun, Payslip
-from apps.staffpay.services import set_pay_rate
+from apps.staffpay.models import ClockKind, Payslip
+from apps.staffpay.services import approve_month, pay_month, set_pay_rate
 from apps.staffpay.tests.days import JAN_1, MONDAY, job, switch_on, tapped
 
 pytestmark = pytest.mark.django_db
@@ -294,29 +295,39 @@ def test_own_answers_list_every_field_inside_them_too() -> None:
 
 
 def test_an_approved_month_answers_its_payslip_and_how_it_was_paid(
-    shop_a: Shop, staff_a: StaffMember, staff_client_a: APIClient
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, staff_client_a: APIClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Asha's November, 152,000, approved with the month by the owner (staff_a), who then pays it by M-Pesa. Her page
-    # says who approved it and when, and how it was handed out, with the number to check against her phone; never the
-    # payslip's id, nor a signature.
+    # 19:05 on Tuesday 1 December in Arusha: November is over. Asha, paid 10,000 a day from November, came on Monday
+    # the 16th; the owner (staff_a) approves November through the real approval, so her payslip keeps its lines, then
+    # pays it by M-Pesa. Her page says who approved it and when, its lines as they were kept, and how it was handed
+    # out, with the number to check against her phone; never the payslip's id, nor a signature (the review: written by
+    # hand before, the payslip had no lines, so nothing showed they reach her).
+    evening = dt.datetime(2026, 12, 1, 19, 5, tzinfo=dt.timezone(dt.timedelta(hours=3)))
+    monkeypatch.setattr(timezone, "now", lambda: evening)
+    switch_on(shop_a)
+    asha = job(shop_a, "Asha")
     with shop_context(shop_a):
-        asha = job(shop_a, "Asha")
-        run = PayRun.objects.create(shop=shop_a, month=NOVEMBER, created_by=staff_a)
-        payslip = Payslip.objects.create(
-            shop=shop_a, staff=asha, month=NOVEMBER, pay_run=run, total=Decimal("152000.00"), created_by=staff_a
-        )
+        set_pay_rate(asha, daily_rate=Decimal("10000"), effective_from=NOVEMBER, by=None)
+    tapped(asha, (ClockKind.IN, 7, 20), (ClockKind.OUT, 18, 45), date=MONDAY)
+    with shop_context(shop_a):
+        Device.objects.update(last_synced_at=timezone.now())
+        seen = {line.staff_id: line.total for line in pay_month(shop_a, NOVEMBER).workers}
+        approve_month(shop_a, NOVEMBER, run_id=uuid.uuid7(), seen=seen, by=staff_a)
+        payslip = Payslip.objects.get(staff=asha, month=NOVEMBER)
     sent = {"id": str(uuid.uuid7()), "method": "mobile_money", "reference": "QK7H2M9XPL"}
     assert staff_client_a.post(f"/api/v1/staffpay/payslips/{payslip.pk}/pay/", sent, format="json").status_code == 200
 
     line = month(client_for(asha), PAY).json()["line"]
 
-    assert (line["total"], line["to_hand_out"], line["approval"]["by"]) == ("152000.00", "0.00", "Staff A")
+    assert (line["total"], line["to_hand_out"], line["approval"]["by"]) == ("10000.00", "0.00", "Staff A")
+    # The payslip's own line, as the approval kept it: one full day at her rate.
+    assert [(kept["paid_as"], kept["days"], kept["each"]) for kept in line["pay"]["lines"]] == [("full", 1, "10000.00")]
     [payment] = line["payments"]
     assert set(payment) == {"id", "method", "reference", "amount", "by", "at", "voided"}
     assert (payment["method"], payment["reference"], payment["amount"], payment["by"], payment["voided"]) == (
         "mobile_money",
         "QK7H2M9XPL",
-        "152000.00",
+        "10000.00",
         "Staff A",
         None,
     )
