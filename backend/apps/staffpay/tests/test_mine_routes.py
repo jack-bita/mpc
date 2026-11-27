@@ -24,6 +24,7 @@ from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
 from apps.people.services import confirm_pairing, set_pin, start_pairing
 from apps.shops.models import Shop, Side
+from apps.shops.selectors import shop_today
 from apps.staffpay.models import ClockKind, PayRun, Payslip
 from apps.staffpay.services import set_pay_rate
 from apps.staffpay.tests.days import JAN_1, MONDAY, job, switch_on, tapped
@@ -246,6 +247,12 @@ def laptop_key(staff_a2: StaffMember, side_a: Side, give_role: GiveRole) -> str:
     return asked.key
 
 
+def this_month(staff: StaffMember) -> dict[str, str]:
+    # The shop's own month: the only one a job that starts today has. Never a month by name, which a job made by the
+    # test, starting today, would not have had once that month is gone (the review: November, asked on 1 December).
+    return {"month": shop_today(staff.shop).strftime("%Y-%m")}
+
+
 def test_a_pin_session_reads_its_own_job(staff_a: StaffMember, laptop_key: str) -> None:
     # Asha at the counter laptop, logged in by her PIN, the way most of the shop logs in (Jack's screen 1): her own
     # month, by the job the PIN's badge names.
@@ -255,20 +262,20 @@ def test_a_pin_session_reads_its_own_job(staff_a: StaffMember, laptop_key: str) 
     laptop.cookies[KEY_COOKIE] = laptop_key
     assert laptop.post(PIN_LOGIN, {"staff": str(staff_a.pk), "pin": PIN}, format="json").status_code == 204
     for route in (DAYS, PAY):
-        assert laptop.get(route, {"month": "2026-11"}).status_code == 200
-    assert laptop.get(DAYS, {"month": "2026-11"}).json()["worker"]["staff"] == str(staff_a.pk)
+        assert laptop.get(route, this_month(staff_a)).status_code == 200
+    assert laptop.get(DAYS, this_month(staff_a)).json()["worker"]["staff"] == str(staff_a.pk)
 
 
 def test_a_password_session_reads_its_own_job(staff_a: StaffMember) -> None:
     # Juma, a manager paid by the day, on his own phone with his password (Jack: A, the office home's button).
     phone = on_a_phone(staff_a)
     for route in (DAYS, PAY):
-        assert phone.get(route, {"month": "2026-11"}).status_code == 200
+        assert phone.get(route, this_month(staff_a)).status_code == 200
 
 
 def test_a_temporary_password_is_refused(staff_a: StaffMember) -> None:
     # A temporary password opens no office route until its person chooses their own (AUTH-6): this one neither.
     User.objects.filter(pk=staff_a.user_id).update(must_change_password=True)
     for route in (DAYS, PAY):
-        answer = on_a_phone(staff_a).get(route, {"month": "2026-11"})
+        answer = on_a_phone(staff_a).get(route, this_month(staff_a))
         assert (answer.status_code, answer.json()["code"]) == (403, "password.must_change")
