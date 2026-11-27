@@ -1135,6 +1135,7 @@
       "device_gap": "Kumbukumbu zinakosekana",
       "permission_break": "Hakuwa na ruhusa",
       "invalid_document": "Kumbukumbu haikukubalika",
+      "late_record": "Imefika baada ya malipo kuidhinishwa",
       "another": "Tofauti nyingine"
     },
     "status": {
@@ -1188,6 +1189,8 @@
       "recordsMissing": "Kompyuta hii ilituma kumbukumbu namba {actual}, lakini seva ilisubiri namba {expected}. Zinazokosekana: {missing}.",
       "numbersWentBack": "Namba za kumbukumbu za kompyuta hii zimerudi nyuma: seva ilisubiri namba {expected}, ikaja namba {actual}.",
       "recordRefused": "Seva haikuweza kuhifadhi kumbukumbu iliyotumwa na kompyuta hii.",
+      "lateTap": "{name} alibonyeza {kind} {day}, saa {time}, lakini kompyuta iliituma {sent}, baada ya malipo ya {month} kuidhinishwa. Haikuhesabiwa kwenye malipo yake.",
+      "lateRecord": "{name} aliandika kumbukumbu iliyofika baada ya malipo kuidhinishwa, kwa hiyo haikuhesabiwa kwenye malipo yake.",
       "another": "Mfumo umeona tofauti ambayo toleo hili la programu halijui kuieleza."
     },
     "systemNote": {

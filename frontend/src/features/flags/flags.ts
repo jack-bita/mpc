@@ -44,6 +44,7 @@ export const RAISED_KINDS = [
   "device_gap",
   "permission_break",
   "invalid_document",
+  "late_record",
 ] as const satisfies readonly FlagKind[];
 export type RaisedKind = (typeof RAISED_KINDS)[number];
 

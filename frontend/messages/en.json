@@ -1135,6 +1135,7 @@
       "device_gap": "Records are missing",
       "permission_break": "Had no permission",
       "invalid_document": "A record was refused",
+      "late_record": "Came after the pay was approved",
       "another": "Another flag"
     },
     "status": {
@@ -1188,6 +1189,8 @@
       "recordsMissing": "This laptop sent record number {actual}, but the server was waiting for number {expected}. Missing: {missing}.",
       "numbersWentBack": "This laptop's record numbers went back: the server was waiting for number {expected}, and number {actual} came.",
       "recordRefused": "The server couldn't keep a record this laptop sent.",
+      "lateTap": "{name} tapped {kind} on {day} at {time}, but the laptop sent it on {sent}, after {month}'s pay was approved. It wasn't counted in their pay.",
+      "lateRecord": "{name} made a record that came after the pay was approved, so it wasn't counted in their pay.",
       "another": "The system found something this version of the app can't explain."
     },
     "systemNote": {

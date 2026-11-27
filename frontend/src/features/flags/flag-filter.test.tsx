@@ -191,8 +191,8 @@ describe("Chuja", () => {
     expect(
       within(sheet).queryByRole("radiogroup", { name: "Upande" }),
     ).toBeNull();
-    // "Aina zote" and the five kinds.
-    expect(rows(sheet, "Aina").getAllByRole("radio")).toHaveLength(6);
+    // "Aina zote" and the six kinds, a late tap's among them (WAGE-10).
+    expect(rows(sheet, "Aina").getAllByRole("radio")).toHaveLength(7);
     expect(screen.queryByText(/^Umechuja/)).toBeNull();
   });
 

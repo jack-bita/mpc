@@ -129,6 +129,22 @@ describe("one flag's page", () => {
       "Juma alibonyeza Ingia kazini akiwa amesimamishwa, au baada ya kuondoka kazini.",
     ],
     [
+      // WAGE-10: by the laptop's clock, the only time it has, and sent when the server saw it, both on the shop's clock.
+      "a tap that came after its day's pay was approved",
+      {
+        kind: "late_record",
+        tap: { staff: JUMA_JOB, kind: "in", day: "2026-11-30" },
+        made_at: "2026-11-30T04:20:00Z",
+        raised_at: "2026-12-02T06:14:00Z",
+      },
+      "Juma alibonyeza Ingia kazini Jumatatu 30/11, saa 07:20 asubuhi, lakini kompyuta iliituma Jumatano 02/12, baada ya malipo ya Novemba kuidhinishwa. Haikuhesabiwa kwenye malipo yake.",
+    ],
+    [
+      "another record that came after its pay was approved",
+      { kind: "late_record", tap: null },
+      "Juma aliandika kumbukumbu iliyofika baada ya malipo kuidhinishwa, kwa hiyo haikuhesabiwa kwenye malipo yake.",
+    ],
+    [
       "a record by someone with no key",
       { kind: "permission_break", tap: null },
       "Juma aliandika kumbukumbu ambayo hana ruhusa ya kuiandika.",

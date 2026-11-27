@@ -87,7 +87,7 @@ export function FlagScreen({ id }: { id: string | null }) {
 function WhatHappened({ flag, me }: { flag: Flag; me: WhoIsHere }) {
   const t = useTranslations("flags");
   const names = useNames();
-  const happened = useWhatHappened();
+  const happened = useWhatHappened(me.shop.timezone);
   const moment = useMomentWords(me.shop.timezone);
   const { sentence, why } = happened(flag);
 
