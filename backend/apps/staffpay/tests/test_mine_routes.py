@@ -17,6 +17,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from rest_framework import serializers
 from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
@@ -25,6 +26,7 @@ from apps.people.models import Device, StaffMember, User
 from apps.people.services import confirm_pairing, set_pin, start_pairing
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
+from apps.staffpay.api.serializers import OwnAttendanceAnswer, OwnPayAnswer
 from apps.staffpay.models import ClockKind, PayRun, Payslip
 from apps.staffpay.services import set_pay_rate
 from apps.staffpay.tests.days import JAN_1, MONDAY, job, switch_on, tapped
@@ -174,6 +176,122 @@ def test_own_answers_hold_only_what_a_worker_is_shown(two: tuple[StaffMember, St
         "approval",
         "to_hand_out",
         "payments",
+    }
+
+
+def shape(field: object) -> object:
+    # Every field an answer sends, by name, and inside each the fields it sends in turn, every level down: a list as
+    # [its item], a value as None. Read from the serializers themselves, so a field a later card adds anywhere inside,
+    # in a part shared with the manager's answer too, shows here before any row of it exists.
+    if isinstance(field, serializers.ListSerializer):
+        return [shape(field.child)]
+    if isinstance(field, serializers.Serializer):
+        return {name: shape(child) for name, child in field.fields.items()}
+    return None
+
+
+# Who did something to a row, when and why: a tap added or crossed out, a payment or a correction crossed out.
+STAMP: dict[str, object] = {"by": None, "at": None, "reason": None}
+# A pay over some days, as the manager's lines read it (PaySerializer).
+A_PAY: dict[str, object] = {
+    "lines": [{"paid_as": None, "days": None, "each": None, "amount": None}],
+    "fined_days": None,
+    "fines": None,
+    "meal_days": None,
+    "meals": None,
+    "advances": None,
+    "carried": None,
+    "corrections": None,
+    "waiting": None,
+    "no_rate": None,
+    "total": None,
+}
+
+
+def test_own_answers_list_every_field_inside_them_too() -> None:
+    # The review: the test above reads the outer fields of what came, and the own answers still nest the manager's
+    # parts (a decision, a tap's stamps, a pay, an approval, a correction). So every field, every level down, is
+    # written out here: one added later to any part, a manager's note on a decision say, fails here until someone
+    # decides a worker may read it.
+    assert shape(OwnAttendanceAnswer()) == {
+        "month": None,
+        "today": None,
+        "worker": {
+            "staff": None,
+            "display_name": None,
+            "on_time": None,
+            "late": None,
+            "half": None,
+            "absent": None,
+            "needs_review": None,
+        },
+        "started_on": None,
+        "left_on": None,
+        "days": [
+            {
+                "date": None,
+                "status": None,
+                "reason": None,
+                "fine": None,
+                "meal_share": None,
+                "first_in": None,
+                "first_out": None,
+                "decision": {
+                    "status": None,
+                    "absence_type": None,
+                    "fine": None,
+                    "by": None,
+                    "at": None,
+                    "reason": None,
+                },
+            }
+        ],
+        "taps": [
+            {
+                "id": None,
+                "date": None,
+                "kind": None,
+                "time": None,
+                "laptop_time": None,
+                "laptop": None,
+                "entered": STAMP,
+                "voided": STAMP,
+                "after_approval": None,
+            }
+        ],
+        "ready_reasons": None,
+        "ready_add_reasons": None,
+        "ready_void_reasons": None,
+    }
+    assert shape(OwnPayAnswer()) == {
+        "month": None,
+        "today": None,
+        "counted_to": None,
+        "paid_by_day": None,
+        "no_day_yet": None,
+        "line": {
+            "left_on": None,
+            "pay": A_PAY,
+            "today": A_PAY,
+            "total": None,
+            "carried_from": None,
+            "approval": {"by": None, "at": None},
+            "to_hand_out": None,
+            "payments": [
+                {
+                    "id": None,
+                    "method": None,
+                    "reference": None,
+                    "amount": None,
+                    "by": None,
+                    "at": None,
+                    "voided": STAMP,
+                }
+            ],
+        },
+        "corrections": [{"id": None, "amount": None, "reason": None, "by": None, "at": None, "voided": STAMP}],
+        "void_reasons": None,
+        "correction_void_reasons": None,
     }
 
 
