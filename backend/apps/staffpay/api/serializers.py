@@ -34,6 +34,10 @@ And handing a payslip out (WAGE-9): each payslip's payments on its worker's line
 month's Bado kulipa; a payment by M-Pesa or a bank (PayPayslipSerializer), or in cash with the signature's drawing as
 the request's body, its ids in the address (PayCashQuery), which pay_payslip checks and keeps; and one crossed out
 (VoidPaymentSerializer), by void_payslip_payment, each answered as the payslip shows it (PaymentLineSerializer).
+
+And a worker's own days and pay (WAGE-4, A4), on Siku na malipo yangu: their month (OwnAttendanceAnswer), worked out by
+own_attendance, and their pay (OwnPayAnswer), by own_pay, for the month in the address (AttendanceMonthQuery). Each a
+list of what a worker may read, at the end of this file, with what is left out and why.
 """
 
 import re
@@ -903,3 +907,113 @@ class PayCashQuery(serializers.Serializer[Any]):
 class VoidPaymentSerializer(serializers.Serializer[Any]):
     # A payment crossed out, as the sheet sends it: why. Empty here is void_payslip_payment's to refuse, beside the box.
     reason = serializers.CharField(max_length=200, allow_blank=True)
+
+
+# --- A worker's own days and pay (WAGE-4, 02 A4): Siku na malipo yangu.
+#
+# Each answer is a list of what a worker may read of their own, never the manager's answer with fields taken off: a
+# field a later card adds to the manager's answer then never reaches a worker by itself, and the schema says exactly
+# what a worker is shown. Built from the manager's own parts wherever a part is the same (a decision, who added or
+# crossed out a tap, a pay's lines, an approval), so the app shows both with the same pieces. Left out, with why:
+# a tap's photo, which its route opens only for whoever fixes attendance, and its doubt, the shop's check on a
+# laptop; a day's choices and its id, the address a decision goes to; the payslip's id and the offer of Lipa; a
+# payment's signature; what the approval waits for, which names other workers and laptops; and why the month takes no
+# correction, an offer only whoever approves pay is made.
+
+
+class OwnDaySerializer(serializers.Serializer[Any]):
+    # One of the worker's own days, as their calendar marks it and its sheet says it: what it was, why it waits (their
+    # own day, so they know why Inahitaji uamuzi), its fine and meal share, the two taps the rule read, and the decision
+    # with who and why (A2).
+    date = serializers.DateField()
+    status = serializers.ChoiceField(choices=DayStatus.choices)
+    reason = serializers.ChoiceField(choices=ReviewReason.choices, allow_null=True)
+    fine = serializers.DecimalField(max_digits=14, decimal_places=2)
+    meal_share = serializers.DecimalField(max_digits=14, decimal_places=2)
+    first_in = serializers.TimeField(format="%H:%M", allow_null=True)
+    first_out = serializers.TimeField(format="%H:%M", allow_null=True)
+    decision = DayDecisionSerializer(allow_null=True)
+
+
+class OwnTapSerializer(serializers.Serializer[Any]):
+    # One of the worker's own taps: "Ingia saa 08:20 asubuhi · Kompyuta Dawa". The laptop's own time only for a tap
+    # whose time the server doesn't trust (own_attendance), as it is then the only one. One added in the office says
+    # who added it, and one crossed out who did it, when and why, struck through (Jack: A, WAGE-4); one that came after
+    # its day's pay was approved says so (WAGE-10).
+    id = serializers.UUIDField()
+    date = serializers.DateField()
+    kind = serializers.ChoiceField(choices=ClockKind.choices)
+    time = serializers.TimeField(format="%H:%M", allow_null=True)
+    laptop_time = serializers.TimeField(format="%H:%M", allow_null=True)
+    laptop = serializers.CharField(allow_null=True)
+    entered = TapStampSerializer(allow_null=True)
+    voided = TapStampSerializer(allow_null=True)
+    after_approval = serializers.BooleanField()
+
+
+# One object, not a list: the route is an action on no row, which the schema would otherwise describe as a list.
+@extend_schema_serializer(many=False)
+class OwnAttendanceAnswer(serializers.Serializer[Any]):
+    # The worker's own month (WAGE-4), as own_attendance works it out: which month; the shop's today, which the calendar
+    # marks (•); their own line of counts; their job's first and last day, for a day outside them to say why, and for
+    # the page's ‹ to stop at the first month; each day up to yesterday; and each tap of the month, today's too. On the
+    # demo, the ready reasons a decision and a tap's fix are kept as, as codes the page says in words.
+    month = MonthField()
+    today = serializers.DateField()
+    worker = WorkerMonthSerializer()
+    started_on = serializers.DateField()
+    left_on = serializers.DateField(allow_null=True)
+    days = OwnDaySerializer(many=True)
+    taps = OwnTapSerializer(many=True)
+    ready_reasons = serializers.ListField(child=serializers.ChoiceField(choices=DEMO_REASONS))
+    ready_add_reasons = serializers.ListField(child=serializers.ChoiceField(choices=DEMO_ADD_REASONS))
+    ready_void_reasons = serializers.ListField(child=serializers.ChoiceField(choices=DEMO_VOID_REASONS))
+
+
+class OwnPaymentSerializer(serializers.Serializer[Any]):
+    # How the worker's own payslip was handed out: "Umelipwa taslimu na Baba · 01/11/2026 10:15", the number of one by
+    # M-Pesa or a bank, which is theirs to check against their phone, the amount, and who crossed it out, struck
+    # through. Not the signature's picture, as Jack drew the page (WAGE-4): its route opens it only for whoever holds
+    # the two keys of pay (WAGE-9).
+    id = serializers.UUIDField()
+    method = serializers.ChoiceField(choices=PaymentMethod.choices)
+    reference = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+    voided = VoidedPaymentSerializer(allow_null=True)
+
+
+class OwnPayLineSerializer(serializers.Serializer[Any]):
+    # The worker's own line of the month, as Mishahara shows it of them: the days that are over, today once they tapped
+    # Toka, the total, a debt's month, who approved it, their last day if they left, what is still to hand out, and each
+    # payment. Not whose (it is theirs), nor the payslip's id, which only Lipa uses, nor whether it is their own.
+    left_on = serializers.DateField(allow_null=True)
+    pay = PaySerializer()
+    today = PaySerializer(allow_null=True)
+    total = serializers.DecimalField(max_digits=14, decimal_places=2)
+    carried_from = MonthField(allow_null=True)
+    approval = ApprovalSerializer(allow_null=True)
+    to_hand_out = serializers.DecimalField(max_digits=14, decimal_places=2)
+    payments = OwnPaymentSerializer(many=True)
+
+
+# One object, not a list, as for the worker's own month above.
+@extend_schema_serializer(many=False)
+class OwnPayAnswer(serializers.Serializer[Any]):
+    # The worker's own pay of the month (WAGE-4), as own_pay works it out: the month; the shop's today; the last day
+    # counted, or null; whether the shop pays them by the day in it, or gave them money in it; whether their first
+    # working day of it is still to come; their line; the month's corrections, crossed out ones too, with why; and, on
+    # the demo, the ready reasons a payment and a correction are crossed out with, as codes the page says in words.
+    month = MonthField()
+    today = serializers.DateField()
+    counted_to = serializers.DateField(allow_null=True)
+    paid_by_day = serializers.BooleanField()
+    no_day_yet = serializers.BooleanField()
+    line = OwnPayLineSerializer(source="worker")
+    corrections = CorrectionLineSerializer(many=True)
+    void_reasons = serializers.ListField(child=serializers.CharField())
+    correction_void_reasons = serializers.SerializerMethodField()
+
+    def get_correction_void_reasons(self, _answer: Any) -> list[str]:
+        return ready_correction_void_reasons()

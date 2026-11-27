@@ -1019,6 +1019,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staffpay/mine/attendance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["staffpay_mine_attendance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffpay/mine/pay/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["staffpay_mine_pay_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/pay/": {
         parameters: {
             query?: never;
@@ -2031,6 +2063,77 @@ export interface components {
              */
             end_unknown: boolean;
         };
+        OwnAttendanceAnswer: {
+            /** @example 2026-11 */
+            month: string;
+            /** Format: date */
+            today: string;
+            worker: components["schemas"]["WorkerMonth"];
+            /** Format: date */
+            started_on: string;
+            /** Format: date */
+            left_on: string | null;
+            days: components["schemas"]["OwnDay"][];
+            taps: components["schemas"]["OwnTap"][];
+            ready_reasons: components["schemas"]["ReadyReasonsEnum"][];
+            ready_add_reasons: components["schemas"]["ReadyAddReasonsEnum"][];
+            ready_void_reasons: components["schemas"]["TapVoidReasonEnum"][];
+        };
+        OwnDay: {
+            /** Format: date */
+            date: string;
+            status: components["schemas"]["DayStatusEnum"];
+            reason: (components["schemas"]["ReasonEnum"] | components["schemas"]["NullEnum"]) | null;
+            /** Format: decimal */
+            fine: string;
+            /** Format: decimal */
+            meal_share: string;
+            /** Format: time */
+            first_in: string | null;
+            /** Format: time */
+            first_out: string | null;
+            decision: components["schemas"]["DayDecision"] | null;
+        };
+        OwnPayAnswer: {
+            /** @example 2026-11 */
+            month: string;
+            /** Format: date */
+            today: string;
+            /** Format: date */
+            counted_to: string | null;
+            paid_by_day: boolean;
+            no_day_yet: boolean;
+            line: components["schemas"]["OwnPayLine"];
+            corrections: components["schemas"]["CorrectionLine"][];
+            void_reasons: string[];
+            readonly correction_void_reasons: string[];
+        };
+        OwnPayLine: {
+            /** Format: date */
+            left_on: string | null;
+            pay: components["schemas"]["Pay"];
+            today: components["schemas"]["Pay"] | null;
+            /** Format: decimal */
+            total: string;
+            /** @example 2026-11 */
+            carried_from: string | null;
+            approval: components["schemas"]["Approval"] | null;
+            /** Format: decimal */
+            to_hand_out: string;
+            payments: components["schemas"]["OwnPayment"][];
+        };
+        OwnPayment: {
+            /** Format: uuid */
+            id: string;
+            method: components["schemas"]["PaymentMethodEnum"];
+            reference: string;
+            /** Format: decimal */
+            amount: string;
+            by: string;
+            /** Format: date-time */
+            at: string;
+            voided: components["schemas"]["VoidedPayment"] | null;
+        };
         OwnSettingsAnswer: {
             readonly language: components["schemas"]["LanguageEnum"];
             readonly font: components["schemas"]["FontEnum"];
@@ -2038,6 +2141,21 @@ export interface components {
         OwnSettingsRequest: {
             language?: components["schemas"]["LanguageEnum"];
             font?: components["schemas"]["FontEnum"];
+        };
+        OwnTap: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            date: string;
+            kind: components["schemas"]["ClockKindEnum"];
+            /** Format: time */
+            time: string | null;
+            /** Format: time */
+            laptop_time: string | null;
+            laptop: string | null;
+            entered: components["schemas"]["TapStamp"] | null;
+            voided: components["schemas"]["TapStamp"] | null;
+            after_approval: boolean;
         };
         PaginatedDeviceList: {
             /**
@@ -2834,6 +2952,11 @@ export interface components {
             at: string;
             reason: string;
         };
+        /**
+         * @description * `wrong_tap` - wrong_tap
+         * @enum {string}
+         */
+        TapVoidReasonEnum: "wrong_tap";
         TemporaryPasswordRequest: {
             password: string;
             reason: string;
@@ -2925,13 +3048,8 @@ export interface components {
             /** @description On the demo, the ready reasons a tap added may take, as codes; elsewhere none (ATT-13). */
             ready_add_reasons: components["schemas"]["ReadyAddReasonsEnum"][];
             /** @description On the demo, the ready reasons a tap crossed out may take, as codes; elsewhere none (ATT-13). */
-            ready_void_reasons: components["schemas"]["WorkerAttendanceAnswerReadyVoidReasonsEnum"][];
+            ready_void_reasons: components["schemas"]["TapVoidReasonEnum"][];
         };
-        /**
-         * @description * `wrong_tap` - wrong_tap
-         * @enum {string}
-         */
-        WorkerAttendanceAnswerReadyVoidReasonsEnum: "wrong_tap";
         WorkerDay: {
             /** Format: uuid */
             id: string;
@@ -5098,6 +5216,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MealMoneyAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_mine_attendance_retrieve: {
+        parameters: {
+            query: {
+                /** @description The month, as 2026-11. */
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnAttendanceAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_mine_pay_retrieve: {
+        parameters: {
+            query: {
+                /** @description The month, as 2026-11. */
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnPayAnswer"];
                 };
             };
             default: {

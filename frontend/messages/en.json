@@ -1667,6 +1667,10 @@
       "amount_too_big": "This amount is too big. Check its zeros.",
       "reason_missing": "Write why."
     },
+    "mine": {
+      "before_job": "You hadn't started work here yet in this month.",
+      "month_to_come": "This month hasn't come yet."
+    },
     "flag": {
       "note_required": "Write a note.",
       "closed": "This flag is already closed.",

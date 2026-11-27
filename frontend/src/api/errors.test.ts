@@ -192,6 +192,10 @@ const CODES_THE_API_SENDS = [
   "correction.amount_invalid",
   "correction.amount_too_big",
   "correction.reason_missing",
+  // A worker's own days and pay (WAGE-4, apps/staffpay/services/mine.py): a month before the job's first, or one still
+  // to come, each a slip of a typed address.
+  "mine.before_job",
+  "mine.month_to_come",
   // Explaining or closing a flag (CTRL-4, apps/control/services.py): no words; one closed already; one that names the
   // person closing it. On the demo, a note that isn't a ready one is demo.ready_reasons above.
   "flag.note_required",

@@ -1667,6 +1667,10 @@
       "amount_too_big": "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
       "reason_missing": "Andika sababu."
     },
+    "mine": {
+      "before_job": "Ulikuwa bado hujaanza kazi mwezi huu.",
+      "month_to_come": "Mwezi huu bado haujafika."
+    },
     "flag": {
       "note_required": "Andika maelezo.",
       "closed": "Tofauti hii imeshafungwa.",

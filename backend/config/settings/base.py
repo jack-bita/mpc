@@ -322,6 +322,9 @@ SPECTACULAR_SETTINGS = {
         # The demo's ready reason for money typed wrong, which meal money's answer and an advance's both carry (WAGE-8):
         # one list, one name.
         "MoneyVoidReasonEnum": "apps.staffpay.services.DEMO_MONEY_VOID_REASONS",
+        # The demo's ready reason for a tap crossed out (ATT-13), which a worker's month and the worker's own carry
+        # (WAGE-4): one list, one name, as the money's, never one guessed from the answer that held it first.
+        "TapVoidReasonEnum": "apps.staffpay.services.DEMO_VOID_REASONS",
     },
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.
