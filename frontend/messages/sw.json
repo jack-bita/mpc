@@ -896,6 +896,7 @@
     "advances": "Advansi",
     "carried": "Deni la {month}",
     "less": "− {amount}",
+    "more": "+ {amount}",
     "todayLine": {
       "full": "Leo: siku kamili",
       "half": "Leo: nusu siku",
@@ -968,6 +969,25 @@
       },
       "readyReason": {
         "marked_by_mistake": "Niliweka kwa makosa"
+      }
+    },
+    "correction": {
+      "button": "Ongeza marekebisho",
+      "title": "Marekebisho ya {name}",
+      "way": "Ongeza au punguza",
+      "add": "Ongeza malipo",
+      "take": "Punguza malipo",
+      "amount": "Kiasi (TSh)",
+      "reason": "Sababu",
+      "readyHint": "Kwenye demo, chagua sababu iliyo tayari.",
+      "save": "Hifadhi",
+      "saved": "Imeandikwa: marekebisho ya {amount}.",
+      "line": "Marekebisho: {reason}",
+      "leftPaid": "{name} ameondoka, malipo yake yamefungwa.",
+      "readyReason": {
+        "dayNotCounted": "Siku haikuhesabiwa",
+        "paidTooMuch": "Alilipwa zaidi",
+        "wrongAmount": "Kiasi kimekosewa"
       }
     }
   },

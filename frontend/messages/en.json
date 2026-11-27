@@ -896,6 +896,7 @@
     "advances": "Advances",
     "carried": "Owed from {month}",
     "less": "− {amount}",
+    "more": "+ {amount}",
     "todayLine": {
       "full": "Today: full day",
       "half": "Today: half day",
@@ -968,6 +969,25 @@
       },
       "readyReason": {
         "marked_by_mistake": "Marked by mistake"
+      }
+    },
+    "correction": {
+      "button": "Add a correction",
+      "title": "Correction of {name}'s pay",
+      "way": "Add or take off",
+      "add": "Add to the pay",
+      "take": "Take off the pay",
+      "amount": "Amount (TSh)",
+      "reason": "Reason",
+      "readyHint": "On the demo, pick a ready reason.",
+      "save": "Save",
+      "saved": "Saved: a correction of {amount}.",
+      "line": "Correction: {reason}",
+      "leftPaid": "{name} has left, and their pay is closed.",
+      "readyReason": {
+        "dayNotCounted": "A day wasn't counted",
+        "paidTooMuch": "Paid too much",
+        "wrongAmount": "Wrong amount"
       }
     }
   },

@@ -43,6 +43,23 @@ export const PAYER: components["schemas"]["WhoIsHere"] = {
 };
 
 export type PaymentLine = components["schemas"]["PaymentLine"];
+export type CorrectionLine = components["schemas"]["CorrectionLine"];
+
+/** A correction of a worker's pay (WAGE-10): Juma's + 9,000 of a November day left out, typed by Baba at 10:05 on 3
+ * December in Arusha, counting, unless told otherwise. */
+export function correction(
+  fields: Partial<CorrectionLine> = {},
+): CorrectionLine {
+  return {
+    id: "019a8800-0000-7000-8000-000000000001",
+    amount: "9000.00",
+    reason: "Novemba: siku ya 12/11 haikuhesabiwa",
+    by: "Baba",
+    at: "2026-12-03T07:05:00Z",
+    voided: null,
+    ...fields,
+  };
+}
 
 /** A payment of a payslip: Asha's 152,000, in cash, by Baba at 08:10 on 2 December in Arusha, signed, unless told
  * otherwise. */

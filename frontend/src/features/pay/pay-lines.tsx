@@ -8,6 +8,7 @@
 //   Leo: siku kamili                  10,000
 //   Advansi                         − 40,000
 //   Deni la Oktoba                  − 18,000
+//   Marekebisho: Oktoba: siku ya 7/10 haikuhesabiwa   + 9,000
 //   ------------------------------------------
 //   Jumla ya kumlipa leo         TSh 102,000
 //   ! Siku 1 inasubiri uamuzi
@@ -15,7 +16,8 @@
 // On the worker's pay page (worker-pay-screen.tsx) and in the card of their own page (worker-month-pay.tsx), so both show
 // the same. Today's lines, once they tapped Toka, are apart, as today isn't over: its meals are split so far (Jack: A).
 // Then what they were given before payday (WAGE-8), today's with it, and what an earlier month's pay left owed (WAGE-3),
-// just above the total. A total below 0 pays nothing, and the page says what is owed (Jack: A). Every amount is the
+// just above the total; last, each correction of an earlier month's mistake, with its reason, plus or minus (WAGE-10).
+// A total below 0 pays nothing, and the page says what is owed (Jack: A). Every amount is the
 // server's; the page multiplies and adds up nothing. Once a payslip keeps the pay, these are its lines as they were kept.
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
@@ -30,22 +32,39 @@ import {
 import { Decimal } from "@/lib/decimal";
 import { formatAmount, formatMoney } from "@/lib/format";
 
+import { type CorrectionLine, useReasonWords } from "./corrections";
 import type { WorkerPay } from "./pay";
 import { type Counted, isThisMonth, Left, NotPaid } from "./pay-notes";
 
 /** One row: what, how many, and how much. */
 type Row = { key: string; what: string; many: string; amount: string };
 
+/** An amount that may be either way, with its sign: "+ 9,000", "− 5,000" (WAGE-10). */
+export function useSignedAmount(): (amount: string) => string {
+  const t = useTranslations("pay");
+  return (amount) => {
+    const value = new Decimal(amount);
+    return t(value.lt("0") ? "less" : "more", {
+      amount: formatAmount(value.abs()),
+    });
+  };
+}
+
 export function PayLines({
   answer,
   worker,
+  corrections,
 }: {
   /** The month the pay is of. */
   answer: Counted;
   worker: WorkerPay;
+  /** The corrections that count, in the order typed: each its own line, with its reason (WAGE-10). */
+  corrections: CorrectionLine[];
 }) {
   const t = useTranslations("pay");
   const monthWords = useTranslations("attendanceMonth");
+  const reasonWords = useReasonWords();
+  const signed = useSignedAmount();
   const { pay, today } = worker;
   const plus = (amount: string) => formatAmount(new Decimal(amount));
   // Money taken off, with its minus: "− 2,000".
@@ -114,6 +133,15 @@ export function PayLines({
       }),
       many: "",
       amount: less(pay.carried),
+    });
+  // Last, the corrections of an earlier month's mistakes (WAGE-10): one line each, its reason said, plus or minus. The
+  // pay's own sum of them is in its total; each line is the server's too, so the page adds nothing up.
+  for (const line of corrections)
+    rows.push({
+      key: `correction ${line.id}`,
+      what: t("correction.line", { reason: reasonWords(line.reason) }),
+      many: "",
+      amount: signed(line.amount),
     });
 
   return (

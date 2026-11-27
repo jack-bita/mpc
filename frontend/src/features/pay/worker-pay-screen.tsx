@@ -14,6 +14,12 @@
 // Baba, with the signature, and Batilisha; or Hajalipwa with Lipa, for whoever may hand out pay (mayPay), never on their
 // own. One who left is paid from here the evening they go, once theirs is approved alone.
 //
+// And Ongeza marekebisho, a mistake of an earlier month put right in this one (correction-sheet.tsx, WAGE-10), for
+// whoever approves pay, never on their own, on a month that takes one, as the server says (`no_correction`); each
+// correction a line of the pay, with its reason. Of one who left whose pay is approved, the page says why there is none
+// (Jack: A). The address's `marekebisho=ongeza` opens the sheet as the page opens, as the flag of a late tap sends Baba
+// here, and goes as the sheet closes, so the browser's back never opens it again.
+//
 // An office screen: it asks the server through the store of server answers (rule 5). Its route asks the two keys of pay
 // on the whole shop; someone without both sees the server's refusal.
 //
@@ -24,6 +30,7 @@ import { type RefObject, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
+import { useWordInAddress } from "@/components/tab-in-address";
 import { Button } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
@@ -37,6 +44,13 @@ import { shopToday } from "@/offline/rules";
 
 import { ApproveLeaver } from "./approve-leaver";
 import { ApprovedLine } from "./approved-line";
+import { AddCorrection } from "./correction-sheet";
+import {
+  CORRECTION_PARAM,
+  correctionsThatCount,
+  OPEN_THE_SHEET,
+  offersCorrection,
+} from "./corrections";
 import {
   mayApprovePay,
   payPage,
@@ -72,6 +86,8 @@ export function WorkerPayScreen({
       ? asked
       : thisMonth;
   const answer = useWorkerPay(staff, month);
+  // Whether the address asks for Ongeza marekebisho's sheet as the page opens (WAGE-10).
+  const [correcting, setCorrecting] = useWordInAddress(CORRECTION_PARAM);
   // The page's title, which the keyboard goes to when a sheet's link moved the page to another month.
   const title = useRef<HTMLHeadingElement>(null);
   // Until both answer, through the store's own tries too; only for a worker the address names.
@@ -106,6 +122,8 @@ export function WorkerPayScreen({
           mayApprove={mayApprovePay(who.data)}
           mayPay={mayPay(who.data)}
           title={title}
+          openCorrection={correcting === OPEN_THE_SHEET}
+          onCorrectionOpened={() => setCorrecting(null)}
         />
       ) : null}
     </div>
@@ -120,6 +138,8 @@ function TheWorkersPay({
   mayApprove,
   mayPay,
   title,
+  openCorrection,
+  onCorrectionOpened,
 }: {
   answer: WorkerPayMonth;
   /** The shop's, for when it was approved. */
@@ -129,6 +149,10 @@ function TheWorkersPay({
   mayPay: boolean;
   /** The page's title, which stays as the month moves. */
   title: RefObject<HTMLHeadingElement | null>;
+  /** Whether the address asked for Ongeza marekebisho's sheet (WAGE-10); and the page takes the word away once it is
+   * opened. */
+  openCorrection: boolean;
+  onCorrectionOpened: () => void;
 }) {
   const t = useTranslations("pay");
   const monthWords = useTranslations("attendanceMonth");
@@ -171,13 +195,29 @@ function TheWorkersPay({
         <Card>
           <CardContent>
             {answer.paid_by_day ? (
-              <PayLines answer={answer} worker={answer.worker} />
+              <PayLines
+                answer={answer}
+                worker={answer.worker}
+                corrections={correctionsThatCount(answer)}
+              />
             ) : (
               <p>{t("notPaidByDay")}</p>
             )}
           </CardContent>
         </Card>
       )}
+      {/* Ongeza marekebisho, for whoever approves pay, on a month that takes one (WAGE-10); of one who left and was paid,
+          why there is none (Jack: A). */}
+      {offersCorrection(answer, mayApprove) ? (
+        <AddCorrection
+          answer={answer}
+          month={month}
+          openAtStart={openCorrection}
+          onOpened={onCorrectionOpened}
+        />
+      ) : mayApprove && answer.no_correction === "correction.left_paid" ? (
+        <p>{t("correction.leftPaid", { name: answer.worker.display_name })}</p>
+      ) : null}
       {/* Once a payslip keeps it: how it was handed out, or Lipa (WAGE-9). */}
       <PayslipPayments
         worker={answer.worker}
