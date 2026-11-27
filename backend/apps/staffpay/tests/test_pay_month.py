@@ -56,7 +56,7 @@ from apps.staffpay.models import (
     PayRun,
     Payslip,
 )
-from apps.staffpay.selectors import advances_between, corrections_by_job
+from apps.staffpay.selectors import advances_between, closings, corrections_by_job, corrections_of
 from apps.staffpay.services import (
     PayMonth,
     WorkerPay,
@@ -792,11 +792,17 @@ def test_the_page_says_why_a_month_takes_none(shop_a: Shop, baba: StaffMember, a
         assert why(asha, dt.date(2026, 12, 1)) == "correction.month_to_come"
 
 
-def test_corrections_are_read_inside_their_own_shop(shop_a: Shop, shop_b: Shop) -> None:
+@pytest.mark.parametrize("read", ["corrections_by_job", "corrections_of", "closings"])
+def test_corrections_are_read_inside_their_own_shop(shop_a: Shop, shop_b: Shop, asha: StaffMember, read: str) -> None:
     # Asked inside another shop's visit, the guard would hide every row, and Juma would be 9,000 short a second time,
-    # without a word: so it fails loudly (ADR-0022).
+    # without a word, or a late tap would go unmarked: so each fails loudly (ADR-0022; the review for the last two).
+    reads: dict[str, Callable[[], object]] = {
+        "corrections_by_job": lambda: corrections_by_job(shop_a, NOVEMBER),
+        "corrections_of": lambda: corrections_of(shop_a, asha.pk, NOVEMBER),
+        "closings": lambda: closings(shop_a, [asha.pk]),
+    }
     with shop_context(shop_b), pytest.raises(ShopMismatch):
-        corrections_by_job(shop_a, NOVEMBER)
+        reads[read]()
 
 
 # Leo: today, still running, once the worker taps Toka (Jack: A).

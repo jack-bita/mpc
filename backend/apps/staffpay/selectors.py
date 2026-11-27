@@ -272,6 +272,9 @@ def corrections_by_job(shop: Shop, month: date) -> dict[uuid.UUID, list[tuple[De
 def corrections_of(shop: Shop, job: uuid.UUID, month: date) -> list[PayCorrection]:
     """One job's corrections in the pay of the month of `month`, crossed out ones too, in the order typed, with who
     typed and who crossed out each (WAGE-10): what the worker's page lists, as a payslip's foot lists its payments."""
+    # The same check as the month's, for the same reason (ADR-0022): asked inside another shop's visit, the guard would
+    # hide every row, and the page would say there is none, without a word (the review).
+    _check_open(shop, "corrections_of")
     return list(
         PayCorrection.objects.filter(shop=shop, staff_id=job, month=month.replace(day=1))
         .select_related("created_by", "voided_by")
@@ -355,6 +358,9 @@ class Closings:
 def closings(shop: Shop, jobs: Iterable[uuid.UUID]) -> Closings:
     """When each month's pay was approved, for the shop and for each of `jobs` (WAGE-10): in two reads, whatever the
     number of taps. What tells a tap that came after its day's pay was approved, and so counts for nothing."""
+    # The same check, for the same reason: inside another shop's visit, no approval would show, and no late tap would
+    # be marked (the review).
+    _check_open(shop, "closings")
     runs = list(PayRun.objects.filter(shop=shop).values_list("month", "created_at"))
     slips: dict[uuid.UUID, list[tuple[date, datetime]]] = defaultdict(list)
     for staff_id, month, at in Payslip.objects.filter(shop=shop, staff_id__in=list(jobs)).values_list(
@@ -362,6 +368,13 @@ def closings(shop: Shop, jobs: Iterable[uuid.UUID]) -> Closings:
     ):
         slips[staff_id].append((month, at))
     return Closings(runs=runs, slips=dict(slips))
+
+
+def _check_open(shop: Shop, read: str) -> None:
+    # The guard reads only the shop open (ADR-0022): asked of another, a read would answer nothing, never loudly.
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch(f"{read} was given a shop that is not the one open.")
 
 
 def _months_end(month: date) -> date:
