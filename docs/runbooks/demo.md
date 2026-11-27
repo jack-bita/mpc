@@ -60,6 +60,8 @@ None of them can open the admin: nobody the seed makes is `is_staff`. And nobody
 
 **Approving the pay** (WAGE-3). Meneja holds `pay.approve`, the owner's own key, so a visitor can try *Idhinisha* both ways. *One who left*, on any day: on *Wafanyakazi* add a worker with a first day a day or more back and a daily pay, then mark them left (*Ameondoka*); their name on *Mishahara* opens their pay, which offers *Idhinisha malipo ya …*. *A whole month*: once one of the weeks' months is over, so on a month's first days, *Mishahara* of the month before offers *Idhinisha*, after the days that wait are decided (*Zinahitaji uamuzi*). The seed approves nothing itself. What a visitor approves stays closed until the next reset, for every visitor: no decision, tap, rate, meal money or advance of it can be added or crossed out.
 
+**A worker's own days and pay** (WAGE-4). Everyone logged in finds *Siku na malipo yangu*: Asha and Baraka on a laptop's PIN welcome, under *Mahudhurio*, with the internet only, and Meneja on the office home too. It shows that person's own weeks of the seed and nobody else's: on *Siku* the calendar Meneja sees of them, each day in a sheet with its taps, and on *Malipo* their pay so far, *Bado hayajaidhinishwa, yanaweza kubadilika.*; a month a visitor approved shows its payslip, who approved it and how it was paid. Nothing on it changes anything, so it needs no reset of its own.
+
 **When it is made again.** The seed runs on every start of the demo, after the migrations:
 - on a new database (the first setup, or every 30 days) it makes the shop;
 - on the first start of a new day, in Arusha's time, it wipes the database and makes the shop again, so whatever visitors changed is gone;
