@@ -34,6 +34,11 @@
 // A screen gives the words: the title, what it's about, the main button's words, and the form. Ghairi's word is the
 // sheet's own (sheet.cancel).
 //
+// A sheet that only shows (WAGE-4): a worker's own day, opened from their calendar, has nothing to save, so the screen
+// gives no main button, and the foot is one *Funga*, the sheet's own word (sheet.close), across its whole width, in
+// place of Ghairi, which would say something is being given up. Funga and Esc close it, as Ghairi does; a tap on the
+// dimmed page still doesn't, the same rule for every sheet.
+//
 // "use client": Base UI's dialog keeps state and listens to the keyboard, in the browser's React; and it asks
 // use-intl for a word.
 "use client";
@@ -60,6 +65,16 @@ export const SHEET_LOOK = [
   "pb-[max(1rem,env(safe-area-inset-bottom))]",
 ].join(" ");
 
+/** The main button and what it does, both or neither: a sheet that only shows has none (WAGE-4). */
+type SheetAction =
+  | {
+      /** The main button's words: *Hifadhi uamuzi*. */
+      actionLabel: string;
+      /** The main button, or Enter in a box: the screen checks and sends its form. */
+      onAction: () => void;
+    }
+  | { actionLabel?: undefined; onAction?: undefined };
+
 export function Sheet({
   open,
   onClose,
@@ -72,17 +87,13 @@ export function Sheet({
   actionKind = "main",
   finalFocus,
   children,
-}: {
+}: SheetAction & {
   /** Whether it is on the screen: the screen keeps this, opening it from its own button. */
   open: boolean;
-  /** Ghairi or Esc: the screen closes it, forgetting what was typed. */
+  /** Ghairi, Funga or Esc: the screen closes it, forgetting what was typed. */
   onClose: () => void;
   title: string;
   description?: ReactNode;
-  /** The main button's words: *Hifadhi uamuzi*. */
-  actionLabel: string;
-  /** The main button, or Enter in a box: the screen checks and sends its form. */
-  onAction: () => void;
   /** The main action is on its way: both buttons held, and nothing closes it. */
   busy?: boolean;
   /** The main button alone held, Ghairi still free: with no network, so nothing waits unsent while it looks done. */
@@ -99,7 +110,8 @@ export function Sheet({
   function send(event: FormEvent<HTMLFormElement>) {
     // The browser's own sending of a form would load the page again: this one is sent by the screen.
     event.preventDefault();
-    if (!busy && !actionDisabled) onAction();
+    // A sheet that only shows sends nothing: Enter in it does nothing, as it holds no box to send.
+    if (!busy && !actionDisabled) onAction?.();
   }
 
   return (
@@ -137,7 +149,8 @@ export function Sheet({
           <div className="grid min-h-0 gap-4 overflow-y-auto py-1">
             {children}
           </div>
-          {/* Ghairi first, the main button last, on the right, where the thumb ends: as on every screen's pair. */}
+          {/* Ghairi first, the main button last, on the right, where the thumb ends: as on every screen's pair. A sheet
+              that only shows: Funga alone, across the foot. */}
           <SheetFooter className="flex-row gap-3 px-0 pb-0">
             <Button
               kind="second"
@@ -145,16 +158,18 @@ export function Sheet({
               disabled={busy}
               onClick={onClose}
             >
-              {t("cancel")}
+              {actionLabel === undefined ? t("close") : t("cancel")}
             </Button>
-            <Button
-              kind={actionKind}
-              type="submit"
-              className="flex-1"
-              disabled={busy || actionDisabled}
-            >
-              {actionLabel}
-            </Button>
+            {actionLabel !== undefined && (
+              <Button
+                kind={actionKind}
+                type="submit"
+                className="flex-1"
+                disabled={busy || actionDisabled}
+              >
+                {actionLabel}
+              </Button>
+            )}
           </SheetFooter>
         </form>
       </SheetContent>

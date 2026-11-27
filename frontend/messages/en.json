@@ -151,7 +151,8 @@
     "clear": "Clear the signature"
   },
   "sheet": {
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "close": "Close"
   },
   "password": {
     "chooseTitle": "Choose your password",
