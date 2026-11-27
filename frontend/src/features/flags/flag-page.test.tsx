@@ -30,6 +30,20 @@ const MENEJA: WhoIsHere = {
   },
 };
 
+/** Meneja who approves pay too: the approval's key and the two of pay, on the whole shop (WAGE-10). */
+const APPROVES_PAY: WhoIsHere = {
+  ...MENEJA,
+  permissions: {
+    ...MENEJA.permissions,
+    whole_shop: [
+      ...MENEJA.permissions.whole_shop,
+      "pay.approve",
+      "settings.manage",
+      "staff.manage",
+    ],
+  },
+};
+
 /** The page of `one`, as `me` sees it. */
 function show(one: Flag, me: WhoIsHere = MENEJA) {
   answer("GET", ME, { status: 200, body: me });
@@ -90,6 +104,53 @@ describe("one flag's page", () => {
     expect(screen.queryByRole("link", { name: "Fungua siku yake" })).toBeNull();
   });
 
+  it("opens a late tap's worker's pay to correct, for whoever approves pay (WAGE-10)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    // Wednesday 2 December 2026 in Arusha.
+    vi.setSystemTime(new Date("2026-12-02T06:14:00Z"));
+    try {
+      const late = flag({
+        kind: "late_record",
+        tap: { staff: JUMA_JOB, kind: "in", day: "2026-11-30", time: "07:20" },
+      });
+      const { unmount } = show(late, APPROVES_PAY);
+      const link = await screen.findByRole("link", {
+        name: "Ongeza marekebisho",
+      });
+      expect(link.getAttribute("href")).toMatch(
+        new RegExp(
+          `^/pay/worker/?\\?staff=${JUMA_JOB}&month=2026-12&marekebisho=ongeza$`,
+        ),
+      );
+      unmount();
+
+      // Whoever may close flags, and fix attendance, but not approve pay: no way to correct it from here.
+      const second = show(late);
+      await screen.findByText("Hali");
+      expect(
+        screen.queryByRole("link", { name: "Ongeza marekebisho" }),
+      ).toBeNull();
+      second.unmount();
+
+      // Their own late tap: nobody corrects their own pay (Jack: A), so no way there from here (the review).
+      const own = show({ ...late, names_you: true }, APPROVES_PAY);
+      await screen.findByText("Hali");
+      expect(
+        screen.queryByRole("link", { name: "Ongeza marekebisho" }),
+      ).toBeNull();
+      own.unmount();
+
+      // A flag of another kind about a tap: its day alone.
+      show(flag({ kind: "unverified_time" }), APPROVES_PAY);
+      await screen.findByText("Hali");
+      expect(
+        screen.queryByRole("link", { name: "Ongeza marekebisho" }),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("offers no day for a flag about no tap", async () => {
     show(flag({ kind: "device_gap", tap: null, people: [] }));
 
@@ -105,7 +166,9 @@ describe("one flag's page", () => {
     ],
     [
       "a Toka while suspended",
-      { tap: { staff: JUMA_JOB, kind: "out", day: "2026-11-22" } },
+      {
+        tap: { staff: JUMA_JOB, kind: "out", day: "2026-11-22", time: "07:52" },
+      },
       "Juma alibonyeza Toka kazini akiwa amesimamishwa, au baada ya kuondoka kazini.",
     ],
     [
@@ -127,6 +190,34 @@ describe("one flag's page", () => {
       "a tap in a file loaded by someone of the same nickname",
       { loaded_by: "Juma", brought_from: "Laptop Vyakula" },
       "Juma alibonyeza Ingia kazini akiwa amesimamishwa, au baada ya kuondoka kazini.",
+    ],
+    [
+      // WAGE-10: its day and its minute by the time the server trusts, never the laptop's own clock, 20 minutes slow
+      // here (WAGE-10's review); and sent when the server saw it, both on the shop's clock.
+      "a tap that came after its day's pay was approved",
+      {
+        kind: "late_record",
+        tap: { staff: JUMA_JOB, kind: "in", day: "2026-11-30", time: "07:20" },
+        made_at: "2026-11-30T04:00:00Z",
+        raised_at: "2026-12-02T06:14:00Z",
+      },
+      "Juma alibonyeza Ingia kazini Jumatatu 30/11, saa 07:20 asubuhi, lakini kompyuta iliituma Jumatano 02/12, baada ya malipo ya Novemba kuidhinishwa. Haikuhesabiwa kwenye malipo yake.",
+    ],
+    [
+      // Its time not trusted: no minute said, as the server knows none it can stand by.
+      "a tap whose time isn't trusted that came after its pay was approved",
+      {
+        kind: "late_record",
+        tap: { staff: JUMA_JOB, kind: "in", day: "2026-11-30", time: null },
+        made_at: "2026-11-30T04:00:00Z",
+        raised_at: "2026-12-02T06:14:00Z",
+      },
+      "Juma alibonyeza Ingia kazini Jumatatu 30/11, lakini kompyuta iliituma Jumatano 02/12, baada ya malipo ya Novemba kuidhinishwa. Haikuhesabiwa kwenye malipo yake.",
+    ],
+    [
+      "another record that came after its pay was approved",
+      { kind: "late_record", tap: null },
+      "Juma aliandika kumbukumbu iliyofika baada ya malipo kuidhinishwa, kwa hiyo haikuhesabiwa kwenye malipo yake.",
     ],
     [
       "a record by someone with no key",

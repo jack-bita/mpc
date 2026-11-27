@@ -2,15 +2,23 @@
 // record says of itself, and a note's words, which are the person's own, or a code the system wrote.
 //
 // Every sentence is a whole one in the word books, never glued from parts, so each language orders its words its own
-// way. A device's missing numbers are counts of records, never money or a quantity (02 §13), kept exact all the same.
+// way. A device's missing numbers are counts of records, never money or a quantity (02 §13), kept exact all the same. A
+// tap that came after its day's pay was approved (WAGE-10) is said with its day, its time and the day it was sent, each
+// on the shop's own clock, so the sentence takes the shop's zone.
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
 
 import { useTranslations } from "use-intl";
 
+import type {
+  MonthNumber,
+  Weekday,
+} from "@/features/attendance/attendance-month";
 import { useRefusedRecordWords } from "@/i18n/refused-record";
 import { Decimal } from "@/lib/decimal";
+import { clockPart, formatDayMonth, weekdayOf } from "@/lib/format";
+import { shopToday } from "@/offline/rules";
 
 import { type Flag, type FlagNote, isRaised } from "./flags";
 
@@ -24,14 +32,25 @@ function recordNumber(number: string | null): string {
   return new Decimal(number ?? "0").toFixed(0);
 }
 
-/** What happened, in a sentence, and why the server refused the record, if it did. */
-export function useWhatHappened(): (flag: Flag) => {
+/** What happened, in a sentence, and why the server refused the record, if it did. `timezone`: the shop's, whose clock
+ * a late tap's day and time are said by (WAGE-10). */
+export function useWhatHappened(timezone: string): (flag: Flag) => {
   sentence: string;
   why: string | null;
 } {
   const t = useTranslations("flags.what");
+  const flags = useTranslations("flags");
   const tapKind = useTranslations("flags.tapKind");
+  const weekdays = useTranslations("attendanceMonth.weekdays");
+  const months = useTranslations("attendanceMonth.monthNames");
+  const attendance = useTranslations("attendance");
   const refusedFor = useRefusedRecordWords();
+  // A day as the flag's facts say it, "Jumatatu 30/11", from the shop's business date.
+  const dayWords = (day: string) =>
+    flags("day", {
+      weekday: weekdays(String(weekdayOf(day)) as Weekday),
+      date: formatDayMonth(day),
+    });
   return (flag) => {
     // Whom it is about: the tap's own worker first (ATT-1), the one who loaded a file, the record's maker.
     const name = flag.people[0] ?? t("someone");
@@ -79,6 +98,31 @@ export function useWhatHappened(): (flag: Flag) => {
       }
       case "invalid_document":
         return said(t("recordRefused"));
+      case "late_record": {
+        // Asha's Ingia of Monday 30/11 at 07:20, its day and minute by the time the server trusts, on the shop's clock,
+        // never the laptop's own beside it, as the two may disagree (WAGE-10's review); sent on Wednesday 2/12, when the
+        // server saw it, after November's approval. A tap whose time it trusts none says its day alone. Its month is
+        // the tap's own day's.
+        if (flag.tap === null) return said(t("lateRecord", { name }));
+        const words = {
+          name,
+          kind: tapKind(flag.tap.kind),
+          day: dayWords(flag.tap.day),
+          sent: dayWords(shopToday(timezone, Date.parse(flag.raised_at))),
+          month: months(flag.tap.day.slice(5, 7) as MonthNumber),
+        };
+        return said(
+          flag.tap.time === null
+            ? t("lateTapNoTime", words)
+            : t("lateTap", {
+                ...words,
+                time: attendance("timeOfDay", {
+                  time: flag.tap.time,
+                  part: clockPart(flag.tap.time),
+                }),
+              }),
+        );
+      }
     }
   };
 }

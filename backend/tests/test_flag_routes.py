@@ -42,6 +42,7 @@ from apps.people.services import add_staff, grant_permission, hire_again, mark_l
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
+from apps.staffpay.models import AttendanceEvent
 from apps.sync.models import PushedDocument, PushedStatus
 from apps.sync.push import Carried, Sent, push
 
@@ -338,7 +339,8 @@ def test_a_flag_about_a_tap_names_the_day_to_open(
 
     page = page_of(baba, flag)
 
-    assert page["tap"] == {"staff": str(staff_a.pk), "kind": "out", "day": "2026-11-23"}
+    # No minute: the server trusts no time of it, and never says the laptop's beside its day (WAGE-10's review).
+    assert page["tap"] == {"staff": str(staff_a.pk), "kind": "out", "day": "2026-11-23", "time": None}
     assert (page["kind"], page["side"], page["people"], page["device"]) == (
         "unverified_time",
         None,
@@ -361,7 +363,12 @@ def test_a_suspended_workers_tap_names_its_day(
     page = page_of(baba, only_flag(shop_a, FlagKind.SUSPENDED_STAFF_ACTIVITY))
 
     day = tapped.astimezone(ARUSHA).date().isoformat()
-    assert page["tap"] == {"staff": str(staff_a.pk), "kind": "in", "day": day}
+    # Sent at once, its time the server's: its minute on the shop's clock, by that time (WAGE-10's review).
+    with shop_context(shop_a):
+        trusted = AttendanceEvent.objects.get().trusted_time
+    assert trusted is not None
+    minute = trusted.astimezone(ARUSHA).strftime("%H:%M")
+    assert page["tap"] == {"staff": str(staff_a.pk), "kind": "in", "day": day, "time": minute}
     assert (page["side"], page["device"]) == ("Dawa", "Laptop ya Dawa")
 
 

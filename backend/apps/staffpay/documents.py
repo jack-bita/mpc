@@ -11,12 +11,14 @@ code does (tests/probe/documents.py): it saves inside a recording_changes block,
 with the laptop's id, so an id another shop holds clashes and is never overwritten; and a broken rule is a flag,
 never a refusal (accept, then flag). A clock-in needs no key: anyone working at the shop may clock in on any of its
 laptops (Jack, ATT-1). A camera missing, blocked or broken never stops a tap either: it is kept, with why it has no
-photo (Jack, ATT-3: A).
+photo (Jack, ATT-3: A). A tap that comes after its day's pay was approved is kept too, counted nowhere, as that pay
+never changes (A3), and flagged, so nobody's pay is short unsaid (late_record, WAGE-10).
 """
 
 import datetime as dt
 import uuid
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
@@ -30,6 +32,8 @@ from apps.core.changes import record_change, recording_changes
 from apps.people.models import Device, StaffMember
 from apps.staffpay.calculations import Evidence, Sign, check_time
 from apps.staffpay.models import AttendanceEvent, ClockKind, NoPhoto, TimeCheck
+from apps.staffpay.selectors import is_closed
+from apps.staffpay.services import where_it_falls
 
 
 class Pushed(Protocol):
@@ -156,6 +160,17 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
     # tap disagrees with no record, and Neema's day before it stays as it was.
     disagrees_with = document.record_before if Sign.RECORD_BEFORE_IS_LATER in checked.signs else None
     with recording_changes(shop_id):
+        # The worker's job, locked for the rest of the push's transaction, before its pay is asked about below: the
+        # approval of a month takes every job's row (lock_jobs, WAGE-3). Without it the tap's own link takes only a key
+        # share, which never waits for an approval, so a tap that came while Baba approved November could be read by
+        # neither: too late for the approval's reads, too early to find the month approved. With it, one waits for the
+        # other: the tap is counted by the approval, or finds the month approved and is flagged (WAGE-10). The light
+        # lock (backend rules), after the laptop's row, as the push takes that first, and before the change numbers,
+        # taken last; the approval takes no laptop's row, so the two never wait for each other in a ring. Every run of
+        # the book takes the same rows (lock_jobs): so a tap also waits a moment while an office page works a month out,
+        # Mahudhurio ya mwezi, Mishahara or a worker's pay, or the night's job does, as it never did before (the
+        # review): a few hundred milliseconds, on a push no person waits on.
+        job = StaffMember.objects.select_for_update(no_key=True).get(pk=document.created_by.pk)
         event = AttendanceEvent(
             id=document.id,
             shop_id=shop_id,
@@ -197,8 +212,19 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
                 )
             except ValidationError as refusal:
                 raise _refused_label(refusal) from refusal
-    if checked.time_check != TimeCheck.UNVERIFIED:
-        return []
+    flags = [] if checked.time_check != TimeCheck.UNVERIFIED else [_unverified(document, event, checked.signs)]
+    # The day the tap falls on, as the book places it (where_it_falls): by the time trusted, or the laptop's for one in
+    # doubt. Its pay approved already, for the job, with its month or alone as they left (is_closed): the tap is kept
+    # and counts for nothing, and the flag says so, naming the worker, on no side, as attendance is the whole shop's
+    # (02 §13, WAGE-10). One per tap, beside the time's flag when both hold. Read under the job's lock, taken above.
+    shop = document.device.shop
+    day, _ = where_it_falls(event.trusted_time, event.client_time, ZoneInfo(shop.timezone))
+    if is_closed(shop, day, job.pk):
+        flags.append(raise_flag(kind=FlagKind.LATE_RECORD, subject=event, people=[document.created_by], by=None))
+    return flags
+
+
+def _unverified(document: Pushed, event: AttendanceEvent, signs: frozenset[Sign]) -> Flag:
     # A sign the laptop's clock moved, or a record carried in a rescue file: the line is kept, and flagged for a
     # manager, naming the worker (02 §12, SYNC-12). On no side: attendance belongs to the whole shop, as its rules do,
     # so the flag is the shop's. A carried one has no sign 1, so its flag names nobody else.
@@ -206,6 +232,6 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
     # Sign 1 says two records disagree, not whose clock moved: back for this tap, or forward for the one before. So the
     # flag names that record's maker too, for a manager to check both (Jack, ATT-1's review). Read only now, through
     # the shop's guard, as a flag is rare; someone the guard can't find is left out.
-    if Sign.RECORD_BEFORE_IS_LATER in checked.signs and document.made_before_by is not None:
+    if Sign.RECORD_BEFORE_IS_LATER in signs and document.made_before_by is not None:
         people.extend(StaffMember.objects.filter(pk=document.made_before_by))
-    return [raise_flag(kind=FlagKind.UNVERIFIED_TIME, subject=event, people=people, by=None)]
+    return raise_flag(kind=FlagKind.UNVERIFIED_TIME, subject=event, people=people, by=None)

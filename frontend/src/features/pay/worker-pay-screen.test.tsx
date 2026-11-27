@@ -1,6 +1,7 @@
 // worker-pay-screen.test.tsx — one worker's pay of a month, line by line (WAGE-2): the lines as Jack drew them, a raise,
 // what they were given before payday (WAGE-8), today once they tapped Toka, what isn't paid, a month gone by, and what the
 // page says with no worker or no pay. And at the foot of a payslip, how it was handed out, Lipa and Batilisha (WAGE-9).
+// And the corrections of earlier months, each a line, and who is offered Ongeza marekebisho (WAGE-10).
 import {
   act,
   fireEvent,
@@ -12,6 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { answer, refusal, sent } from "@/test/fake-server";
 import {
+  APPROVER,
+  correction,
   NO_PAY,
   OWNER,
   pay,
@@ -533,6 +536,146 @@ describe("a worker's pay", () => {
     act(() => screen.getByRole("button", { name: "Rudi ulipotoka" }).click());
 
     expect(router.push).toHaveBeenCalledWith("/pay/?month=2026-10");
+  });
+});
+
+describe("corrections (WAGE-10)", () => {
+  it("puts each that counts last, with its reason, plus or minus, and none crossed out", async () => {
+    // Juma's 132,000, a day of October's left out and 2,000 of fines taken twice: + 11,000, the server's own sums.
+    jumaIsPaid(
+      {
+        pay: pay({ corrections: "11000.00", total: "143000.00" }),
+        total: "143000.00",
+      },
+      {
+        corrections: [
+          correction({
+            amount: "9000.00",
+            reason: "Oktoba: siku ya 7/10 haikuhesabiwa",
+          }),
+          correction({
+            id: "019a8800-0000-7000-8000-000000000002",
+            amount: "90000.00",
+            reason: "Oktoba: kosa",
+            voided: {
+              by: "Baba",
+              at: "2026-12-03T07:20:00Z",
+              reason: "Kiasi kimekosewa",
+            },
+          }),
+          correction({
+            id: "019a8800-0000-7000-8000-000000000003",
+            amount: "2000.00",
+            reason: "Oktoba: faini mara mbili",
+          }),
+        ],
+      },
+    );
+
+    open();
+
+    expect(await lines()).toEqual([
+      "Siku kamili | 14 × 10,000 | 140,000",
+      "Nusu siku | 2 × 5,000 | 10,000",
+      "Faini | 2 | − 2,000",
+      "Chakula | siku 16 | − 16,000",
+      "Marekebisho: Oktoba: siku ya 7/10 haikuhesabiwa | + 9,000",
+      "Marekebisho: Oktoba: faini mara mbili | + 2,000",
+      "Jumla ya kumlipa leo | TSh 143,000",
+    ]);
+  });
+
+  it("says one taken off with its minus, and a ready reason in words", async () => {
+    jumaIsPaid(
+      {
+        pay: pay({ corrections: "-5000.00", total: "127000.00" }),
+        total: "127000.00",
+      },
+      {
+        corrections: [
+          correction({ amount: "-5000.00", reason: "paid_too_much" }),
+        ],
+      },
+    );
+    open();
+    expect((await lines()).at(-2)).toBe(
+      "Marekebisho: Alilipwa zaidi | − 5,000",
+    );
+  });
+
+  it("offers Ongeza marekebisho to whoever approves pay, on a month that takes one", async () => {
+    answer("GET", ME, { status: 200, body: APPROVER });
+    answer("GET", payRoute(JUMA), {
+      status: 200,
+      body: workerPayMonth(workerPay({ staff: JUMA })),
+    });
+    open();
+    expect(
+      await screen.findByRole("button", { name: "Ongeza marekebisho" }),
+    ).toBeTruthy();
+  });
+
+  it.each<[string, () => void]>([
+    // The two keys of pay alone: seeing the pay is not approving it (Jack: A).
+    ["to whoever may not approve pay", () => jumaIsPaid()],
+    [
+      "on one's own pay",
+      () => {
+        answer("GET", ME, { status: 200, body: APPROVER });
+        answer("GET", payRoute(JUMA), {
+          status: 200,
+          body: workerPayMonth(workerPay({ staff: JUMA, own: true })),
+        });
+      },
+    ],
+    [
+      "on a month that takes none",
+      () => {
+        answer("GET", ME, { status: 200, body: APPROVER });
+        answer("GET", payRoute(JUMA), {
+          status: 200,
+          body: workerPayMonth(workerPay({ staff: JUMA }), {
+            no_correction: "pay.day_approved",
+          }),
+        });
+      },
+    ],
+  ])("offers no Ongeza marekebisho %s", async (_, theServer) => {
+    theServer();
+    open();
+    await lines();
+    expect(
+      screen.queryByRole("button", { name: "Ongeza marekebisho" }),
+    ).toBeNull();
+    expect(screen.queryByText(/ameondoka, malipo yake yamefungwa/)).toBeNull();
+  });
+
+  it("says nothing of it to whoever may not approve pay", async () => {
+    // The sentence explains a button they would never have.
+    jumaIsPaid(
+      { display_name: "Neema" },
+      { no_correction: "correction.left_paid" },
+    );
+    open();
+    await lines();
+    expect(screen.queryByText(/ameondoka, malipo yake yamefungwa/)).toBeNull();
+  });
+
+  it("says why one who left and was paid takes none (Jack: A)", async () => {
+    answer("GET", ME, { status: 200, body: APPROVER });
+    answer("GET", payRoute(JUMA), {
+      status: 200,
+      body: workerPayMonth(workerPay({ staff: JUMA, display_name: "Neema" }), {
+        no_correction: "correction.left_paid",
+      }),
+    });
+    open();
+    expect(
+      await screen.findByText("Neema ameondoka, malipo yake yamefungwa."),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Ongeza marekebisho" }),
+    ).toBeNull();
   });
 });
 

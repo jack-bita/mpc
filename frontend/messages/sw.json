@@ -896,6 +896,7 @@
     "advances": "Advansi",
     "carried": "Deni la {month}",
     "less": "− {amount}",
+    "more": "+ {amount}",
     "todayLine": {
       "full": "Leo: siku kamili",
       "half": "Leo: nusu siku",
@@ -968,6 +969,34 @@
       },
       "readyReason": {
         "marked_by_mistake": "Niliweka kwa makosa"
+      }
+    },
+    "correction": {
+      "button": "Ongeza marekebisho",
+      "title": "Marekebisho ya {name}",
+      "way": "Ongeza au punguza",
+      "add": "Ongeza malipo",
+      "take": "Punguza malipo",
+      "amount": "Kiasi (TSh)",
+      "reason": "Sababu",
+      "readyHint": "Kwenye demo, chagua sababu iliyo tayari.",
+      "save": "Hifadhi",
+      "saved": "Imeandikwa: marekebisho ya {amount}.",
+      "line": "Marekebisho: {reason}",
+      "leftPaid": "{name} ameondoka, malipo yake yamefungwa.",
+      "readyReason": {
+        "dayNotCounted": "Siku haikuhesabiwa",
+        "paidTooMuch": "Alilipwa zaidi",
+        "wrongAmount": "Kiasi kimekosewa"
+      },
+      "reasonSaid": "Sababu: {reason}",
+      "typedBy": "Imeandikwa na {by} · {date} {time}",
+      "crossedOut": "Marekebisho yaliyobatilishwa",
+      "voidedBy": "Imebatilishwa na {by} · {date} {time}: {reason}",
+      "void": {
+        "title": "Marekebisho ya {name} · {amount}",
+        "reason": "Sababu ya kubatilisha",
+        "action": "Batilisha"
       }
     }
   },
@@ -1050,6 +1079,7 @@
     "tapLineEnteredNoDate": "{kind} {time} · imeongezwa na {by}",
     "laptopTime": "{time} (saa ya kompyuta, haiaminiki)",
     "doubt": "Shaka: {why}",
+    "afterApproval": "Ilifika baada ya malipo kuidhinishwa, kwa hiyo haikuhesabiwa.",
     "doubtWhy": {
       "not_working": "alikuwa amesimamishwa au ameondoka",
       "clock_disagrees": "huenda saa ya kompyuta ilibadilishwa"
@@ -1135,6 +1165,7 @@
       "device_gap": "Kumbukumbu zinakosekana",
       "permission_break": "Hakuwa na ruhusa",
       "invalid_document": "Kumbukumbu haikukubalika",
+      "late_record": "Imefika baada ya malipo kuidhinishwa",
       "another": "Tofauti nyingine"
     },
     "status": {
@@ -1171,6 +1202,7 @@
       "raisedAt": "Mfumo uliona",
       "status": "Hali",
       "openDay": "Fungua siku yake",
+      "addCorrection": "Ongeza marekebisho",
       "notes": "Maelezo ({count})",
       "noNotes": "Bado hakuna maelezo.",
       "noteBy": "{step} · {by} · {when}",
@@ -1188,6 +1220,9 @@
       "recordsMissing": "Kompyuta hii ilituma kumbukumbu namba {actual}, lakini seva ilisubiri namba {expected}. Zinazokosekana: {missing}.",
       "numbersWentBack": "Namba za kumbukumbu za kompyuta hii zimerudi nyuma: seva ilisubiri namba {expected}, ikaja namba {actual}.",
       "recordRefused": "Seva haikuweza kuhifadhi kumbukumbu iliyotumwa na kompyuta hii.",
+      "lateTap": "{name} alibonyeza {kind} {day}, saa {time}, lakini kompyuta iliituma {sent}, baada ya malipo ya {month} kuidhinishwa. Haikuhesabiwa kwenye malipo yake.",
+      "lateTapNoTime": "{name} alibonyeza {kind} {day}, lakini kompyuta iliituma {sent}, baada ya malipo ya {month} kuidhinishwa. Haikuhesabiwa kwenye malipo yake.",
+      "lateRecord": "{name} aliandika kumbukumbu iliyofika baada ya malipo kuidhinishwa, kwa hiyo haikuhesabiwa kwenye malipo yake.",
       "another": "Mfumo umeona tofauti ambayo toleo hili la programu halijui kuieleza."
     },
     "systemNote": {
@@ -1620,6 +1655,16 @@
       "reference_missing": "Andika namba ya muamala.",
       "reference_invalid": "Namba ya muamala ina herufi na tarakimu tu.",
       "reference_used": "Namba hii ya muamala imeshatumika kwa malipo mengine.",
+      "reason_missing": "Andika sababu."
+    },
+    "correction": {
+      "own": "Huwezi kuandika wala kubatilisha marekebisho ya malipo yako mwenyewe.",
+      "left_paid": "Mfanyakazi huyu ameondoka, na malipo yake yamefungwa.",
+      "month_to_come": "Mwezi huu bado haujafika.",
+      "outside_job": "Mfanyakazi huyu hakuwa kazini mwezi huu.",
+      "not_paid_by_day": "Mfanyakazi huyu halipwi kwa siku mwezi huu.",
+      "amount_invalid": "Andika kiasi cha shilingi nzima, kisicho sifuri.",
+      "amount_too_big": "Kiasi hiki ni kikubwa mno. Angalia sifuri zake.",
       "reason_missing": "Andika sababu."
     },
     "flag": {

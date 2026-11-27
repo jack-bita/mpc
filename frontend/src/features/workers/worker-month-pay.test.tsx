@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { components } from "@/api/schema";
 import { answer, refusal, sent } from "@/test/fake-server";
 import {
+  correction,
   NO_PAY,
   pay,
   payRoute,
@@ -164,6 +165,26 @@ describe("Malipo ya mwezi", () => {
     expect((await lines(await theCard())).slice(-2)).toEqual([
       "Advansi |  | − 40,000",
       "Jumla ya kumlipa leo | TSh 92,000",
+    ]);
+  });
+
+  it("adds each correction of the month, with its reason, as the worker's pay page does (WAGE-10)", async () => {
+    theServerHas(JUMA, {
+      "2026-11": workerPayMonth(
+        workerPay({
+          staff: JUMA.id,
+          pay: pay({ corrections: "9000.00", total: "141000.00" }),
+          total: "141000.00",
+        }),
+        { corrections: [correction()] },
+      ),
+    });
+
+    render(<WorkerScreen id={JUMA.id} />);
+
+    expect((await lines(await theCard())).slice(-2)).toEqual([
+      "Marekebisho: Novemba: siku ya 12/11 haikuhesabiwa |  | + 9,000",
+      "Jumla ya kumlipa leo | TSh 141,000",
     ]);
   });
 

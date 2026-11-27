@@ -1,18 +1,20 @@
 """apps/staffpay/api/views.py — the staffpay routes an office screen calls, under /api/v1/staffpay/ (WAGE-1; 03 §5.10).
 
-Ten: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
+Twelve: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
 read on Mahudhurio ya mwezi (ATT-5); one worker's month, their calendar and its days' taps (ATT-12); a decision on one
 of their days, sent from the sheet under the calendar (ATT-6); a manager's fixes to the taps, a tap added and a tap
 crossed out, each sent from its sheet under the calendar (ATT-13); the day's meal money, read, typed and crossed out on
 Hela ya chakula (WAGE-7); money given before payday, read, typed and crossed out on Advansi (WAGE-8); and the month's
-pay, everyone's on Mishahara and one worker's on their page, read alone (WAGE-2); and its approval, a month's and one
-worker's alone (WAGE-3). Thin, as every route is (ADR-0015):
+pay, everyone's on Mishahara and one worker's on their page, read alone (WAGE-2); its approval, a month's and one
+worker's alone (WAGE-3); handing it out, and crossing out a payment marked by mistake (WAGE-9); and a correction of a
+later month, typed and crossed out on a worker's pay page (WAGE-10). Thin, as every route is (ADR-0015):
 who may set a rate, and what it may be, are set_pay_rate's (apps/staffpay/services/money.py); which rate is in force,
 the selectors'; what a month holds, attendance_month's; what a worker's month holds, worker_attendance's; who may decide
 a day, and how, decide_day's; who may fix a tap, and how, add_tap's and void_tap's; the meal money of any days,
 meal_money_days'; who may type it, and cross it out, and how, record_meal_money's and void_meal_money's; the advances of
 a month, advances_month's; who may type one, and cross it out, and how, record_advance's and void_advance's; what the
-month pays, pay_month's and worker_pay's; and who may approve it, and when, approve_month's and approve_leaver's.
+month pays, pay_month's and worker_pay's; who may approve it, and when, approve_month's and approve_leaver's; and who
+may correct it, and how, record_correction's and void_correction's.
 """
 
 from collections.abc import Iterator
@@ -46,6 +48,7 @@ from apps.staffpay.api.serializers import (
     ApproveMonthSerializer,
     AttendanceMonthAnswer,
     AttendanceMonthQuery,
+    CorrectionAnswer,
     DayDecisionSerializer,
     DecideDaySerializer,
     MealMoneyAnswer,
@@ -62,9 +65,11 @@ from apps.staffpay.api.serializers import (
     PayRunAnswer,
     PayslipAnswer,
     RecordAdvanceSerializer,
+    RecordCorrectionSerializer,
     RecordMealMoneySerializer,
     TapAnswer,
     VoidAdvanceSerializer,
+    VoidCorrectionSerializer,
     VoidMealMoneySerializer,
     VoidPaymentSerializer,
     VoidTapSerializer,
@@ -78,6 +83,7 @@ from apps.staffpay.models import (
     ClockKind,
     DayChoice,
     MealMoney,
+    PayCorrection,
     PaymentMethod,
     PayRate,
     PayRun,
@@ -102,9 +108,11 @@ from apps.staffpay.services import (
     payment_line,
     ready_advance_void_reasons,
     record_advance,
+    record_correction,
     record_meal_money,
     set_pay_rate,
     void_advance,
+    void_correction,
     void_meal_money,
     void_payslip_payment,
     void_tap,
@@ -672,6 +680,53 @@ class PayslipPaymentViewSet(ShopViewSet[PayslipPayment]):
         sent.is_valid(raise_exception=True)
         voided = void_payslip_payment(row, reason=sent.validated_data["reason"], by=cast(StaffMember, self.actor))
         return Response(PaymentLineSerializer(payment_line(voided)).data)
+
+
+class PayCorrectionViewSet(CreateOnceMixin[PayCorrection]):
+    # POST pay-corrections/: Marekebisho, a mistake found after an earlier month's approval put right in a month still
+    # open (WAGE-10), from the sheet on a worker's pay page. POST pay-corrections/{id}/void/: a wrong one crossed out,
+    # from the sheet its line opens. Nothing else: corrections are read with the worker's pay, through pay/{id}/. The
+    # row in an address through the guard first (get_object): another shop's, or an id no shop has, is "not found"
+    # alike (03 §5.4).
+    model = PayCorrection
+    # A worker's pay belongs to the whole shop: no side.
+    side_field = None
+    # The approval's own key, as only whoever approves pay types or crosses out one (Jack: A).
+    action_permissions = {"create": Permission.PAY_APPROVE, "void": Permission.PAY_APPROVE}
+    serializer_class = CorrectionAnswer
+    create_serializer_class = RecordCorrectionSerializer
+
+    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
+        # The base's checks, then all three of the approval's keys, before anything is read: the two of pay, as a
+        # correction and its reason are the pay's own; and the approval's again, as a create sent again hands back the
+        # row it made and asks no key for that (CreateOnceMixin). The services ask them again, under their locks.
+        super().initial(request, *args, **kwargs)
+        _ask(self, *APPROVES)
+
+    def base_rows(self) -> QuerySet[PayCorrection]:
+        # Each names who typed it and who crossed it out: their jobs come in the same read.
+        return super().base_rows().select_related("created_by", "voided_by")
+
+    def create_row(self, data: dict[str, Any]) -> PayCorrection:
+        # The worker is one of the visit's shop (WorkerField); record_correction checks the rest, and refuses with its
+        # codes. cast: the login leaves the staff member acting in `request.auth`, which mypy reads as an Actor.
+        return record_correction(
+            data["staff"],
+            correction_id=data["id"],
+            month=data["month"],
+            amount=data["amount"],
+            reason=data["reason"],
+            by=cast(StaffMember, self.actor),
+        )
+
+    @extend_schema(request=VoidCorrectionSerializer, responses=CorrectionAnswer)
+    @action(detail=True, methods=["post"])
+    def void(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        row = self.get_object()
+        sent = VoidCorrectionSerializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        voided = void_correction(row, reason=sent.validated_data["reason"], by=cast(StaffMember, self.actor))
+        return Response(CorrectionAnswer(voided).data)
 
 
 @contextmanager

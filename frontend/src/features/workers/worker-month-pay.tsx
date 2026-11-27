@@ -23,6 +23,7 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Card, CardContent } from "@/components/design/card";
 import { MonthSwitch } from "@/features/attendance/month-switch";
 import { ApprovedLine } from "@/features/pay/approved-line";
+import { correctionsThatCount } from "@/features/pay/corrections";
 import type { WorkerPayMonth } from "@/features/pay/pay";
 import { PayLines } from "@/features/pay/pay-lines";
 import { useCountedTo } from "@/features/pay/pay-notes";
@@ -99,7 +100,11 @@ function ThePay({
           With none, nothing more when the line above says no working day has come: whether they are paid by the day isn't
           known yet. */}
       {answer.paid_by_day ? (
-        <PayLines answer={answer} worker={answer.worker} />
+        <PayLines
+          answer={answer}
+          worker={answer.worker}
+          corrections={correctionsThatCount(answer)}
+        />
       ) : answer.no_day_yet ? null : (
         <p>{t("notPaidByDay")}</p>
       )}

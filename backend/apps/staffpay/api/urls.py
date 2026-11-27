@@ -1,5 +1,5 @@
 """apps/staffpay/api/urls.py — the staffpay routes, mounted under /api/v1/staffpay/ by config/urls.py (WAGE-1,
-ATT-5, ATT-12, ATT-6, ATT-13, WAGE-7, WAGE-8, WAGE-2, WAGE-3, WAGE-9)."""
+ATT-5, ATT-12, ATT-6, ATT-13, WAGE-7, WAGE-8, WAGE-2, WAGE-3, WAGE-9, WAGE-10)."""
 
 from rest_framework.routers import SimpleRouter
 
@@ -10,6 +10,7 @@ from apps.staffpay.api.views import (
     AttendanceTapViewSet,
     AttendanceWorkerViewSet,
     MealMoneyViewSet,
+    PayCorrectionViewSet,
     PayRateViewSet,
     PayRunViewSet,
     PayslipPaymentViewSet,
@@ -26,7 +27,8 @@ from apps.staffpay.api.views import (
 # meal-money/ for the days and to type some, meal-money/{id}/void/ to cross one out (WAGE-7); one for money given before
 # payday, advances/ for a month's and to type one, advances/{id}/ for one, advances/{id}/void/ to cross it out (WAGE-8);
 # one for the month's pay, pay/ for everyone's and pay/{id}/ for one worker's, its job in the address, reads alone
-# (WAGE-2); and two to approve it, pay-runs/ a month's and payslips/ one worker's alone (WAGE-3).
+# (WAGE-2); and two to approve it, pay-runs/ a month's and payslips/ one worker's alone (WAGE-3); and one for a
+# correction of a later month, pay-corrections/ to type one and pay-corrections/{id}/void/ to cross it out (WAGE-10).
 router = SimpleRouter()
 router.register("pay-rates", PayRateViewSet, basename="pay-rate")
 router.register("attendance-month", AttendanceMonthViewSet, basename="attendance-month")
@@ -39,5 +41,6 @@ router.register("pay", PayViewSet, basename="pay")
 router.register("pay-runs", PayRunViewSet, basename="pay-run")
 router.register("payslips", PayslipViewSet, basename="payslip")
 router.register("payslip-payments", PayslipPaymentViewSet, basename="payslip-payment")
+router.register("pay-corrections", PayCorrectionViewSet, basename="pay-correction")
 
 urlpatterns = router.urls

@@ -43,6 +43,23 @@ export const PAYER: components["schemas"]["WhoIsHere"] = {
 };
 
 export type PaymentLine = components["schemas"]["PaymentLine"];
+export type CorrectionLine = components["schemas"]["CorrectionLine"];
+
+/** A correction of a worker's pay (WAGE-10): Juma's + 9,000 of a November day left out, typed by Baba at 10:05 on 3
+ * December in Arusha, counting, unless told otherwise. */
+export function correction(
+  fields: Partial<CorrectionLine> = {},
+): CorrectionLine {
+  return {
+    id: "019a8800-0000-7000-8000-000000000001",
+    amount: "9000.00",
+    reason: "Novemba: siku ya 12/11 haikuhesabiwa",
+    by: "Baba",
+    at: "2026-12-03T07:05:00Z",
+    voided: null,
+    ...fields,
+  };
+}
 
 /** A payment of a payslip: Asha's 152,000, in cash, by Baba at 08:10 on 2 December in Arusha, signed, unless told
  * otherwise. */
@@ -90,6 +107,7 @@ export function pay(fields: Partial<Pay> = {}): Pay {
     meals: "16000.00",
     advances: "0.00",
     carried: "0.00",
+    corrections: "0.00",
     waiting: 0,
     no_rate: 0,
     total: "132000.00",
@@ -106,6 +124,7 @@ export const NO_PAY: Pay = {
   meals: "0.00",
   advances: "0.00",
   carried: "0.00",
+  corrections: "0.00",
   waiting: 0,
   no_rate: 0,
   total: "0.00",
@@ -172,6 +191,11 @@ export function workerPayMonth(
     // No ready reason to cross a payment out with, as off the demo it is typed (WAGE-9).
     void_reasons: [],
     keeps_signatures: true,
+    // No correction, and the month takes one; off the demo, their reasons are typed (WAGE-10).
+    corrections: [],
+    no_correction: null,
+    correction_reasons: [],
+    correction_void_reasons: [],
     ...fields,
   };
 }

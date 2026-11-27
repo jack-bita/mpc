@@ -3313,6 +3313,110 @@
                 }
             }
         },
+        "/api/v1/staffpay/pay-corrections/": {
+            "post": {
+                "operationId": "staffpay_pay_corrections_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecordCorrectionRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CorrectionAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/staffpay/pay-corrections/{id}/void/": {
+            "post": {
+                "operationId": "staffpay_pay_corrections_void_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this pay correction.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VoidCorrectionRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CorrectionAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/staffpay/pay-rates/": {
             "get": {
                 "operationId": "staffpay_pay_rates_list",
@@ -4228,9 +4332,14 @@
                             }
                         ],
                         "nullable": true
+                    },
+                    "after_approval": {
+                        "type": "boolean",
+                        "description": "Whether it came after its day's pay was approved, so it counts for nothing (WAGE-10)."
                     }
                 },
                 "required": [
+                    "after_approval",
                     "date",
                     "doubt",
                     "entered",
@@ -4508,6 +4617,90 @@
                 ],
                 "type": "string",
                 "description": "* `active` - Active\n* `cancelled` - Cancelled"
+            },
+            "CorrectionAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "description": "Plus or minus."
+                    },
+                    "reason": {
+                        "type": "string"
+                    },
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/VoidedCorrection"
+                            }
+                        ],
+                        "nullable": true,
+                        "description": "Who crossed it out, or none while it counts."
+                    }
+                },
+                "required": [
+                    "amount",
+                    "at",
+                    "by",
+                    "id",
+                    "reason",
+                    "voided"
+                ]
+            },
+            "CorrectionLine": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "description": "Plus or minus."
+                    },
+                    "reason": {
+                        "type": "string"
+                    },
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/VoidedCorrection"
+                            }
+                        ],
+                        "nullable": true,
+                        "description": "Who crossed it out, or none while it counts."
+                    }
+                },
+                "required": [
+                    "amount",
+                    "at",
+                    "by",
+                    "id",
+                    "reason",
+                    "voided"
+                ]
             },
             "DayDecision": {
                 "type": "object",
@@ -5308,12 +5501,19 @@
                         "type": "string",
                         "format": "date",
                         "description": "Its day on the shop's calendar."
+                    },
+                    "time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true,
+                        "description": "Its minute on the shop's clock, by the time the server trusts; none when it trusts none."
                     }
                 },
                 "required": [
                     "day",
                     "kind",
-                    "staff"
+                    "staff",
+                    "time"
                 ]
             },
             "FontEnum": {
@@ -5868,6 +6068,17 @@
                 "type": "string",
                 "description": "* `wrong_amount` - wrong_amount"
             },
+            "NoCorrectionEnum": {
+                "enum": [
+                    "correction.left_paid",
+                    "correction.month_to_come",
+                    "correction.outside_job",
+                    "correction.not_paid_by_day",
+                    "pay.day_approved"
+                ],
+                "type": "string",
+                "description": "* `correction.left_paid` - correction.left_paid\n* `correction.month_to_come` - correction.month_to_come\n* `correction.outside_job` - correction.outside_job\n* `correction.not_paid_by_day` - correction.not_paid_by_day\n* `pay.day_approved` - pay.day_approved"
+            },
             "NoPhotoEnum": {
                 "enum": [
                     "no_camera",
@@ -6175,6 +6386,12 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
                     },
+                    "corrections": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "description": "Plus or minus (WAGE-10)."
+                    },
                     "waiting": {
                         "type": "integer"
                     },
@@ -6190,6 +6407,7 @@
                 "required": [
                     "advances",
                     "carried",
+                    "corrections",
                     "fined_days",
                     "fines",
                     "lines",
@@ -7063,6 +7281,40 @@
                     "amount",
                     "date",
                     "id",
+                    "staff"
+                ]
+            },
+            "RecordCorrectionRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "month": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "amount",
+                    "id",
+                    "month",
+                    "reason",
                     "staff"
                 ]
             },
@@ -8133,9 +8385,14 @@
                             }
                         ],
                         "nullable": true
+                    },
+                    "after_approval": {
+                        "type": "boolean",
+                        "description": "Whether it came after its day's pay was approved, so it counts for nothing (WAGE-10)."
                     }
                 },
                 "required": [
+                    "after_approval",
                     "date",
                     "doubt",
                     "entered",
@@ -8277,6 +8534,18 @@
                     "reason"
                 ]
             },
+            "VoidCorrectionRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "reason"
+                ]
+            },
             "VoidMealMoneyRequest": {
                 "type": "object",
                 "properties": {
@@ -8314,6 +8583,26 @@
                 ]
             },
             "VoidedAdvance": {
+                "type": "object",
+                "properties": {
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "at",
+                    "by",
+                    "reason"
+                ]
+            },
+            "VoidedCorrection": {
                 "type": "object",
                 "properties": {
                     "by": {
@@ -8758,12 +9047,50 @@
                         "type": "boolean",
                         "readOnly": true,
                         "description": "Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9)."
+                    },
+                    "corrections": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CorrectionLine"
+                        }
+                    },
+                    "no_correction": {
+                        "nullable": true,
+                        "description": "Why this month takes no correction for the worker, or none when it takes one (WAGE-10).\n\n* `correction.left_paid` - correction.left_paid\n* `correction.month_to_come` - correction.month_to_come\n* `correction.outside_job` - correction.outside_job\n* `correction.not_paid_by_day` - correction.not_paid_by_day\n* `pay.day_approved` - pay.day_approved",
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/NoCorrectionEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "correction_reasons": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "readOnly": true,
+                        "description": "The ready reasons a correction is typed with, on the demo alone; empty where it is typed."
+                    },
+                    "correction_void_reasons": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "readOnly": true,
+                        "description": "The ready reasons a correction is crossed out with, on the demo alone; empty where it is typed."
                     }
                 },
                 "required": [
+                    "correction_reasons",
+                    "correction_void_reasons",
+                    "corrections",
                     "counted_to",
                     "keeps_signatures",
                     "month",
+                    "no_correction",
                     "no_day_yet",
                     "paid_by_day",
                     "to_approve",

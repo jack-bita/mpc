@@ -39,6 +39,7 @@ const TEN_OCLOCK: AttendanceTap = {
   doubt: null,
   entered: null,
   voided: null,
+  after_approval: false,
 };
 
 /** The same tap, crossed out by Baba, as the server answers it. */

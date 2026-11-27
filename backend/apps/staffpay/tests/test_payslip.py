@@ -34,6 +34,7 @@ NOVEMBER = dt.date(2026, 11, 1)
 FULL, HALF = PayslipLineKind.FULL, PayslipLineKind.HALF
 FINES, MEALS = PayslipLineKind.FINES, PayslipLineKind.MEALS
 ADVANCE, CARRIED = PayslipLineKind.ADVANCE, PayslipLineKind.CARRIED
+CORRECTION = PayslipLineKind.CORRECTION
 
 
 def _run(shop: Shop, by: StaffMember | None, month: dt.date = NOVEMBER) -> PayRun:
@@ -123,7 +124,7 @@ def test_one_approved_alone_has_no_run(shop_a: Shop, staff_a: StaffMember, staff
 
 # The lines, each holding what its kind has: (kind, days, each, date, amount).
 A_FULL_LINE = (FULL, 14, "10000.00", None, "140000.00")
-GOOD_LINES: list[tuple[PayslipLineKind, int | None, str | None, dt.date | None, str]] = [
+GOOD_LINES: list[tuple[Any, ...]] = [
     A_FULL_LINE,
     (HALF, 2, "4501.00", None, "9002.00"),
     # Half of a small rate may round to 0, at a shop that rounds to 50: the day is on the payslip all the same.
@@ -132,11 +133,15 @@ GOOD_LINES: list[tuple[PayslipLineKind, int | None, str | None, dt.date | None, 
     (MEALS, 16, None, None, "-16000.00"),
     (ADVANCE, None, None, dt.date(2026, 11, 10), "-20000.00"),
     (CARRIED, None, None, dt.date(2026, 10, 1), "-18000.00"),
+    # A correction (WAGE-10): its reason, and money either way.
+    (CORRECTION, None, None, None, "9000.00", "Oktoba: siku ya 7/10 haikuhesabiwa"),
+    (CORRECTION, None, None, None, "-2000.00", "Oktoba: faini mara mbili"),
 ]
 
 
 def _line(slip: Payslip, by: StaffMember, line: tuple[Any, ...], position: int = 1) -> PayslipLine:
-    kind, days, each, date, amount = line
+    # A line's parts, its note last, on a correction's alone.
+    kind, days, each, date, amount, *note = line
     return PayslipLine(
         shop_id=slip.shop_id,
         payslip=slip,
@@ -146,6 +151,7 @@ def _line(slip: Payslip, by: StaffMember, line: tuple[Any, ...], position: int =
         each=None if each is None else Decimal(each),
         date=date,
         amount=Decimal(amount),
+        note=note[0] if note else "",
         created_by=by,
     )
 
@@ -156,7 +162,7 @@ def test_a_payslips_lines_are_kept_in_their_order(shop_a: Shop, staff_a2: StaffM
     with shop_context(shop_a):
         kept = PayslipLine.objects.filter(payslip=slip).order_by("position")
         assert [(row.kind, row.days, row.date) for row in kept] == [
-            (kind, days, date) for kind, days, _, date, _ in GOOD_LINES
+            (kind, days, date) for kind, days, _, date, *_ in GOOD_LINES
         ]
 
 
@@ -197,6 +203,18 @@ def test_a_place_on_a_payslip_holds_one_line(staff_a2: StaffMember, slip: Paysli
         (CARRIED, None, None, dt.date(2026, 10, 2), "-18000.00"),
         (CARRIED, 1, None, dt.date(2026, 10, 1), "-18000.00"),
         (CARRIED, None, "18000.00", dt.date(2026, 10, 1), "-18000.00"),
+        # A correction says why, and corrects something, with nothing else on it (WAGE-10).
+        (CORRECTION, None, None, None, "9000.00"),
+        (CORRECTION, None, None, None, "9000.00", "   "),
+        (CORRECTION, None, None, None, "0.00", "Oktoba: kosa"),
+        (CORRECTION, 1, None, None, "9000.00", "Oktoba: kosa"),
+        (CORRECTION, None, "9000.00", None, "9000.00", "Oktoba: kosa"),
+        (CORRECTION, None, None, dt.date(2026, 10, 7), "9000.00", "Oktoba: kosa"),
+        # And no other line has a note.
+        (FULL, 14, "10000.00", None, "140000.00", "Kazi nzuri"),
+        (FINES, 2, None, None, "-2000.00", "Kosa"),
+        (ADVANCE, None, None, dt.date(2026, 11, 10), "-20000.00", "Ada"),
+        (CARRIED, None, None, dt.date(2026, 10, 1), "-18000.00", "Deni"),
         # No other kind there is.
         ("bonus", 1, "10000.00", None, "10000.00"),
     ],

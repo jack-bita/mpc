@@ -896,6 +896,7 @@
     "advances": "Advances",
     "carried": "Owed from {month}",
     "less": "− {amount}",
+    "more": "+ {amount}",
     "todayLine": {
       "full": "Today: full day",
       "half": "Today: half day",
@@ -968,6 +969,34 @@
       },
       "readyReason": {
         "marked_by_mistake": "Marked by mistake"
+      }
+    },
+    "correction": {
+      "button": "Add a correction",
+      "title": "Correction of {name}'s pay",
+      "way": "Add or take off",
+      "add": "Add to the pay",
+      "take": "Take off the pay",
+      "amount": "Amount (TSh)",
+      "reason": "Reason",
+      "readyHint": "On the demo, pick a ready reason.",
+      "save": "Save",
+      "saved": "Saved: a correction of {amount}.",
+      "line": "Correction: {reason}",
+      "leftPaid": "{name} has left, and their pay is closed.",
+      "readyReason": {
+        "dayNotCounted": "A day wasn't counted",
+        "paidTooMuch": "Paid too much",
+        "wrongAmount": "Wrong amount"
+      },
+      "reasonSaid": "Reason: {reason}",
+      "typedBy": "Typed by {by} · {date} {time}",
+      "crossedOut": "Corrections crossed out",
+      "voidedBy": "Crossed out by {by} · {date} {time}: {reason}",
+      "void": {
+        "title": "Correction of {name}'s pay · {amount}",
+        "reason": "Why it is crossed out",
+        "action": "Cross out"
       }
     }
   },
@@ -1050,6 +1079,7 @@
     "tapLineEnteredNoDate": "{kind} {time} · added by {by}",
     "laptopTime": "{time} (the laptop's clock, not trusted)",
     "doubt": "In doubt: {why}",
+    "afterApproval": "It came after the pay was approved, so it wasn't counted.",
     "doubtWhy": {
       "not_working": "suspended or gone",
       "clock_disagrees": "the laptop's clock may have been changed"
@@ -1135,6 +1165,7 @@
       "device_gap": "Records are missing",
       "permission_break": "Had no permission",
       "invalid_document": "A record was refused",
+      "late_record": "Came after the pay was approved",
       "another": "Another flag"
     },
     "status": {
@@ -1171,6 +1202,7 @@
       "raisedAt": "The system found it",
       "status": "State",
       "openDay": "Open their day",
+      "addCorrection": "Add a correction",
       "notes": "Notes ({count})",
       "noNotes": "No notes yet.",
       "noteBy": "{step} · {by} · {when}",
@@ -1188,6 +1220,9 @@
       "recordsMissing": "This laptop sent record number {actual}, but the server was waiting for number {expected}. Missing: {missing}.",
       "numbersWentBack": "This laptop's record numbers went back: the server was waiting for number {expected}, and number {actual} came.",
       "recordRefused": "The server couldn't keep a record this laptop sent.",
+      "lateTap": "{name} tapped {kind} on {day} at {time}, but the laptop sent it on {sent}, after {month}'s pay was approved. It wasn't counted in their pay.",
+      "lateTapNoTime": "{name} tapped {kind} on {day}, but the laptop sent it on {sent}, after {month}'s pay was approved. It wasn't counted in their pay.",
+      "lateRecord": "{name} made a record that came after the pay was approved, so it wasn't counted in their pay.",
       "another": "The system found something this version of the app can't explain."
     },
     "systemNote": {
@@ -1620,6 +1655,16 @@
       "reference_missing": "Type the transaction number.",
       "reference_invalid": "A transaction number has only letters and digits.",
       "reference_used": "This transaction number is already used for another payment.",
+      "reason_missing": "Write why."
+    },
+    "correction": {
+      "own": "You can't add or cross out a correction of your own pay.",
+      "left_paid": "This worker has left, and their pay is closed.",
+      "month_to_come": "This month hasn't come yet.",
+      "outside_job": "This worker didn't work here in this month.",
+      "not_paid_by_day": "This worker has no daily pay in this month.",
+      "amount_invalid": "Type a whole number of shillings, not 0.",
+      "amount_too_big": "This amount is too big. Check its zeros.",
       "reason_missing": "Write why."
     },
     "flag": {

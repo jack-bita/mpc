@@ -61,7 +61,8 @@ export function flag(fields: Partial<Flag> = {}): Flag {
     expected: null,
     actual: null,
     difference: null,
-    tap: { staff: JUMA_JOB, kind: "in", day: "2026-11-22" },
+    // 07:52 by the time the server trusts, as the laptop's own clock says too (made_at).
+    tap: { staff: JUMA_JOB, kind: "in", day: "2026-11-22", time: "07:52" },
     refused_for: "",
     brought_from: null,
     loaded_by: null,

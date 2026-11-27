@@ -206,8 +206,8 @@ CREATE TRIGGER append_only
 
 
 class VoidStampTrigger(AppendOnlyTrigger):
-    # The step for payments, money movements, meal money, advances, payslip payments and attendance events:
-    # VoidStampTrigger("payment").
+    # The step for payments, money movements, meal money, advances, pay corrections, payslip payments and attendance
+    # events: VoidStampTrigger("payment").
     # The same as AppendOnlyTrigger, except for the rule it writes. Undoing it is the parent's
     # database_backwards: the trigger has the same name, so the same DROP takes it off.
 

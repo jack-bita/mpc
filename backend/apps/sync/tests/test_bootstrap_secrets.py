@@ -17,6 +17,8 @@ byte of it. So these never travel:
                                    catch it
     a month's approved pay         a pay run and its payslips (WAGE-3), as above: no table sends one, so the names
                                    catch it
+    a correction of pay            what a worker is owed after a mistake (WAGE-10): no table sends one, so the names
+                                   catch it
 
 Three checks. The bootstrap's answer and a pull's page, as sent, hold none of a real person's secrets, and no name in
 them looks secret. Every field the registry sends, and every field a pull's page adds around a record, is checked by its
@@ -59,10 +61,11 @@ KEY_COOKIE = "device_key"
 # never `monkey` or `costume`. The same idea as SECRET_COLUMN (backend/tests/test_edit_history.py), with a seller's
 # secrets added: what a sale cost the shop (cost, buying, profit, margin: `cost.view`'s, 02 §5), a phone and an email;
 # a worker's pay (rate, wage, salary, payslip: 03 §6.1, WAGE-1; meal: WAGE-7; advance: WAGE-8; pay_run: WAGE-3;
-# signature, a worker's mark as they are paid: WAGE-9), never `rated` or `separate`; and `key` kept apart, below.
+# signature, a worker's mark as they are paid: WAGE-9; correction, a mistake put right in a later month: WAGE-10), never
+# `rated` or `separate`; and `key` kept apart, below.
 SECRET_WORD = re.compile(
     r"(^|_)(hash|password|secret|token|pepper|cost|buying|profit|margin|phone|email|rate|wage|salary|payslip|meal"
-    r"|advance|pay_run|signature)"
+    r"|advance|pay_run|signature|correction)"
     r"(e?s)?(_|$)"
 )
 # `key` alone is a rule's name in the list in core ("attendance.late_fine"), which a setting's row must carry. Inside a
@@ -262,6 +265,7 @@ class _Planted(serializers.Serializer[Any]):
     payslip_id = serializers.CharField()  # by what paid their day
     pay_run = serializers.CharField()  # by the approval it came with
     signature = serializers.CharField()  # by the mark a worker drew as they were paid
+    corrections = serializers.CharField()  # by what a later month put right
     # By what a link shows of its row, alone and in a many-link.
     owner = serializers.SlugRelatedField[Any](source="user", slug_field="password", read_only=True)
     batches = serializers.SlugRelatedField[Any](many=True, slug_field="unit_cost", read_only=True)
@@ -298,6 +302,8 @@ def test_secret_check_finds_what_it_must() -> None:
         "pay_run: reads pay_run",
         "signature: its name",
         "signature: reads signature",
+        "corrections: its name",
+        "corrections: reads corrections",
         "owner: shows password",
         "batches: shows unit_cost",
         "wrapped.api_key: its name",

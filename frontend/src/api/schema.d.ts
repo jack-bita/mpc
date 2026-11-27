@@ -1035,6 +1035,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staffpay/pay-corrections/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_pay_corrections_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffpay/pay-corrections/{id}/void/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_pay_corrections_void_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/pay-rates/": {
         parameters: {
             query?: never;
@@ -1345,6 +1395,8 @@ export interface components {
             doubt: (components["schemas"]["TapDoubtEnum"] | components["schemas"]["NullEnum"]) | null;
             entered: components["schemas"]["TapStamp"] | null;
             voided: components["schemas"]["TapStamp"] | null;
+            /** @description Whether it came after its day's pay was approved, so it counts for nothing (WAGE-10). */
+            after_approval: boolean;
         };
         /** @enum {unknown} */
         BlankEnum: "";
@@ -1442,6 +1494,36 @@ export interface components {
          * @enum {string}
          */
         ClosureStatusEnum: "active" | "cancelled";
+        CorrectionAnswer: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: decimal
+             * @description Plus or minus.
+             */
+            amount: string;
+            reason: string;
+            by: string;
+            /** Format: date-time */
+            at: string;
+            /** @description Who crossed it out, or none while it counts. */
+            voided: components["schemas"]["VoidedCorrection"] | null;
+        };
+        CorrectionLine: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: decimal
+             * @description Plus or minus.
+             */
+            amount: string;
+            reason: string;
+            by: string;
+            /** Format: date-time */
+            at: string;
+            /** @description Who crossed it out, or none while it counts. */
+            voided: components["schemas"]["VoidedCorrection"] | null;
+        };
         DayDecision: {
             status: components["schemas"]["DayDecisionStatusEnum"];
             absence_type: (components["schemas"]["AbsenceTypeEnum"] | components["schemas"]["NullEnum"]) | null;
@@ -1720,6 +1802,11 @@ export interface components {
              * @description Its day on the shop's calendar.
              */
             day: string;
+            /**
+             * Format: time
+             * @description Its minute on the shop's clock, by the time the server trusts; none when it trusts none.
+             */
+            time: string | null;
         };
         /**
          * @description * `default` - Default
@@ -1889,6 +1976,15 @@ export interface components {
          */
         MoneyVoidReasonEnum: "wrong_amount";
         /**
+         * @description * `correction.left_paid` - correction.left_paid
+         *     * `correction.month_to_come` - correction.month_to_come
+         *     * `correction.outside_job` - correction.outside_job
+         *     * `correction.not_paid_by_day` - correction.not_paid_by_day
+         *     * `pay.day_approved` - pay.day_approved
+         * @enum {string}
+         */
+        NoCorrectionEnum: "correction.left_paid" | "correction.month_to_come" | "correction.outside_job" | "correction.not_paid_by_day" | "pay.day_approved";
+        /**
          * @description * `no_camera` - No camera
          *     * `blocked` - Camera blocked
          *     * `failed` - Camera failed
@@ -2033,6 +2129,11 @@ export interface components {
             advances: string;
             /** Format: decimal */
             carried: string;
+            /**
+             * Format: decimal
+             * @description Plus or minus (WAGE-10).
+             */
+            corrections: string;
             waiting: number;
             no_rate: number;
             /** Format: decimal */
@@ -2387,6 +2488,17 @@ export interface components {
             /** @default  */
             note: string;
         };
+        RecordCorrectionRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            staff: string;
+            /** @example 2026-11 */
+            month: string;
+            /** Format: decimal */
+            amount: string;
+            reason: string;
+        };
         RecordMealMoneyRequest: {
             /** Format: uuid */
             id: string;
@@ -2702,6 +2814,8 @@ export interface components {
             doubt: (components["schemas"]["TapDoubtEnum"] | components["schemas"]["NullEnum"]) | null;
             entered: components["schemas"]["TapStamp"] | null;
             voided: components["schemas"]["TapStamp"] | null;
+            /** @description Whether it came after its day's pay was approved, so it counts for nothing (WAGE-10). */
+            after_approval: boolean;
         };
         /**
          * @description * `not_working` - Suspended or gone
@@ -2744,6 +2858,9 @@ export interface components {
         VoidAdvanceRequest: {
             reason: string;
         };
+        VoidCorrectionRequest: {
+            reason: string;
+        };
         VoidMealMoneyRequest: {
             reason: string;
         };
@@ -2754,6 +2871,12 @@ export interface components {
             reason: string;
         };
         VoidedAdvance: {
+            by: string;
+            /** Format: date-time */
+            at: string;
+            reason: string;
+        };
+        VoidedCorrection: {
             by: string;
             /** Format: date-time */
             at: string;
@@ -2888,6 +3011,21 @@ export interface components {
             void_reasons: string[];
             /** @description Whether cash is sent with the worker's signature: false on the demo, which keeps none (WAGE-9). */
             readonly keeps_signatures: boolean;
+            corrections: components["schemas"]["CorrectionLine"][];
+            /**
+             * @description Why this month takes no correction for the worker, or none when it takes one (WAGE-10).
+             *
+             *     * `correction.left_paid` - correction.left_paid
+             *     * `correction.month_to_come` - correction.month_to_come
+             *     * `correction.outside_job` - correction.outside_job
+             *     * `correction.not_paid_by_day` - correction.not_paid_by_day
+             *     * `pay.day_approved` - pay.day_approved
+             */
+            no_correction: (components["schemas"]["NoCorrectionEnum"] | components["schemas"]["NullEnum"]) | null;
+            /** @description The ready reasons a correction is typed with, on the demo alone; empty where it is typed. */
+            readonly correction_reasons: string[];
+            /** @description The ready reasons a correction is crossed out with, on the demo alone; empty where it is typed. */
+            readonly correction_void_reasons: string[];
         };
     };
     responses: never;
@@ -4990,6 +5128,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PayMonthAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_pay_corrections_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordCorrectionRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrectionAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_pay_corrections_void_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this pay correction. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidCorrectionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrectionAnswer"];
                 };
             };
             default: {

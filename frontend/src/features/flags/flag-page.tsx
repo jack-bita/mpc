@@ -1,8 +1,10 @@
 // flag-page.tsx — one flag's own page, opened by tapping its line on Tofauti (CTRL-4, 02 §13), as Jack pictured it
 // (24 Nov 2026): what happened in a sentence, who it names, where, which laptop and when, and everything written about
 // it, oldest first. A flag about a tap opens that tap's day, where its pay is decided (ATT-6): deciding a day closes no
-// flag (Jack: A). While it waits, three buttons, each a sheet: Eleza, Imetatuliwa and Si tatizo (flag-note.tsx); someone
-// the flag names has Eleza alone, as they never close their own (02 §13).
+// flag (Jack: A). A tap that came after its day's pay was approved (late_record, WAGE-10) opens the worker's pay of the
+// shop's month too, with Ongeza marekebisho's sheet open, for whoever approves pay, as Jack pictured it (27 Nov 2026).
+// While it waits, three buttons, each a sheet: Eleza, Imetatuliwa and Si tatizo (flag-note.tsx); someone the flag names
+// has Eleza alone, as they never close their own (02 §13).
 //
 // At /flags/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address. It
 // asks GET /api/v1/control/flags/{id}/; one the person may not close is "not found", as another shop's is. The back
@@ -25,8 +27,11 @@ import {
   monthOf,
 } from "@/features/attendance/attendance-month";
 import { workerMonthAddress } from "@/features/attendance/worker-month";
+import { correctionPage } from "@/features/pay/corrections";
+import { mayApprovePay } from "@/features/pay/pay";
 import { useWhoIsHere, type WhoIsHere } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
+import { shopToday } from "@/offline/rules";
 
 import { FlagNoteSheet } from "./flag-note";
 import {
@@ -87,9 +92,12 @@ export function FlagScreen({ id }: { id: string | null }) {
 function WhatHappened({ flag, me }: { flag: Flag; me: WhoIsHere }) {
   const t = useTranslations("flags");
   const names = useNames();
-  const happened = useWhatHappened();
+  const happened = useWhatHappened(me.shop.timezone);
   const moment = useMomentWords(me.shop.timezone);
   const { sentence, why } = happened(flag);
+  // The moment the page opened, read once, never while drawing (React's rule): the shop's month a correction goes in.
+  const [openedAt] = useState(() => Date.now());
+  const thisMonth = monthOf(shopToday(me.shop.timezone, openedAt));
 
   return (
     <Card>
@@ -134,6 +142,23 @@ function WhatHappened({ flag, me }: { flag: Flag; me: WhoIsHere }) {
               size="normal"
             >
               {t("page.openDay")}
+            </ButtonLink>
+          </div>
+        ) : null}
+        {/* A tap that came after its day's pay was approved (WAGE-10): its worker's pay of the shop's month, the sheet
+            open, for whoever approves pay, never on a flag that names them, as nobody corrects their own pay (Jack: A).
+            A worker who left and was paid takes none, and that page says why. */}
+        {flag.kind === "late_record" &&
+        flag.tap !== null &&
+        !flag.names_you &&
+        mayApprovePay(me) ? (
+          <div>
+            <ButtonLink
+              href={correctionPage(flag.tap.staff, thisMonth)}
+              kind="second"
+              size="normal"
+            >
+              {t("page.addCorrection")}
             </ButtonLink>
           </div>
         ) : null}

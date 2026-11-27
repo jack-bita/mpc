@@ -53,9 +53,11 @@ from apps.staffpay.services import (
     decide_day,
     pay_month,
     record_advance,
+    record_correction,
     record_meal_money,
     set_pay_rate,
     void_advance,
+    void_correction,
     work_out_days,
     worker_pay,
 )
@@ -246,6 +248,92 @@ def test_every_kind_of_line_is_kept(shop_a: Shop, baba: StaffMember, asha: Staff
         ("advance", None, None, TUE, "-500.00"),
     ]
     assert line_of(month(shop_a), "Asha").pay == shown.pay
+
+
+def correct(staff: StaffMember, by: StaffMember, amount: str, reason: str, of: dt.date = NOVEMBER) -> Any:
+    with shop_context(staff.shop_id):
+        return record_correction(
+            staff, correction_id=uuid.uuid7(), month=of, amount=Decimal(amount), reason=reason, by=by
+        )
+
+
+def notes_kept(staff: StaffMember, of: dt.date = NOVEMBER) -> list[tuple[str, str, str]]:
+    """The lines of a payslip that say why, in their order: their kind, amount and note."""
+    with shop_context(staff.shop_id):
+        return [
+            (line.kind, str(line.amount), line.note)
+            for line in PayslipLine.objects.filter(payslip__staff=staff, payslip__month=of).order_by("position")
+            if line.note
+        ]
+
+
+def test_each_correction_is_kept_last_with_its_reason(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # WAGE-10: Asha's November, typed into on 1 December, still open, with two mistakes of October's, one each way, and
+    # one crossed out, at 19:00, 19:01 and 19:02, the clock moving. Each a line of its own after the advance, in the
+    # order typed, its reason copied (T4); the crossed out one not among them; and the lines add up to the total, as
+    # every payslip's.
+    kept_day(asha, *FULL, date=MON)
+    give(asha, baba, MON, "3000")
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 12, 1, 19, 0)))
+    correct(asha, baba, "9000", "Oktoba: siku ya 7/10 haikuhesabiwa")
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 12, 1, 19, 1)))
+    with shop_context(shop_a):
+        void_correction(correct(asha, baba, "90000", "Oktoba: kosa"), reason="Kiasi kimekosewa", by=baba)
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 12, 1, 19, 2)))
+    correct(asha, baba, "-2000", "Oktoba: faini mara mbili")
+    monkeypatch.setattr(timezone, "now", at(EVENING))
+    shown = line_of(month(shop_a), "Asha")
+    assert (shown.pay.corrections, shown.total) == (Decimal("7000.00"), Decimal("14000.00"))
+
+    approve(shop_a, baba)
+
+    assert lines_kept(asha) == [
+        ("full", 1, "10000.00", None, "10000.00"),
+        ("advance", None, None, MON, "-3000.00"),
+        ("correction", None, None, None, "9000.00"),
+        ("correction", None, None, None, "-2000.00"),
+    ]
+    assert notes_kept(asha) == [
+        ("correction", "9000.00", "Oktoba: siku ya 7/10 haikuhesabiwa"),
+        ("correction", "-2000.00", "Oktoba: faini mara mbili"),
+    ]
+    with shop_context(shop_a):
+        assert Payslip.objects.get().total == Decimal("14000.00")
+    # Read back from the payslip, the line says the very same as the draft did; and the month takes no more.
+    kept = line_of(month(shop_a), "Asha")
+    assert kept.pay == shown.pay
+    with shop_context(shop_a):
+        page = worker_pay(shop_a, asha, NOVEMBER)
+    assert ([line.amount for line in page.corrections], page.no_correction) == (
+        [Decimal("9000.00"), Decimal("90000.00"), Decimal("-2000.00")],
+        "pay.day_approved",
+    )
+
+
+def test_a_correction_alone_is_a_pay_to_approve(shop_a: Shop, baba: StaffMember) -> None:
+    # Hamisi, paid by the day from 28 November, never came that month, and was owed 9,000 of October's: his November is
+    # the + 9,000 alone, a payslip of its own, whose one line is the correction.
+    hamisi = paid(shop_a, "Hamisi", since=dt.date(2026, 11, 28))
+    correct(hamisi, baba, "9000", "Oktoba: siku ya 7/10 haikuhesabiwa")
+    approve(shop_a, baba)
+    assert lines_kept(hamisi) == [("correction", None, None, None, "9000.00")]
+
+
+def test_a_correction_below_the_pay_leaves_a_debt(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 10,000 earned, 25,000 paid too much in October: November pays 0, and December starts with Deni la Novemba −15,000,
+    # as any total below 0 (WAGE-3, Jack: A).
+    kept_day(asha, *FULL, date=MON)
+    correct(asha, baba, "-25000", "Oktoba: alilipwa zaidi")
+    approve(shop_a, baba)
+    with shop_context(shop_a):
+        assert Payslip.objects.get().total == Decimal("-15000.00")
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 12, 8, 9, 0)))
+    worker = line_of(month(shop_a, DECEMBER), "Asha")
+    assert (worker.carried_from, worker.pay.carried) == (NOVEMBER, Decimal("15000.00"))
 
 
 def test_the_days_paid_are_marked(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
@@ -485,6 +573,20 @@ def test_money_given_before_attendance_was_on_is_an_earlier_month(
     assert line_of(month(shop_a), "Asha").pay.carried == Decimal("5000.00")
     approve(shop_a, baba)
     assert line_of(month(shop_a), "Asha").total == Decimal("15000.00")
+
+
+def test_a_correction_before_attendance_was_on_is_an_earlier_month(shop_a: Shop, baba: StaffMember) -> None:
+    # WAGE-10: Juma, paid by the day since October, before anyone clocked in, was owed 9,000 of September's, put in his
+    # October, still open. October holds his pay, so it is approved first, the correction its one line; or approving
+    # November would close it, and the 9,000 would be on nobody's pay.
+    juma = paid(shop_a, "Juma", since=OCTOBER)
+    kept_day(juma, *FULL, date=MON)
+    correct(juma, baba, "9000", "Septemba: siku haikuhesabiwa", of=OCTOBER)
+    assert refused(shop_a, baba).params == {"month": "2026-10"}
+    approve(shop_a, baba, OCTOBER)
+    assert lines_kept(juma, OCTOBER) == [("correction", None, None, None, "9000.00")]
+    approve(shop_a, baba)
+    assert line_of(month(shop_a), "Juma").total == Decimal("10000.00")
 
 
 def test_a_rate_long_before_attendance_opens_no_month(

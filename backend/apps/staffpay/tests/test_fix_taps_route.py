@@ -119,6 +119,8 @@ def test_a_tap_added_as_the_sheet_sends_it(staff_client_a: APIClient, juma: Staf
         "no_photo": "entered",
         "doubt": None,
         "voided": None,
+        # It came before its day's pay was approved, as none is (WAGE-10).
+        "after_approval": False,
     }
     assert (entered["by"], entered["reason"]) == ("Staff A", "Alisahau kubonyeza Toka")
     again = staff_client_a.post(TAPS, sent, format="json")

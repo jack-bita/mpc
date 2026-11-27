@@ -41,6 +41,7 @@ from apps.staffpay.services import (
     decide_day,
     pay_month,
     record_advance,
+    record_correction,
     record_meal_money,
     set_pay_rate,
     work_out_days,
@@ -465,6 +466,33 @@ def test_one_who_owes_is_approved_at_below_0(shop_a: Shop, baba: StaffMember, wo
     assert approve(worked, baba).total == Decimal("-18000.00")
     assert lines_kept(worked)[-1] == ("advance", None, "-80000.00")
     assert month(shop_a).total == NOTHING
+
+
+def test_her_correction_is_kept_on_her_payslip_alone(shop_a: Shop, baba: StaffMember, worked: StaffMember) -> None:
+    # WAGE-10: her October was 9,000 short, put right in her November, still open: kept as the last line of the payslip
+    # she is approved alone with, its reason copied. From then on her pay takes none, and the system says why (Jack: A).
+    def correct() -> None:
+        with shop_context(shop_a):
+            record_correction(
+                worked,
+                correction_id=uuid.uuid7(),
+                month=NOVEMBER,
+                amount=Decimal("9000"),
+                reason="Oktoba: siku ya 7/10 haikuhesabiwa",
+                by=baba,
+            )
+
+    correct()
+    leaves(worked, baba)
+    assert page(worked).worker.total == Decimal("71000.00")
+    assert approve(worked, baba).total == Decimal("71000.00")
+    assert lines_kept(worked)[-1] == ("correction", None, "9000.00")
+    with shop_context(shop_a):
+        assert PayslipLine.objects.get(kind="correction").note == "Oktoba: siku ya 7/10 haikuhesabiwa"
+    with pytest.raises(ValidationError) as refusal:
+        correct()
+    assert refusal.value.code == "correction.left_paid"
+    assert page(worked).no_correction == "correction.left_paid"
 
 
 def test_each_job_of_one_hired_again_has_its_own(

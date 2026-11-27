@@ -8,17 +8,19 @@ round. A table that answers none still shows, with the flag's own facts alone.
 
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, time
 from typing import Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
 class FlaggedTap:
     # A tap of Ingia or Toka: whose (their job), which of the two, and its day on the shop's calendar, for the page to
-    # open that day, where it is decided (ATT-6).
+    # open that day, where it is decided (ATT-6); and its minute on the shop's clock, by the time the server trusts, or
+    # None for a tap whose time it doesn't, so a sentence says the day and the time by one clock (WAGE-10's review).
     staff: uuid.UUID
     kind: str
     day: date
+    time: time | None = None
 
 
 @dataclass(frozen=True)

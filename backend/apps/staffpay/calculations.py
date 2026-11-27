@@ -496,9 +496,10 @@ class PayLine:
 class Pay:
     # A worker's pay over some days (02 §15, 8): the lines, the full days first, then the half ones, each in the days'
     # order; the fines taken, and on how many days; the meals, and how many days ate; the advances; a debt carried from
-    # an earlier month (WAGE-3); how many days wait for a decision, and how many paid days have no rate, neither of them
-    # paid; and what is left to pay, which may be below 0, as the meals, the advances and a debt can be more than the
-    # days: cash_to_pay says what is handed over, and debt_left what the next month takes.
+    # an earlier month (WAGE-3); the corrections of mistakes found after an earlier month's approval, their sum, plus or
+    # minus (WAGE-10); how many days wait for a decision, and how many paid days have no rate, neither of them paid; and
+    # what is left to pay, which may be below 0, as the meals, the advances, a debt and a correction can be more than
+    # the days: cash_to_pay says what is handed over, and debt_left what the next month takes.
     lines: tuple[PayLine, ...]
     fined_days: int
     fines: Decimal
@@ -506,6 +507,7 @@ class Pay:
     meals: Decimal
     advances: Decimal
     carried: Decimal
+    corrections: Decimal
     waiting: int
     no_rate: int
     total: Decimal
@@ -524,13 +526,17 @@ def debt_left(total: Decimal) -> Decimal:
     return total.copy_negate() if total < 0 else NO_PAY
 
 
-def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY, carried: Decimal = NO_PAY) -> Pay:
+def work_out_pay(
+    days: Iterable[DayToPay], *, advances: Decimal = NO_PAY, carried: Decimal = NO_PAY, corrections: Decimal = NO_PAY
+) -> Pay:
     """A worker's pay over `days`, in their order (WAGE-2; spec §8.1, 02 §15, 8): each paid alone (pay_day), then added
     up and grouped by what they pay. `advances`: money given before payday (WAGE-8), which comes off it. `carried`: what
-    an earlier month's pay left owed (debt_left, WAGE-3), which comes off it too. The sum reads nothing itself, so any
-    days are paid by it: a month's, a leaver's, or today alone."""
+    an earlier month's pay left owed (debt_left, WAGE-3), which comes off it too. `corrections`: what the mistakes found
+    after an earlier month's approval add, or take off, below 0 (WAGE-10): Juma's + 9,000 of a November day left out.
+    The sum reads nothing itself, so any days are paid by it: a month's, a leaver's, or today alone."""
     if advances < 0 or carried < 0:
-        # Money the worker already took: below 0 it would pay them a second time, so a bug in our code.
+        # Money the worker already took: below 0 it would pay them a second time, so a bug in our code. A correction
+        # may be either way, as it says itself.
         raise ValueError(f"Advances of {advances}, a debt of {carried}: neither is ever below 0.")
     # How many days pay each amount, full days and half ones apart: half of 20,000 is as much as a full day at 10,000,
     # and the page says which is which. In the order each first comes, so the rate before a raise stays above the one
@@ -564,7 +570,7 @@ def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY, carrie
             if paid_as is kind
         )
         fined, eaten = add_up(fines), add_up(meals)
-        total = add_up(line.amount for line in lines) - fined - eaten - advances - carried
+        total = add_up(line.amount for line in lines) - fined - eaten - advances - carried + corrections
     return Pay(
         lines=lines,
         fined_days=len(fines),
@@ -573,6 +579,7 @@ def work_out_pay(days: Iterable[DayToPay], *, advances: Decimal = NO_PAY, carrie
         meals=eaten,
         advances=advances,
         carried=carried,
+        corrections=corrections,
         waiting=waiting,
         no_rate=no_rate,
         total=total,

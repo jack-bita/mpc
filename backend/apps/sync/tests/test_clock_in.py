@@ -7,22 +7,27 @@ the attendance book (ATT-1; 02 §12, 03 §6.3, §6.6).
                                            and the record its time disagrees with (ATT-11)  + disagrees_with
     by a worker suspended meanwhile      → saved, and flagged by the push (SYNC-5)          + suspended_staff_activity
     by anyone working here, any laptop   → no key needed (Jack, ATT-1)
+    of a day whose pay is approved       → saved, counted nowhere, and a flag (WAGE-10)       + late_record
 
 Through the push service, as the route runs it, so each test meets the whole path: the list of document types, the
 push's own checks, the saving code (apps/staffpay/documents.py) and the time check (apps/staffpay/calculations.py). Here
 in `sync`, not `staffpay`, as only the layer above may call the push (ADR-0043); last, two taps from the push to the
-book of days (ATT-11). The time check's every case is apps/staffpay/tests/test_time_check.py's. Fake data only: the repo
-is public.
+book of days (ATT-11); and last, a tap of a day whose pay is approved (WAGE-10). The time check's every case is
+apps/staffpay/tests/test_time_check.py's. Fake data only: the repo is public.
 """
 
 import dataclasses
 import datetime as dt
+import itertools
 import uuid
+import uuid as _uuid
 from collections.abc import Sequence
+from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
+from django.db import transaction
 from django.db.models import Model
 from django.utils import timezone
 
@@ -34,10 +39,11 @@ from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, suspend
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.services import add_side
-from apps.staffpay.models import AttendanceEvent, DayStatus, TimeCheck
-from apps.staffpay.services import work_out_days
+from apps.staffpay.models import AttendanceEvent, DayStatus, PayRate, PayRun, Payslip, TimeCheck
+from apps.staffpay.services import approve_month, pay_month, work_out_days, worker_attendance
 from apps.sync.models import PushedDocument
 from apps.sync.push import Answer, Sent, push
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -410,3 +416,174 @@ def test_two_pushed_taps_that_disagree_send_both_days_to_review(shop_a: Shop, de
     jumas_toka, ashas_toka = _events(shop_a)[2:]
     assert (jumas_toka.time_check, ashas_toka.disagrees_with) == (TimeCheck.DEVICE_OK, jumas_toka.pk)
     assert _book(shop_a, arusha(0, 0).date()) == {"Asha": DayStatus.NEEDS_REVIEW, "Juma": DayStatus.NEEDS_REVIEW}
+
+
+# A tap of a day whose pay is approved (WAGE-10): kept, counted nowhere, as that pay never changes (A3), and flagged.
+
+NOVEMBER = dt.date(2026, 11, 1)
+
+
+def late(hour: int, minute: int) -> dt.datetime:
+    # A time on Monday 30 November 2026, in Arusha: the Vyakula laptop's tap, offline over the weekend.
+    return dt.datetime(2026, 11, 30, hour, minute, tzinfo=ARUSHA)
+
+
+# When it is sent: Wednesday 2 December, 09:14, after November's approval.
+SENT = dt.datetime(2026, 12, 2, 9, 14, tzinfo=ARUSHA)
+HEARD = dt.datetime(2026, 11, 30, 6, 50, tzinfo=ARUSHA)
+
+
+def _approved(shop: Shop, by: StaffMember) -> None:
+    # November approved, as its row says: what closes it for every job (is_closed).
+    with shop_context(shop):
+        PayRun.objects.create(shop=shop, month=NOVEMBER, created_by=by)
+
+
+def _late_tap(device: Device, maker: StaffMember, tapped: dt.datetime | None = None, **clock: Any) -> Answer:
+    # Her Ingia at 07:20 on the 30th, unless said.
+    [answer] = _push(
+        device,
+        [_clock(1, maker, tapped or late(7, 20), **({"last_server_time": HEARD} | clock))],
+        sent_at=SENT,
+        received_at=SENT,
+    )
+    return answer
+
+
+def test_a_tap_whose_day_is_approved_is_kept_and_flagged(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # Asha's Ingia of 30/11 at 07:20 comes on 2/12, after November's approval: the push takes it, as it takes every
+    # record, the book keeps it, and Tofauti says so, naming her, on no side, about the tap itself.
+    asha = _worker_since_january(shop_a, "Asha")
+    _approved(shop_a, staff_a2)
+    answer = _late_tap(device_a, asha)
+    assert answer.status == "accepted"
+    [event] = _events(shop_a)
+    assert (event.time_check, event.trusted_time) == (TimeCheck.DEVICE_OK, late(7, 20))
+    [flag] = _flags(shop_a, FlagKind.LATE_RECORD)
+    assert (flag.subject_id, flag.side_id, _named(flag)) == (event.pk, None, [asha.pk])
+    assert [kind for kind in (each["kind"] for each in answer.flags)] == [FlagKind.LATE_RECORD]
+
+
+def test_a_tap_whose_day_is_open_raises_none(shop_a: Shop, device_a: Device, staff_a2: StaffMember) -> None:
+    # November still open: the tap is one more of its taps, and the book reads it. Nothing to say.
+    asha = _worker_since_january(shop_a, "Asha")
+    _late_tap(device_a, asha)
+    assert _flags(shop_a, FlagKind.LATE_RECORD) == []
+
+
+def test_the_day_is_the_shops_own(shop_a: Shop, device_a: Device, staff_a2: StaffMember) -> None:
+    # Asha's Toka at 23:50 on the 30th is November's, approved: flagged. Juma's Ingia at 00:30 on Tuesday 1 December in
+    # Arusha, the laptop's next record, is still 30 November by UTC, but December's day by the shop's, still open: no
+    # flag.
+    asha, juma = _worker_since_january(shop_a, "Asha"), _worker_since_january(shop_a, "Juma")
+    _approved(shop_a, staff_a2)
+    taps = [
+        _clock(1, asha, late(23, 50), kind="out", last_server_time=late(23, 0)),
+        _clock(2, juma, dt.datetime(2026, 12, 1, 0, 30, tzinfo=ARUSHA), last_server_time=late(23, 0)),
+    ]
+    answers = _push(device_a, taps, sent_at=SENT, received_at=SENT)
+    assert [[each["kind"] for each in answer.flags] for answer in answers] == [[FlagKind.LATE_RECORD], []]
+    [flag] = _flags(shop_a, FlagKind.LATE_RECORD)
+    assert _named(flag) == [asha.pk]
+
+
+def test_a_tap_in_doubt_and_late_raises_both(shop_a: Shop, device_a: Device, staff_a2: StaffMember) -> None:
+    # Its time before the last the laptop heard from the server: a clock moved (sign 2), so it is in doubt, and its day,
+    # by the laptop's time, is approved. Two flags, the time's first: two things for a manager to look at.
+    asha = _worker_since_january(shop_a, "Asha")
+    _approved(shop_a, staff_a2)
+    answer = _late_tap(device_a, asha, late(6, 0))
+    assert [each["kind"] for each in answer.flags] == [FlagKind.UNVERIFIED_TIME, FlagKind.LATE_RECORD]
+
+
+def test_one_approved_alone_is_flagged_alone(shop_a: Shop, device_a: Device, staff_a2: StaffMember) -> None:
+    # Neema was approved alone as she left on the 30th; Asha's November is still open. Both their taps of the 30th come
+    # late: only Neema's is flagged, as only her pay of that day is approved.
+    asha, neema = _worker_since_january(shop_a, "Asha"), _worker_since_january(shop_a, "Neema")
+    with shop_context(shop_a):
+        Payslip.objects.create(shop=shop_a, staff=neema, month=NOVEMBER, total=Decimal("10000.00"), created_by=staff_a2)
+    taps = [_clock(1, asha, late(7, 20), last_server_time=HEARD), _clock(2, neema, late(7, 25), last_server_time=HEARD)]
+    _push(device_a, taps, sent_at=SENT, received_at=SENT)
+    [flag] = _flags(shop_a, FlagKind.LATE_RECORD)
+    assert _named(flag) == [neema.pk]
+
+
+# A tap and an approval at the same moment: the tap is counted by the approval, or flagged, never neither.
+
+
+def _paid_in_november(shop: Shop, name: str) -> StaffMember:
+    # A worker paid a made-up 10,000 a day from 1 November, written past set_pay_rate.
+    staff = _worker_since_january(shop, name)
+    with shop_context(shop):
+        PayRate(shop=shop, staff=staff, daily_rate=Decimal("10000.00"), effective_from=NOVEMBER).save()
+    return staff
+
+
+def _ticking(start: dt.datetime) -> Any:
+    # A clock that moves a millisecond each time it is read, as a real one does, from `start`: one stopped at a moment
+    # would give the approval and the tap kept after it the very same time, and hide their order.
+    ticks = itertools.count()
+    return lambda: start + dt.timedelta(milliseconds=next(ticks))
+
+
+def _seen(shop: Shop) -> dict[_uuid.UUID, Decimal]:
+    with shop_context(shop):
+        return {line.staff_id: line.total for line in pay_month(shop, NOVEMBER).workers}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_tap_beside_an_approval_waits_and_is_flagged(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, give_role: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Baba approves November while the Vyakula laptop's push of Asha's tap is on its way: the tap waits for her job's
+    # row, which the approval holds, then finds November approved, and is flagged; and her day says it came after the
+    # approval, by when it was kept, though the push arrived before it (the review). Without the push's lock it would be
+    # read by neither, and her pay would be short with nobody told.
+    monkeypatch.setattr(timezone, "now", _ticking(SENT))
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    asha = _paid_in_november(shop_a, "Asha")
+    seen = _seen(shop_a)
+
+    def pushes() -> list[str]:
+        return [each["kind"] for each in _late_tap(device_a, asha).flags]
+
+    with shop_context(shop_a), transaction.atomic():
+        approve_month(shop_a, NOVEMBER, run_id=_uuid.uuid7(), seen=seen, by=staff_a)
+        thread, ended = in_another_transaction(pushes)
+        wait_until_someone_waits_for_me()
+    thread.join()
+    assert ended == [[FlagKind.LATE_RECORD]]
+    with shop_context(shop_a):
+        [tap] = worker_attendance(shop_a, asha, NOVEMBER, viewer=None).taps
+    assert tap.after_approval is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_an_approval_beside_a_tap_waits_and_sees_it(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, give_role: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The other way round: the push of Asha's Ingia first, not committed yet, and Baba approves the totals he read
+    # before it. He waits for it, and the approval reads her 30th with its Ingia and no Toka, a day that waits for a
+    # decision: refused, and no flag, as the tap is November's to count.
+    monkeypatch.setattr(timezone, "now", lambda: SENT)
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    asha = _paid_in_november(shop_a, "Asha")
+    seen = _seen(shop_a)
+
+    def approves() -> str:
+        with shop_context(shop_a):
+            try:
+                approve_month(shop_a, NOVEMBER, run_id=_uuid.uuid7(), seen=seen, by=staff_a)
+            except Exception as refusal:  # the refusal's code, which the test reads
+                return str(getattr(refusal, "code", refusal))
+        return "approved"
+
+    with transaction.atomic():
+        _late_tap(device_a, asha)
+        thread, ended = in_another_transaction(approves)
+        wait_until_someone_waits_for_me()
+    thread.join()
+    assert ended == ["pay_run.days_waiting"]
+    assert _flags(shop_a, FlagKind.LATE_RECORD) == []
