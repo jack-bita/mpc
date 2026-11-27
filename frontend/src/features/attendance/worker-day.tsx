@@ -56,6 +56,11 @@
 // away, says so in words, never as a broken picture; and one that came but can't be opened now, as the phone went
 // offline or the login ended while the page was open, says that instead (ATT-12's review).
 //
+// The day's words, which say what it was, why it waits, its decision, a tap's line and who crossed one out, and what is
+// missing, are exported for the worker's own page too (WAGE-4, my-day-sheet.tsx), so both say a day the same way. Each
+// reads only what both answers have (DaysWords, TapsWords, MonthsWords): the worker's own answer lists only what a
+// worker may read (OwnAttendanceAnswer), with no day's choices, no photo and no doubt.
+//
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
 
@@ -83,6 +88,30 @@ import type {
   WorkerAttendance,
   WorkerDay,
 } from "./worker-month";
+
+/** What the day's words read of a day: what it was, its fine, why it waits, the two taps the rule read, and a person's
+ * decision; whether its taps changed since, on the manager's answer alone. */
+export type DaysWords = Pick<
+  WorkerDay,
+  "status" | "fine" | "reason" | "first_in" | "first_out" | "decision"
+> & { taps_changed?: boolean };
+
+/** What a tap's line reads of a tap: Ingia or Toka, its time or the laptop's own, its laptop, who added it, who crossed
+ * it out. */
+export type TapsWords = Pick<
+  AttendanceTap,
+  "kind" | "time" | "laptop_time" | "laptop" | "entered" | "voided"
+>;
+
+/** What the day's words read of the month: the job's first and last day, and the demo's ready reasons. */
+export type MonthsWords = Pick<
+  WorkerAttendance,
+  | "started_on"
+  | "left_on"
+  | "ready_reasons"
+  | "ready_add_reasons"
+  | "ready_void_reasons"
+>;
 
 export function TheDay({
   day,
@@ -250,12 +279,12 @@ function Kept({
 
 /** What the system worked out, as ATT-12 showed it: the status and its fine, why it waits, and the worker's days for a
  * day outside them. */
-function BookSays({
+export function BookSays({
   day,
   answer,
 }: {
-  day: WorkerDay;
-  answer: WorkerAttendance;
+  day: DaysWords;
+  answer: Pick<MonthsWords, "started_on" | "left_on">;
 }) {
   const t = useTranslations("attendanceWorker");
   const monthWords = useTranslations("attendanceMonth");
@@ -290,13 +319,13 @@ function BookSays({
 }
 
 /** A decided day: "✓ Siku kamili · uamuzi wa Baba, 20/11/2026", its reason, then what the system said (A2). */
-function Decided({
+export function Decided({
   day,
   answer,
   timezone,
 }: {
-  day: WorkerDay;
-  answer: WorkerAttendance;
+  day: DaysWords;
+  answer: Pick<MonthsWords, "ready_reasons">;
   timezone: string | null;
 }) {
   const t = useTranslations("attendanceWorker");
@@ -343,7 +372,7 @@ function Decided({
       <p className="text-muted-foreground">{said}</p>
       {/* A tap added, arrived or crossed out after the decision (Jack: A, ATT-13): the decision stays, and says so,
           for whoever looks to decide the day again. */}
-      {day.taps_changed ? (
+      {day.taps_changed === true ? (
         <p className="font-semibold">{t("tapsChanged")}</p>
       ) : null}
     </>
@@ -353,7 +382,7 @@ function Decided({
 /** A day's status in words, with its fine on a day with one: a late day, or a late morning's half day (the owner,
  * ATT-4). The shop's own rule, which anyone working there may read; never the worker's rate or the day's pay
  * (WAGE-1). */
-function useStatusWords(day: WorkerDay): string {
+function useStatusWords(day: Pick<DaysWords, "status" | "fine">): string {
   const t = useTranslations("attendanceWorker");
   const fine = new Decimal(day.fine);
   const status = t(`status.${day.status}`);
@@ -364,7 +393,9 @@ function useStatusWords(day: WorkerDay): string {
 
 /** Why a day waits, as the month page's list says it, "alifika saa 09:10 asubuhi": only came_late and left_early name
  * a time, and the book keeps that tap for them (to-decide.tsx). None on a day that didn't wait. */
-function useWhyWords(day: WorkerDay): string | null {
+function useWhyWords(
+  day: Pick<DaysWords, "reason" | "first_in" | "first_out">,
+): string | null {
   const monthWords = useTranslations("attendanceMonth");
   const attendance = useTranslations("attendance");
   if (day.reason === null) return null;
@@ -388,34 +419,10 @@ function Tap({
   timezone: string | null;
 }) {
   const t = useTranslations("attendanceWorker");
-  const attendance = useTranslations("attendance");
   const name = answer.worker.display_name;
   // Whether the sheet that crosses it out is open over the day: opened by Batilisha, closed by Ghairi or once done.
   const [crossing, setCrossing] = useState(false);
-  // The time the server trusts, with its part of the day, so nobody reads 13:20 as Swahili time (Jack, SYNC-11); or,
-  // for a tap whose time it doesn't trust, the laptop's own, said to be the laptop's. A tap entered in the office
-  // (ATT-13) has no laptop clock, but always the time the manager typed, trusted; the server never sends neither.
-  const said = (clock: string) =>
-    attendance("timeOfDay", { time: clock, part: clockPart(clock) });
-  const time =
-    tap.time !== null
-      ? said(tap.time)
-      : t("laptopTime", { time: said(tap.laptop_time ?? "") });
-  const kind = t(`tapKind.${tap.kind}`);
-  // A laptop's tap names its laptop; one added in the office who added it and when (ATT-13).
-  const line =
-    tap.entered !== null
-      ? timezone === null
-        ? t("tapLineEnteredNoDate", { kind, time, by: tap.entered.by })
-        : t("tapLineEntered", {
-            kind,
-            time,
-            by: tap.entered.by,
-            date: formatDate(tap.entered.at, timezone),
-          })
-      : tap.laptop === null
-        ? t("tapLineNoLaptop", { kind, time })
-        : t("tapLine", { kind, time, laptop: tap.laptop });
+  const { kind, time, line } = useTapLine(tap, timezone);
   // Whether the browser failed to open the photo the answer said is kept: a request of its own, which the route can
   // refuse though the month was read (no network now, a login ended, the key taken away, the file gone from the disk).
   const [photoFailed, setPhotoFailed] = useState(false);
@@ -499,11 +506,46 @@ function Tap({
   );
 }
 
+/** A tap's line, "Ingia 07:20 asubuhi · Laptop ya Dawa", with its kind and time apart, for the photo's words and the
+ * sheet that crosses it out. */
+export function useTapLine(
+  tap: TapsWords,
+  timezone: string | null,
+): { kind: string; time: string; line: string } {
+  const t = useTranslations("attendanceWorker");
+  const attendance = useTranslations("attendance");
+  // The time the server trusts, with its part of the day, so nobody reads 13:20 as Swahili time (Jack, SYNC-11); or,
+  // for a tap whose time it doesn't trust, the laptop's own, said to be the laptop's. A tap entered in the office
+  // (ATT-13) has no laptop clock, but always the time the manager typed, trusted; the server never sends neither.
+  const said = (clock: string) =>
+    attendance("timeOfDay", { time: clock, part: clockPart(clock) });
+  const time =
+    tap.time !== null
+      ? said(tap.time)
+      : t("laptopTime", { time: said(tap.laptop_time ?? "") });
+  const kind = t(`tapKind.${tap.kind}`);
+  // A laptop's tap names its laptop; one added in the office who added it and when (ATT-13).
+  const line =
+    tap.entered !== null
+      ? timezone === null
+        ? t("tapLineEnteredNoDate", { kind, time, by: tap.entered.by })
+        : t("tapLineEntered", {
+            kind,
+            time,
+            by: tap.entered.by,
+            date: formatDate(tap.entered.at, timezone),
+          })
+      : tap.laptop === null
+        ? t("tapLineNoLaptop", { kind, time })
+        : t("tapLine", { kind, time, laptop: tap.laptop });
+  return { kind, time, line };
+}
+
 /** Who crossed a tap out, when and why: "Imebatilishwa na Baba, 19/11/2026 · Sababu: Alibonyeza kwa makosa". On the
  * demo the reason is a ready one's code, said in words here. */
-function voidedWords(
+export function voidedWords(
   voided: NonNullable<AttendanceTap["voided"]>,
-  answer: WorkerAttendance,
+  answer: Pick<MonthsWords, "ready_void_reasons">,
   timezone: string | null,
   t: ReturnType<typeof useTranslations<"attendanceWorker">>,
 ): string {
@@ -519,13 +561,13 @@ function voidedWords(
 
 /** What a day that is over is missing: no tap at all on a working day, or no Ingia, or no Toka. Today isn't over, so
  * nothing is missing yet; a shut day needs no tap. */
-function Missing({
+export function Missing({
   kept,
   taps,
   isToday,
 }: {
-  kept: WorkerDay | undefined;
-  taps: AttendanceTap[];
+  kept: Pick<WorkerDay, "status"> | undefined;
+  taps: Pick<AttendanceTap, "kind">[];
   isToday: boolean;
 }) {
   const t = useTranslations("attendanceWorker");
@@ -542,7 +584,7 @@ function Missing({
 }
 
 /** A fix's reason in words: on the demo, a ready reason's code, said in words; elsewhere the words typed. */
-function readyWords(
+export function readyWords(
   reason: string,
   ready: readonly string[],
   t: ReturnType<typeof useTranslations<"attendanceWorker">>,
