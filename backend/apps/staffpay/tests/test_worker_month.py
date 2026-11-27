@@ -496,22 +496,26 @@ def test_a_person_hired_again_keeps_each_jobs_month_apart(shop_a: Shop, device_a
     assert (first_job.left_on, second_job.started_on) == (dt.date(2026, 10, 9), dt.date(2026, 10, 19))
 
 
-def _approved_at(monkeypatch: pytest.MonkeyPatch, moment: dt.datetime, make: Callable[[], object]) -> None:
-    # An approval made at `moment` on the shop's clock, as its row's own created_at says.
+def _at(monkeypatch: pytest.MonkeyPatch, moment: dt.datetime, make: Callable[[], Any]) -> Any:
+    # A row written at `moment` on the shop's clock, as its own created_at says: an approval, or a tap the push kept.
     with monkeypatch.context() as clock:
         clock.setattr(timezone, "now", lambda: moment)
-        make()
+        return make()
 
 
 def test_a_tap_that_came_after_the_approval_says_so(
     shop_a: Shop, device_a: Device, asha: StaffMember, staff_a: StaffMember, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # WAGE-10: October approved on 1 November at 19:05. Asha's Ingia of the 1st came that same morning, counted; her
-    # Ingia of the 30th came only on 2 November, after it, kept and counted nowhere: the day says so beside it.
-    counted = tap(device_a, asha, ClockKind.IN, on(1, 7, 20))
-    late = tap(device_a, asha, ClockKind.IN, on(30, 7, 20), received_at=dt.datetime(2026, 11, 2, 9, 14, tzinfo=ARUSHA))
+    # WAGE-10: October approved on 1 November at 19:05. Asha's Ingia of the 1st was kept that same morning, counted;
+    # her Ingia of the 30th was kept only on 2 November, after it, and counts for nothing: the day says so beside it.
+    counted = _at(monkeypatch, on(1, 8, 20), lambda: tap(device_a, asha, ClockKind.IN, on(1, 7, 20)))
+    late = _at(
+        monkeypatch,
+        dt.datetime(2026, 11, 2, 9, 14, tzinfo=ARUSHA),
+        lambda: tap(device_a, asha, ClockKind.IN, on(30, 7, 20)),
+    )
     with shop_context(shop_a):
-        _approved_at(
+        _at(
             monkeypatch,
             dt.datetime(2026, 11, 1, 19, 5, tzinfo=ARUSHA),
             lambda: PayRun.objects.create(shop=shop_a, month=OCTOBER, created_by=staff_a),
@@ -520,16 +524,37 @@ def test_a_tap_that_came_after_the_approval_says_so(
     assert (tap_of(answer, counted).after_approval, tap_of(answer, late).after_approval) == (False, True)
 
 
+def test_a_tap_of_a_batch_kept_after_the_approval_says_so(
+    shop_a: Shop, device_a: Device, asha: StaffMember, staff_a: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The review: the push arrived at 09:14:00 with the weekend's taps; Baba's approval was kept at 09:14:01, while it
+    # ran; Asha's Ingia waited for her row and was kept at 09:14:02, then flagged. Its arrival is before the approval,
+    # its keeping after it, as the lock ordered them: the day says what the flag says.
+    arrived = dt.datetime(2026, 11, 2, 9, 14, 0, tzinfo=ARUSHA)
+    with shop_context(shop_a):
+        _at(
+            monkeypatch,
+            arrived + dt.timedelta(seconds=1),
+            lambda: PayRun.objects.create(shop=shop_a, month=OCTOBER, created_by=staff_a),
+        )
+    late = _at(
+        monkeypatch,
+        arrived + dt.timedelta(seconds=2),
+        lambda: tap(device_a, asha, ClockKind.IN, on(30, 7, 20), received_at=arrived),
+    )
+    assert tap_of(month_of(shop_a, asha), late).after_approval is True
+
+
 def test_one_approved_alone_marks_their_own_taps_alone(
     shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Juma left on the 30th and was approved alone that evening; Asha's October is still open. Both their taps of the
-    # 30th came on 2 November: only Juma's came after his pay was approved.
+    # 30th were kept on 2 November: only Juma's came after his pay was approved.
     came = dt.datetime(2026, 11, 2, 9, 14, tzinfo=ARUSHA)
-    ashas = tap(device_a, asha, ClockKind.IN, on(30, 7, 20), received_at=came)
-    jumas = tap(device_a, juma, ClockKind.IN, on(30, 7, 25), received_at=came)
+    ashas = _at(monkeypatch, came, lambda: tap(device_a, asha, ClockKind.IN, on(30, 7, 20)))
+    jumas = _at(monkeypatch, came, lambda: tap(device_a, juma, ClockKind.IN, on(30, 7, 25)))
     with shop_context(shop_a):
-        _approved_at(
+        _at(
             monkeypatch,
             dt.datetime(2026, 10, 30, 19, 5, tzinfo=ARUSHA),
             lambda: Payslip.objects.create(

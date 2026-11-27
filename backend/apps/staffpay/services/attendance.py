@@ -449,6 +449,7 @@ def _tap_lines(shop: Shop, taps: QuerySet[AttendanceEvent]) -> list[tuple[TapLin
             "voided_by__display_name",
             "void_reason",
             "staff_id",
+            "created_at",
             named=True,
         )
     )
@@ -480,9 +481,11 @@ def _tap_lines(shop: Shop, taps: QuerySet[AttendanceEvent]) -> list[tuple[TapLin
             if line.time_check == TimeCheck.ENTERED
             else None,
             voided=voided,
-            # It reached the server after its day's pay was approved: by the push's arrival, as an approval is a moment
-            # too. One entered in the office never is, as a closed day takes none (add_tap).
-            after_approval=(since := closed.since(line.staff_id, day)) is not None and line.received_at > since,
+            # It was kept after its day's pay was approved: by the moment its row was written, which the push takes
+            # under the job's lock (post_clock), so it orders as the lock does, never by the push's arrival, which is
+            # one moment for a whole batch, read before any of its taps waited for an approval. One entered in the
+            # office never is, as a closed day takes none (add_tap).
+            after_approval=(since := closed.since(line.staff_id, day)) is not None and line.created_at > since,
         )
         answered.append((tap, max(line.received_at, line.voided_at or line.received_at)))
     return answered

@@ -18,6 +18,7 @@ apps/staffpay/tests/test_time_check.py's. Fake data only: the repo is public.
 
 import dataclasses
 import datetime as dt
+import itertools
 import uuid
 import uuid as _uuid
 from collections.abc import Sequence
@@ -39,7 +40,7 @@ from apps.people.services import add_staff, suspend
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.services import add_side
 from apps.staffpay.models import AttendanceEvent, DayStatus, PayRate, PayRun, Payslip, TimeCheck
-from apps.staffpay.services import approve_month, pay_month, work_out_days
+from apps.staffpay.services import approve_month, pay_month, work_out_days, worker_attendance
 from apps.sync.models import PushedDocument
 from apps.sync.push import Answer, Sent, push
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
@@ -520,6 +521,13 @@ def _paid_in_november(shop: Shop, name: str) -> StaffMember:
     return staff
 
 
+def _ticking(start: dt.datetime) -> Any:
+    # A clock that moves a millisecond each time it is read, as a real one does, from `start`: one stopped at a moment
+    # would give the approval and the tap kept after it the very same time, and hide their order.
+    ticks = itertools.count()
+    return lambda: start + dt.timedelta(milliseconds=next(ticks))
+
+
 def _seen(shop: Shop) -> dict[_uuid.UUID, Decimal]:
     with shop_context(shop):
         return {line.staff_id: line.total for line in pay_month(shop, NOVEMBER).workers}
@@ -530,9 +538,10 @@ def test_a_tap_beside_an_approval_waits_and_is_flagged(
     shop_a: Shop, device_a: Device, staff_a: StaffMember, give_role: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Baba approves November while the Vyakula laptop's push of Asha's tap is on its way: the tap waits for her job's
-    # row, which the approval holds, then finds November approved, and is flagged. Without the push's lock it would be
+    # row, which the approval holds, then finds November approved, and is flagged; and her day says it came after the
+    # approval, by when it was kept, though the push arrived before it (the review). Without the push's lock it would be
     # read by neither, and her pay would be short with nobody told.
-    monkeypatch.setattr(timezone, "now", lambda: SENT)
+    monkeypatch.setattr(timezone, "now", _ticking(SENT))
     give_role(staff_a, RoleTemplate.OWNER, None)
     asha = _paid_in_november(shop_a, "Asha")
     seen = _seen(shop_a)
@@ -546,6 +555,9 @@ def test_a_tap_beside_an_approval_waits_and_is_flagged(
         wait_until_someone_waits_for_me()
     thread.join()
     assert ended == [[FlagKind.LATE_RECORD]]
+    with shop_context(shop_a):
+        [tap] = worker_attendance(shop_a, asha, NOVEMBER, viewer=None).taps
+    assert tap.after_approval is True
 
 
 @pytest.mark.django_db(transaction=True)
