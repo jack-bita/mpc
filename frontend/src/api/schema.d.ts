@@ -1395,6 +1395,8 @@ export interface components {
             doubt: (components["schemas"]["TapDoubtEnum"] | components["schemas"]["NullEnum"]) | null;
             entered: components["schemas"]["TapStamp"] | null;
             voided: components["schemas"]["TapStamp"] | null;
+            /** @description Whether it came after its day's pay was approved, so it counts for nothing (WAGE-10). */
+            after_approval: boolean;
         };
         /** @enum {unknown} */
         BlankEnum: "";
@@ -2807,6 +2809,8 @@ export interface components {
             doubt: (components["schemas"]["TapDoubtEnum"] | components["schemas"]["NullEnum"]) | null;
             entered: components["schemas"]["TapStamp"] | null;
             voided: components["schemas"]["TapStamp"] | null;
+            /** @description Whether it came after its day's pay was approved, so it counts for nothing (WAGE-10). */
+            after_approval: boolean;
         };
         /**
          * @description * `not_working` - Suspended or gone

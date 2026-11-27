@@ -15,7 +15,7 @@ import { useTranslations } from "use-intl";
 
 import type { components } from "@/api/schema";
 
-import type { WorkerPayMonth } from "./pay";
+import { type WorkerPayMonth, workerPayPage } from "./pay";
 
 export type CorrectionLine = components["schemas"]["CorrectionLine"];
 
@@ -23,6 +23,12 @@ export type CorrectionLine = components["schemas"]["CorrectionLine"];
  * /pay/worker/?staff=…&month=2026-12&marekebisho=ongeza. */
 export const CORRECTION_PARAM = "marekebisho";
 export const OPEN_THE_SHEET = "ongeza";
+
+/** A worker's pay page of `month` with Ongeza marekebisho's sheet open as it opens: where a late tap's flag sends whoever
+ * approves pay (WAGE-10). */
+export function correctionPage(staff: string, month: string): string {
+  return `${workerPayPage(staff, month)}&${new URLSearchParams({ [CORRECTION_PARAM]: OPEN_THE_SHEET }).toString()}`;
+}
 
 /** The corrections that count, in the order typed: what the pay adds up, and its lines. */
 export function correctionsThatCount(answer: WorkerPayMonth): CorrectionLine[] {

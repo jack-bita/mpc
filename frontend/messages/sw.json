@@ -1079,6 +1079,7 @@
     "tapLineEnteredNoDate": "{kind} {time} · imeongezwa na {by}",
     "laptopTime": "{time} (saa ya kompyuta, haiaminiki)",
     "doubt": "Shaka: {why}",
+    "afterApproval": "Ilifika baada ya malipo kuidhinishwa, kwa hiyo haikuhesabiwa.",
     "doubtWhy": {
       "not_working": "alikuwa amesimamishwa au ameondoka",
       "clock_disagrees": "huenda saa ya kompyuta ilibadilishwa"
@@ -1201,6 +1202,7 @@
       "raisedAt": "Mfumo uliona",
       "status": "Hali",
       "openDay": "Fungua siku yake",
+      "addCorrection": "Ongeza marekebisho",
       "notes": "Maelezo ({count})",
       "noNotes": "Bado hakuna maelezo.",
       "noteBy": "{step} · {by} · {when}",

@@ -4332,9 +4332,14 @@
                             }
                         ],
                         "nullable": true
+                    },
+                    "after_approval": {
+                        "type": "boolean",
+                        "description": "Whether it came after its day's pay was approved, so it counts for nothing (WAGE-10)."
                     }
                 },
                 "required": [
+                    "after_approval",
                     "date",
                     "doubt",
                     "entered",
@@ -8373,9 +8378,14 @@
                             }
                         ],
                         "nullable": true
+                    },
+                    "after_approval": {
+                        "type": "boolean",
+                        "description": "Whether it came after its day's pay was approved, so it counts for nothing (WAGE-10)."
                     }
                 },
                 "required": [
+                    "after_approval",
                     "date",
                     "doubt",
                     "entered",

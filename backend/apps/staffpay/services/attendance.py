@@ -62,7 +62,7 @@ from apps.staffpay.models import (
     ReviewReason,
     TimeCheck,
 )
-from apps.staffpay.selectors import closed_pay, rates_between, rules_from_text
+from apps.staffpay.selectors import closed_pay, closings, rates_between, rules_from_text
 from apps.staffpay.services.book import (
     SUNDAY,
     doubt_of,
@@ -232,6 +232,9 @@ class TapLine:
     # counts for nothing.
     entered: TapStamp | None
     voided: TapStamp | None
+    # Whether it came after its day's pay was approved (WAGE-10): kept, counted nowhere, and flagged (late_record), so
+    # the day says so beside it. Its day as the book places it, the job's own approval, alone or with the month.
+    after_approval: bool = False
 
 
 @dataclass(frozen=True)
@@ -445,10 +448,13 @@ def _tap_lines(shop: Shop, taps: QuerySet[AttendanceEvent]) -> list[tuple[TapLin
             "voided_at",
             "voided_by__display_name",
             "void_reason",
+            "staff_id",
             named=True,
         )
     )
     photos = _photos_of(shop, [line.pk for line in lines])
+    # When each day's pay closed, for the jobs of these taps, in two reads more (WAGE-10).
+    closed = closings(shop, {line.staff_id for line in lines})
     answered = []
     for line in lines:
         day, minute = where_it_falls(line.trusted_time, line.client_time, zone)
@@ -474,6 +480,9 @@ def _tap_lines(shop: Shop, taps: QuerySet[AttendanceEvent]) -> list[tuple[TapLin
             if line.time_check == TimeCheck.ENTERED
             else None,
             voided=voided,
+            # It reached the server after its day's pay was approved: by the push's arrival, as an approval is a moment
+            # too. One entered in the office never is, as a closed day takes none (add_tap).
+            after_approval=(since := closed.since(line.staff_id, day)) is not None and line.received_at > since,
         )
         answered.append((tap, max(line.received_at, line.voided_at or line.received_at)))
     return answered

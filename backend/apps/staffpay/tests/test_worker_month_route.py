@@ -108,6 +108,8 @@ def test_the_workers_month_as_the_page_reads_it(
                 # A laptop's tap, never crossed out (ATT-13).
                 "entered": None,
                 "voided": None,
+                # It came before its day's pay was approved, as none is (WAGE-10).
+                "after_approval": False,
             }
         ],
     }

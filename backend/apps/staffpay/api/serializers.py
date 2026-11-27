@@ -301,6 +301,9 @@ class AttendanceTapSerializer(serializers.Serializer[Any]):
     # while it counts (ATT-13). A tap crossed out still comes, for the day to show it struck through (A2).
     entered = TapStampSerializer(allow_null=True)
     voided = TapStampSerializer(allow_null=True)
+    after_approval = serializers.BooleanField(
+        help_text="Whether it came after its day's pay was approved, so it counts for nothing (WAGE-10)."
+    )
 
 
 # One object, not a list, as for the month's answer above.

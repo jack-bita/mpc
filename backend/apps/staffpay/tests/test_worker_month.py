@@ -49,6 +49,8 @@ from apps.staffpay.models import (
     DayStatus,
     MealMoney,
     NoPhoto,
+    PayRun,
+    Payslip,
     ReviewReason,
     TimeCheck,
 )
@@ -492,6 +494,50 @@ def test_a_person_hired_again_keeps_each_jobs_month_apart(shop_a: Shop, device_a
     assert max(day.date for day in first_job.days) == dt.date(2026, 10, 9)
     assert min(day.date for day in second_job.days) == dt.date(2026, 10, 19)
     assert (first_job.left_on, second_job.started_on) == (dt.date(2026, 10, 9), dt.date(2026, 10, 19))
+
+
+def _approved_at(monkeypatch: pytest.MonkeyPatch, moment: dt.datetime, make: Callable[[], object]) -> None:
+    # An approval made at `moment` on the shop's clock, as its row's own created_at says.
+    with monkeypatch.context() as clock:
+        clock.setattr(timezone, "now", lambda: moment)
+        make()
+
+
+def test_a_tap_that_came_after_the_approval_says_so(
+    shop_a: Shop, device_a: Device, asha: StaffMember, staff_a: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # WAGE-10: October approved on 1 November at 19:05. Asha's Ingia of the 1st came that same morning, counted; her
+    # Ingia of the 30th came only on 2 November, after it, kept and counted nowhere: the day says so beside it.
+    counted = tap(device_a, asha, ClockKind.IN, on(1, 7, 20))
+    late = tap(device_a, asha, ClockKind.IN, on(30, 7, 20), received_at=dt.datetime(2026, 11, 2, 9, 14, tzinfo=ARUSHA))
+    with shop_context(shop_a):
+        _approved_at(
+            monkeypatch,
+            dt.datetime(2026, 11, 1, 19, 5, tzinfo=ARUSHA),
+            lambda: PayRun.objects.create(shop=shop_a, month=OCTOBER, created_by=staff_a),
+        )
+    answer = month_of(shop_a, asha)
+    assert (tap_of(answer, counted).after_approval, tap_of(answer, late).after_approval) == (False, True)
+
+
+def test_one_approved_alone_marks_their_own_taps_alone(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Juma left on the 30th and was approved alone that evening; Asha's October is still open. Both their taps of the
+    # 30th came on 2 November: only Juma's came after his pay was approved.
+    came = dt.datetime(2026, 11, 2, 9, 14, tzinfo=ARUSHA)
+    ashas = tap(device_a, asha, ClockKind.IN, on(30, 7, 20), received_at=came)
+    jumas = tap(device_a, juma, ClockKind.IN, on(30, 7, 25), received_at=came)
+    with shop_context(shop_a):
+        _approved_at(
+            monkeypatch,
+            dt.datetime(2026, 10, 30, 19, 5, tzinfo=ARUSHA),
+            lambda: Payslip.objects.create(
+                shop=shop_a, staff=juma, month=OCTOBER, total=Decimal("10000.00"), created_by=asha
+            ),
+        )
+    assert tap_of(month_of(shop_a, asha), ashas).after_approval is False
+    assert tap_of(month_of(shop_a, juma), jumas).after_approval is True
 
 
 def test_a_month_in_a_few_queries(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:

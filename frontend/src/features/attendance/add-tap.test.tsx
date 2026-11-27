@@ -40,6 +40,7 @@ const INGIA: AttendanceTap = {
   doubt: null,
   entered: null,
   voided: null,
+  after_approval: false,
 };
 
 /** The Toka Baba adds, as the server answers it. */
@@ -59,6 +60,7 @@ const ADDED: AttendanceTap = {
     reason: "Alisahau kubonyeza Toka",
   },
   voided: null,
+  after_approval: false,
 };
 
 function month(fields: Partial<WorkerAttendance> = {}): WorkerAttendance {

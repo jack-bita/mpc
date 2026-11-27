@@ -11,7 +11,8 @@
 // Its status, and its fine on a day with one; their share of the day's meal money, *Chakula: TSh 1,000*, where there is
 // one (WAGE-7); why it waits, on a day to decide, with the worker's working days for a
 // day outside them; then each tap, Ingia or Toka, its time on the shop's clock with its part of the day (SYNC-11),
-// the laptop, why the tap itself is in doubt, and its photo, or why there is none. Today says it isn't over, and shows
+// the laptop, why the tap itself is in doubt, whether it came after its day's pay was approved (WAGE-10), and its
+// photo, or why there is none. Today says it isn't over, and shows
 // its taps as they came.
 //
 // A day that is over is decided from here (ATT-6), as Jack pictured it (20 Nov 2026): *Amua siku hii* opens the sheet
@@ -443,6 +444,11 @@ function Tap({
         <p className="font-semibold">
           {t("doubt", { why: t(`doubtWhy.${tap.doubt}`) })}
         </p>
+      ) : null}
+      {/* It reached the server after its day's pay was approved (WAGE-10): kept, counted nowhere, and flagged on Tofauti,
+          so the day says why it moved nothing. */}
+      {tap.after_approval ? (
+        <p className="font-semibold">{t("afterApproval")}</p>
       ) : null}
       {tap.photo?.state === "kept" && photoFailed ? (
         <p className="text-muted-foreground">{t("photoFailed")}</p>

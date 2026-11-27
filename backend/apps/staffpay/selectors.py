@@ -29,6 +29,8 @@ And whether the pay of a day is approved (is_closed, WAGE-3), so nothing it is m
 
     November approved:   30 Nov and every day before it, for everyone        Neema approved alone: her days alone
 
+And when a day's pay closed, for a job (closings, WAGE-10), so a tap that came after it is said to count for nothing.
+
 And the corrections of a month (WAGE-10): mistakes found after an earlier month's approval, put right in this one, by
 job (corrections_by_job), and one worker's, crossed out ones too, for their page (corrections_of); and why a month
 takes none for a job (why_no_correction):
@@ -39,7 +41,7 @@ takes none for a job (why_no_correction):
 import uuid
 from calendar import monthrange
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -333,6 +335,33 @@ def closed_pay(shop: Shop) -> ClosedPay:
         .values_list("staff_id", "last")
     )
     return ClosedPay(to=closed_to(shop), alone={job: _months_end(month) for job, month in alone})
+
+
+@dataclass(frozen=True)
+class Closings:
+    # When each month's pay was approved, read once for a page of many taps (WAGE-10): the shop's runs, and each job's
+    # payslips, as one who left is approved alone. A day's pay closed at the first approval of its month or a later one,
+    # as months are approved in order (is_closed's rule, with the moment).
+    runs: list[tuple[date, datetime]]
+    slips: dict[uuid.UUID, list[tuple[date, datetime]]]
+
+    def since(self, job: uuid.UUID, day: date) -> datetime | None:
+        """When the pay of `day` closed for `job`, or None while it is open."""
+        month = day.replace(day=1)
+        moments = [at for of, at in (*self.runs, *self.slips.get(job, [])) if of >= month]
+        return min(moments, default=None)
+
+
+def closings(shop: Shop, jobs: Iterable[uuid.UUID]) -> Closings:
+    """When each month's pay was approved, for the shop and for each of `jobs` (WAGE-10): in two reads, whatever the
+    number of taps. What tells a tap that came after its day's pay was approved, and so counts for nothing."""
+    runs = list(PayRun.objects.filter(shop=shop).values_list("month", "created_at"))
+    slips: dict[uuid.UUID, list[tuple[date, datetime]]] = defaultdict(list)
+    for staff_id, month, at in Payslip.objects.filter(shop=shop, staff_id__in=list(jobs)).values_list(
+        "staff_id", "month", "created_at"
+    ):
+        slips[staff_id].append((month, at))
+    return Closings(runs=runs, slips=dict(slips))
 
 
 def _months_end(month: date) -> date:

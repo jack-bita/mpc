@@ -1079,6 +1079,7 @@
     "tapLineEnteredNoDate": "{kind} {time} · added by {by}",
     "laptopTime": "{time} (the laptop's clock, not trusted)",
     "doubt": "In doubt: {why}",
+    "afterApproval": "It came after the pay was approved, so it wasn't counted.",
     "doubtWhy": {
       "not_working": "suspended or gone",
       "clock_disagrees": "the laptop's clock may have been changed"
@@ -1201,6 +1202,7 @@
       "raisedAt": "The system found it",
       "status": "State",
       "openDay": "Open their day",
+      "addCorrection": "Add a correction",
       "notes": "Notes ({count})",
       "noNotes": "No notes yet.",
       "noteBy": "{step} · {by} · {when}",

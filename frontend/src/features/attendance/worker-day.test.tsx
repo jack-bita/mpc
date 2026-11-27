@@ -55,6 +55,7 @@ function tap(
     doubt: null,
     entered: null,
     voided: null,
+    after_approval: false,
     ...fields,
   };
 }
@@ -774,6 +775,38 @@ describe("a day under the calendar", () => {
         "Toka 18:30 jioni (saa ya kompyuta, haiaminiki) · Laptop ya Dawa",
       ),
     ).toBeTruthy();
+  });
+
+  it("says a tap that came after its day's pay was approved counts for nothing (WAGE-10)", async () => {
+    // Juma was paid as absent on the 12th, and his Ingia of that morning came only after November's approval: kept,
+    // beside the day, which still says what was paid.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [day({ date: "2026-11-12", status: "absent" })],
+        [
+          tap({
+            date: "2026-11-12",
+            kind: "in",
+            time: "07:20",
+            after_approval: true,
+          }),
+          tap({ date: "2026-11-12", kind: "out", time: "18:45" }),
+        ],
+        { closed: true },
+      ),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-12" />,
+    );
+
+    const open = await theDay("Alhamisi 12/11/2026");
+    // Once, beside the tap that came late, and never beside the one that came in time.
+    expect(
+      within(open).getAllByText(
+        "Ilifika baada ya malipo kuidhinishwa, kwa hiyo haikuhesabiwa.",
+      ),
+    ).toHaveLength(1);
   });
 
   it("says so when a kept photo can't be opened, never a broken picture", async () => {
