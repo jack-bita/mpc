@@ -6416,17 +6416,9 @@
                         "items": {
                             "type": "string"
                         }
-                    },
-                    "correction_void_reasons": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "readOnly": true
                     }
                 },
                 "required": [
-                    "correction_void_reasons",
                     "corrections",
                     "counted_to",
                     "line",

@@ -137,7 +137,6 @@ const ASHAS_PAY: OwnPay = {
   },
   corrections: [],
   void_reasons: [],
-  correction_void_reasons: [],
 };
 
 beforeEach(() => {

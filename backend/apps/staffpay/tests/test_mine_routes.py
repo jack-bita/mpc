@@ -165,7 +165,6 @@ def test_own_answers_hold_only_what_a_worker_is_shown(two: tuple[StaffMember, St
         "line",
         "corrections",
         "void_reasons",
-        "correction_void_reasons",
     }
     assert set(pay["line"]) == {
         "left_on",
@@ -291,7 +290,6 @@ def test_own_answers_list_every_field_inside_them_too() -> None:
         },
         "corrections": [{"id": None, "amount": None, "reason": None, "by": None, "at": None, "voided": STAMP}],
         "void_reasons": None,
-        "correction_void_reasons": None,
     }
 
 

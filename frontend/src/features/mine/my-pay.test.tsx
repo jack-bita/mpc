@@ -51,7 +51,6 @@ const NOVEMBER: OwnPay = {
   },
   corrections: [],
   void_reasons: [],
-  correction_void_reasons: [],
 };
 
 function payment(changes: Partial<OwnPayment>): OwnPayment {

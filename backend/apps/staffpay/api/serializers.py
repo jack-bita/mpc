@@ -1004,7 +1004,9 @@ class OwnPayAnswer(serializers.Serializer[Any]):
     # The worker's own pay of the month (WAGE-4), as own_pay works it out: the month; the shop's today; the last day
     # counted, or null; whether the shop pays them by the day in it, or gave them money in it; whether their first
     # working day of it is still to come; their line; the month's corrections, crossed out ones too, with why; and, on
-    # the demo, the ready reasons a payment and a correction are crossed out with, as codes the page says in words.
+    # the demo, the ready reasons a payment is crossed out with, as codes the page says in words. Not a correction's:
+    # the page says those from its own list (READY_REASONS, features/pay/corrections.ts), and only the manager's
+    # Batilisha sheet reads the server's (the review).
     month = MonthField()
     today = serializers.DateField()
     counted_to = serializers.DateField(allow_null=True)
@@ -1013,7 +1015,3 @@ class OwnPayAnswer(serializers.Serializer[Any]):
     line = OwnPayLineSerializer(source="worker")
     corrections = CorrectionLineSerializer(many=True)
     void_reasons = serializers.ListField(child=serializers.CharField())
-    correction_void_reasons = serializers.SerializerMethodField()
-
-    def get_correction_void_reasons(self, _answer: Any) -> list[str]:
-        return ready_correction_void_reasons()

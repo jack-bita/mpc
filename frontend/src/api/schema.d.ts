@@ -2106,7 +2106,6 @@ export interface components {
             line: components["schemas"]["OwnPayLine"];
             corrections: components["schemas"]["CorrectionLine"][];
             void_reasons: string[];
-            readonly correction_void_reasons: string[];
         };
         OwnPayLine: {
             /** Format: date */
