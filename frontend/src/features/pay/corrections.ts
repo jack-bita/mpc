@@ -44,6 +44,25 @@ export function offersCorrection(
   return may && !answer.worker.own && answer.no_correction === null;
 }
 
+/** Why a month's pay is closed for a worker, of the server's reasons it takes no correction: its own approval, or one
+ * who left whose pay is approved. Every other reason is about typing a new one: a month the job no longer runs in, its
+ * first day moved since (PPL-10), still lets one typed before be crossed out, as void_correction asks only that its month
+ * is open and it isn't one's own (the review). */
+const CLOSED = new Set(["pay.day_approved", "correction.left_paid"]);
+
+/** Whether this person is offered Batilisha on a worker's corrections: they approve pay, the month is still open, and it
+ * is not their own pay (Jack: A). */
+export function offersCrossingOut(
+  answer: WorkerPayMonth,
+  may: boolean,
+): boolean {
+  return (
+    may &&
+    !answer.worker.own &&
+    (answer.no_correction === null || !CLOSED.has(answer.no_correction))
+  );
+}
+
 /** The demo's ready reasons (DEMO_CORRECTION_REASONS, apps/staffpay/services/correction.py), each a code, with the words
  * it is said in; and crossing one out's, Advansi's own. */
 const READY_REASONS = {

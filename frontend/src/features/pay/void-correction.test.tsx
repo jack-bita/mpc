@@ -157,12 +157,28 @@ describe("Batilisha of a correction", () => {
       "once its month is approved",
       () => withTheWrongOne(APPROVER, { no_correction: "pay.day_approved" }),
     ],
+    [
+      "once one who left is approved",
+      () =>
+        withTheWrongOne(APPROVER, { no_correction: "correction.left_paid" }),
+    ],
   ])("is only read, never opened, %s", async (_, theServer) => {
     theServer();
     open();
     // The line is there, as the pay holds it, with no button to open it.
     expect(await screen.findByRole("rowheader", { name: LINE })).toBeTruthy();
     expect(screen.queryByRole("button", { name: LINE })).toBeNull();
+  });
+
+  it("opens on a month still open that takes no new one, as its first day moved since (the review)", async () => {
+    // Typed for November, then Juma's first day moved into December (PPL-10): November takes no new correction, and
+    // the one typed still counts, so it is still crossed out from here, as the server allows.
+    withTheWrongOne(APPROVER, { no_correction: "correction.outside_job" });
+    open();
+    expect(await screen.findByRole("button", { name: LINE })).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Ongeza marekebisho" }),
+    ).toBeNull();
   });
 
   it("on the demo, offers the ready reason, and says it in words once crossed out", async () => {

@@ -53,6 +53,7 @@ import {
   correctionsThatCount,
   OPEN_THE_SHEET,
   offersCorrection,
+  offersCrossingOut,
 } from "./corrections";
 import {
   mayApprovePay,
@@ -172,6 +173,7 @@ function TheWorkersPay({
   const crossedOut = useRef<HTMLDivElement>(null);
   const afterVoid = useRef(false);
   const corrects = offersCorrection(answer, mayApprove);
+  const crossesOut = offersCrossingOut(answer, mayApprove);
   const button = useRef<HTMLButtonElement>(null);
   const line = useRef<HTMLDivElement>(null);
   // Whether the last close was an approval, when the button is gone: read as the sheet goes, after the draw that took it
@@ -209,7 +211,7 @@ function TheWorkersPay({
                 worker={answer.worker}
                 corrections={correctionsThatCount(answer)}
                 onCorrection={
-                  corrects
+                  crossesOut
                     ? (line) => {
                         afterVoid.current = false;
                         setVoiding(line);
