@@ -53,8 +53,9 @@ export function MyPay({
   const { line } = answer;
   if (!answer.paid_by_day)
     // No line of theirs: no daily rate this month, and no money given. On a month whose first working day is still to
-    // come, nothing at all, as the Siku tab shows that month.
-    return answer.no_day_yet ? null : <p>{t("noRate")}</p>;
+    // come, as on a 1st that is a Sunday, that no day is over yet (useCountedTo), never a blank tab (the review): whether
+    // they are paid by the day isn't known before a working day comes.
+    return <p>{answer.no_day_yet ? counted : t("noRate")}</p>;
   return (
     <div className="grid gap-4">
       {line.approval !== null ? (

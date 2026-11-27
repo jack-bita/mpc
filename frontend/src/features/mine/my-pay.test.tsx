@@ -180,8 +180,17 @@ describe("a worker's own pay", () => {
     expect(page.textContent).toBe("Huna malipo kwa siku mwezi huu.");
   });
 
-  it("says nothing on a month whose first working day is still to come", () => {
-    const page = show({ ...NOVEMBER, paid_by_day: false, no_day_yet: true });
-    expect(page.textContent).toBe("");
+  it("says no working day is over yet on a month whose first working day is still to come (the review)", () => {
+    // Sunday 1 November: no day of it is over, so nothing is known of her pay yet, and the tab says so, never blank.
+    const page = show({
+      ...NOVEMBER,
+      today: "2026-11-01",
+      counted_to: null,
+      paid_by_day: false,
+      no_day_yet: true,
+    });
+    expect(page.textContent).toBe(
+      "Bado hakuna siku ya kazi iliyokwisha mwezi huu.",
+    );
   });
 });
