@@ -1,7 +1,8 @@
-// my-days-and-pay-screen.test.tsx — Siku na malipo yangu, a worker's own month (WAGE-4): asked of the worker's own route
+// my-days-and-pay-screen.test.tsx — Siku na malipo yangu, a worker's own month (WAGE-4): asked of the worker's own routes
 // for this month, with no id; the manager's calendar of them, counts and marks; a day tapped opens in a sheet, closed by
-// Funga, the keyboard back on the day; ‹ stops at the job's first month; a refusal says why; and nothing of it stays in
-// the store once the page is gone.
+// Funga, the keyboard back on the day; ‹ stops at the job's first month; the Malipo tab, kept in the address; no daily
+// pay said once, in place of the calendar; a refusal says why; and nothing of it stays in the store once the page is
+// gone.
 import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,9 +22,11 @@ vi.mock("@/api/client", async (importOriginal) =>
 
 type OwnAttendance = components["schemas"]["OwnAttendanceAnswer"];
 type OwnDay = components["schemas"]["OwnDay"];
+type OwnPay = components["schemas"]["OwnPayAnswer"];
 
 const ME = "/api/auth/me/";
 const MY_DAYS = "/api/v1/staffpay/mine/attendance/";
+const MY_PAY = "/api/v1/staffpay/mine/pay/";
 // Friday 27 November 2026, noon in Arusha.
 const NOW = "2026-11-27T09:00:00Z";
 
@@ -101,10 +104,47 @@ const ASHAS_NOVEMBER: OwnAttendance = {
   ready_void_reasons: [],
 };
 
+/** Her November's pay so far: two days at 9,000, the second of which waits for nothing. */
+const ASHAS_PAY: OwnPay = {
+  month: "2026-11",
+  today: "2026-11-27",
+  counted_to: "2026-11-26",
+  paid_by_day: true,
+  no_day_yet: false,
+  line: {
+    left_on: null,
+    pay: {
+      lines: [
+        { paid_as: "full", days: 2, each: "9000.00", amount: "18000.00" },
+      ],
+      fined_days: 0,
+      fines: "0.00",
+      meal_days: 0,
+      meals: "0.00",
+      advances: "0.00",
+      carried: "0.00",
+      corrections: "0.00",
+      waiting: 0,
+      no_rate: 0,
+      total: "18000.00",
+    },
+    today: null,
+    total: "18000.00",
+    carried_from: null,
+    approval: null,
+    to_hand_out: "0.00",
+    payments: [],
+  },
+  corrections: [],
+  void_reasons: [],
+  correction_void_reasons: [],
+};
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(NOW));
   answer("GET", ME, { status: 200, body: ASHA });
+  answer("GET", MY_PAY, { status: 200, body: ASHAS_PAY });
 });
 
 afterEach(() => {
@@ -201,13 +241,52 @@ describe("my days and pay", () => {
     ).toBe("true");
   });
 
-  it("says why a month is refused", async () => {
-    answer("GET", MY_DAYS, refusal(400, "mine.before_job"));
+  it("opens Malipo, the month's pay, and keeps the tab in the address", async () => {
+    answer("GET", MY_DAYS, { status: 200, body: ASHAS_NOVEMBER });
+    render(<MyDaysAndPayScreen />);
+    await screen.findByRole("table", { name: "Siku za Asha, Novemba 2026" });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Malipo" }));
+
+    const lines = await screen.findByRole("table", {
+      name: "Malipo, mstari kwa mstari",
+    });
+    expect(lines.textContent).toContain("Siku kamili2 × 9,00018,000");
+    expect(new URL(window.location.href).searchParams.get("tab")).toBe(
+      "malipo",
+    );
+    // Its own route, for the same month, with no id.
+    expect(
+      sent
+        .filter((request) => request.url.includes(MY_PAY))
+        .every((request) => new URL(request.url).search === "?month=2026-11"),
+    ).toBe(true);
+  });
+
+  it("says once that there is no daily pay, in place of the calendar", async () => {
+    answer("GET", MY_DAYS, { status: 200, body: ASHAS_NOVEMBER });
+    answer("GET", MY_PAY, {
+      status: 200,
+      body: { ...ASHAS_PAY, paid_by_day: false },
+    });
     render(<MyDaysAndPayScreen />);
 
-    expect(
-      await screen.findByText("Ulikuwa bado hujaanza kazi mwezi huu."),
-    ).toBeDefined();
+    // On the Siku tab, open, in place of the calendar; the Malipo tab says the same, hidden until opened.
+    const said = await screen.findAllByText("Huna malipo kwa siku mwezi huu.");
+    expect(said).toHaveLength(2);
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("says why a month is refused", async () => {
+    answer("GET", MY_DAYS, refusal(400, "mine.before_job"));
+    answer("GET", MY_PAY, refusal(400, "mine.before_job"));
+    render(<MyDaysAndPayScreen />);
+
+    // Each tab says it, the open one in sight.
+    const said = await screen.findAllByText(
+      "Ulikuwa bado hujaanza kazi mwezi huu.",
+    );
+    expect(said.length).toBeGreaterThan(0);
     expect(screen.queryByRole("table")).toBeNull();
   });
 
@@ -220,7 +299,8 @@ describe("my days and pay", () => {
       </QueryClientProvider>,
     );
     await screen.findByRole("table");
-    expect(store.getQueryCache().findAll({ queryKey: MINE })).toHaveLength(1);
+    // Her month and her pay.
+    expect(store.getQueryCache().findAll({ queryKey: MINE })).toHaveLength(2);
 
     unmount();
 

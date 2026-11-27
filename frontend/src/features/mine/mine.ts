@@ -2,8 +2,9 @@
 // its place in the store of server answers, and its reads.
 //
 // GET /api/v1/staffpay/mine/attendance/?month=2026-11 answers the month of the job the login names, whoever is logged in,
-// with no key: a PIN's at the shop's laptop, or a password's on a phone. No id is sent, so nobody can ask for anyone
-// else's. The server works it all out, by the manager's very services; the page only shows it.
+// with no key: a PIN's at the shop's laptop, or a password's on a phone; GET …/mine/pay/?month=2026-11, its pay, line by
+// line, and once approved how it was handed out. No id is sent, so nobody can ask for anyone else's. The server works
+// it all out, by the manager's very services; the page only shows it.
 //
 // Never kept on the laptop (03 §6.1, payslips never on shared devices): the server says no-store, so the browser keeps
 // no copy; the service worker keeps none of /api (src/sw.ts); and the store of server answers, in the tab's memory
@@ -45,6 +46,27 @@ export function useMyDays(month: string | null) {
     refetchInterval: (query) => askAgainEvery(query.state.data),
     // Let go the moment the page is gone, never kept for a later page: a worker's own days and pay stay in the laptop's
     // memory only while they are on its screen. So ‹ back to a month read before asks it again.
+    gcTime: 0,
+  });
+}
+
+export type OwnPay = components["schemas"]["OwnPayAnswer"];
+export type OwnPayment = components["schemas"]["OwnPayment"];
+
+/** The worker's own pay of the month, from the store of server answers, kept as their days are: asked again once a
+ * minute old, each minute while it shows this month, and let go the moment the page is gone. */
+export function useMyPay(month: string | null) {
+  return useQuery({
+    queryKey: [...MINE, "pay", month],
+    queryFn: () =>
+      answerOf(
+        api.GET("/api/v1/staffpay/mine/pay/", {
+          params: { query: { month: month ?? "" } },
+        }),
+      ),
+    enabled: month !== null,
+    staleTime: STALE_AFTER,
+    refetchInterval: (query) => askAgainEvery(query.state.data),
     gcTime: 0,
   });
 }

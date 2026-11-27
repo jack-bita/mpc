@@ -14,7 +14,8 @@
 //   ! Siku 1 inasubiri uamuzi
 //
 // On the worker's pay page (worker-pay-screen.tsx) and in the card of their own page (worker-month-pay.tsx), so both show
-// the same. Today's lines, once they tapped Toka, are apart, as today isn't over: its meals are split so far (Jack: A).
+// the same; and on the worker's own Siku na malipo yangu (WAGE-4, my-pay.tsx), the same lines said to them (voice
+// "own": Jumla ya kulipwa leo, Unadaiwa), with no row to open. Today's lines, once they tapped Toka, are apart, as today isn't over: its meals are split so far (Jack: A).
 // Then what they were given before payday (WAGE-8), today's with it, and what an earlier month's pay left owed (WAGE-3),
 // just above the total; last, each correction of an earlier month's mistake, with its reason, plus or minus (WAGE-10).
 // A total below 0 pays nothing, and the page says what is owed (Jack: A). Every amount is the
@@ -35,6 +36,17 @@ import { formatAmount, formatMoney } from "@/lib/format";
 import { type CorrectionLine, useReasonWords } from "./corrections";
 import type { WorkerPay } from "./pay";
 import { type Counted, isThisMonth, Left, NotPaid } from "./pay-notes";
+
+/** What the lines read of a worker's pay: the days over and today's, the total, a debt's month, who approved it, and
+ * their last day. Mishahara's line and the worker's own (OwnPayLine, WAGE-4) both have these. */
+export type PaidLine = Pick<
+  WorkerPay,
+  "pay" | "today" | "total" | "carried_from" | "approval" | "left_on"
+>;
+
+/** Who the words speak of: the worker, as Baba reads their pay ("Jumla ya kumlipa leo", "Anadaiwa"); or to them, on
+ * their own page (WAGE-4: "Jumla ya kulipwa leo", "Unadaiwa"). */
+export type Voice = "worker" | "own";
 
 /** One row: what, how many, and how much; and, for a correction the page lets open, what a tap opens. */
 type Row = {
@@ -61,17 +73,21 @@ export function PayLines({
   worker,
   corrections,
   onCorrection,
+  voice = "worker",
 }: {
   /** The month the pay is of. */
   answer: Counted;
-  worker: WorkerPay;
+  worker: PaidLine;
   /** The corrections that count, in the order typed: each its own line, with its reason (WAGE-10). */
   corrections: CorrectionLine[];
   /** A correction's line tapped: the page opens its sheet, with Batilisha (WAGE-10). With none, the lines are only
    * read, as on a month whose pay is approved, or for whoever may not cross one out. */
   onCorrection?: (line: CorrectionLine) => void;
+  /** Spoken of the worker, or to them on their own page (WAGE-4). */
+  voice?: Voice;
 }) {
   const t = useTranslations("pay");
+  const mine = useTranslations("mine");
   const monthWords = useTranslations("attendanceMonth");
   const reasonWords = useReasonWords();
   const signed = useSignedAmount();
@@ -195,12 +211,13 @@ export function PayLines({
               colSpan={2}
               className="pt-2 text-left font-semibold"
             >
-              {/* Today, what Baba hands over; of a month gone by, or once it is approved, what it came to. */}
-              {t(
-                isThisMonth(answer) && worker.approval === null
-                  ? "totalToday"
-                  : "totalMonth",
-              )}
+              {/* Today, what Baba hands over, or what the worker is paid, on their own page; of a month gone by, or once
+                  it is approved, what it came to. */}
+              {isThisMonth(answer) && worker.approval === null
+                ? voice === "own"
+                  ? mine("totalToday")
+                  : t("totalToday")
+                : t("totalMonth")}
             </th>
             <td className="pt-2 text-right font-semibold whitespace-nowrap">
               {formatMoney(new Decimal(worker.total))}
@@ -209,8 +226,9 @@ export function PayLines({
         </tfoot>
       </table>
       <NotPaid worker={worker} />
-      <Owes answer={answer} worker={worker} />
-      <Left worker={worker} />
+      <Owes answer={answer} worker={worker} voice={voice} />
+      {/* The day they left: of no use on their own page, as one who left logs in no more. */}
+      {voice === "own" ? null : <Left worker={worker} />}
     </div>
   );
 }
@@ -219,20 +237,26 @@ export function PayLines({
  * their next pay takes it off; or, of one who left by its end, with no pay to come, stays owed. Once approved, what it
  * was: "Alilipwa 0. Alibaki anadaiwa TSh 18,000.", as a payslip is read for ever, long after the next one took it.
  * Nothing on a month still running, whose days still come. */
-function Owes({ answer, worker }: { answer: Counted; worker: WorkerPay }) {
-  const t = useTranslations("pay");
+function Owes({
+  answer,
+  worker,
+  voice,
+}: {
+  answer: Counted;
+  worker: PaidLine;
+  voice: Voice;
+}) {
+  // On their own page, said to them: "Unalipwa 0. Unadaiwa TSh 18,000…" (WAGE-4).
+  const pay = useTranslations("pay");
+  const mine = useTranslations("mine");
   const total = new Decimal(worker.total);
   if (!total.lt("0") || (isThisMonth(answer) && worker.approval === null))
     return null;
   // Days as text sort as days do, and so do months.
   const goneByItsEnd =
     worker.left_on !== null && monthOf(worker.left_on) <= answer.month;
-  return (
-    <p>
-      {t(
-        worker.approval !== null ? "owed" : goneByItsEnd ? "owesLeft" : "owes",
-        { amount: formatMoney(total.abs()) },
-      )}
-    </p>
-  );
+  const key =
+    worker.approval !== null ? "owed" : goneByItsEnd ? "owesLeft" : "owes";
+  const amount = { amount: formatMoney(total.abs()) };
+  return <p>{voice === "own" ? mine(key, amount) : pay(key, amount)}</p>;
 }

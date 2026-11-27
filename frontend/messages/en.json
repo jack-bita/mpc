@@ -1144,7 +1144,17 @@
   },
   "mine": {
     "title": "My days and pay",
-    "intro": "Your days and your pay."
+    "intro": "Your days and your pay.",
+    "days": "Days",
+    "pay": "Pay",
+    "notApproved": "Not approved yet: it may still change.",
+    "noRate": "You have no daily pay in this month.",
+    "totalToday": "Total to be paid today",
+    "owes": "You are paid 0. You owe {amount}, which comes off your next pay.",
+    "owesLeft": "You are paid 0. You owe {amount}.",
+    "owed": "You were paid 0. You were left owing {amount}.",
+    "paidBy": "Paid {how} by {by} · {date} {time}",
+    "notPaid": "Not paid yet."
   },
   "flags": {
     "title": "Flags",

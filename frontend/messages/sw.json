@@ -1144,7 +1144,17 @@
   },
   "mine": {
     "title": "Siku na malipo yangu",
-    "intro": "Siku zako na malipo yako."
+    "intro": "Siku zako na malipo yako.",
+    "days": "Siku",
+    "pay": "Malipo",
+    "notApproved": "Bado hayajaidhinishwa, yanaweza kubadilika.",
+    "noRate": "Huna malipo kwa siku mwezi huu.",
+    "totalToday": "Jumla ya kulipwa leo",
+    "owes": "Unalipwa 0. Unadaiwa {amount}, zitakatwa kwenye malipo yako yajayo.",
+    "owesLeft": "Unalipwa 0. Unadaiwa {amount}.",
+    "owed": "Ulilipwa 0. Ulibaki unadaiwa {amount}.",
+    "paidBy": "Umelipwa {how} na {by} · {date} {time}",
+    "notPaid": "Bado hujalipwa."
   },
   "flags": {
     "title": "Tofauti",
