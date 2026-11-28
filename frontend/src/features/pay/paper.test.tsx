@@ -25,9 +25,9 @@ afterEach(() => {
 });
 
 /** The sheet as the screens draw it: a signature is Next's Image, unoptimized, as on the payslip. */
-function aSheet(withPicture: boolean) {
+function aSheet(withPicture: boolean, printable = true) {
   return (
-    <Paper title="Orodha ya malipo">
+    <Paper title="Orodha ya malipo" printable={printable}>
       <PaperSheet>
         <p>Asha 152,000</p>
         {withPicture ? (
@@ -111,9 +111,21 @@ describe("a page printed on A4", () => {
     );
   });
 
+  it("offers no Chapisha while there is nothing to print, and says nothing of pictures", () => {
+    // A read on its way, a refusal, or a month still open: the screen says why in words that never print, so Chapisha
+    // would print a blank page (WAGE-5's review).
+    render(aSheet(false, false));
+
+    expect(screen.getByRole("button", { name: "Chapisha" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByRole("status").textContent).toBe("");
+  });
+
   it("puts nothing of the screen on paper, and gives each sheet a page of its own", () => {
     render(
-      <Paper title="Hati za malipo">
+      <Paper title="Hati za malipo" printable>
         <PaperSheet>
           <p>Asha</p>
         </PaperSheet>

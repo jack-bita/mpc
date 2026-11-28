@@ -89,6 +89,8 @@ export function PrintedPayslipsScreen({
     <Paper
       title={staff === null ? t("titleAll") : t("titleOne")}
       fallback={fallback}
+      // Only once a payslip is drawn.
+      printable={who.data !== undefined && slips.length > 0}
     >
       {/* The screen's own lines, never on paper. */}
       <div className="grid gap-4 print:hidden">

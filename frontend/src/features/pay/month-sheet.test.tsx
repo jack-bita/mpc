@@ -323,6 +323,11 @@ describe("the month's sheet", () => {
     ).toBeDefined();
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByText("Asha")).toBeNull();
+    // Nothing to print: Chapisha would print a blank page.
+    expect(screen.getByRole("button", { name: "Chapisha" })).toHaveProperty(
+      "disabled",
+      true,
+    );
   });
 
   it("asks nothing with no month in the address", async () => {

@@ -40,6 +40,7 @@ export function Paper({
   title,
   intro,
   fallback,
+  printable,
   children,
 }: {
   /** The page's title on the screen, its one <h1>, as every page's (PageHeader); the paper names itself inside. */
@@ -47,6 +48,9 @@ export function Paper({
   intro?: string;
   /** Where the arrow goes when the page before isn't the app's own: the page the paper was opened from. */
   fallback?: string;
+  /** Whether a paper is drawn to print: false while its read is on its way, after a refusal, or of a month still open,
+   * when the page says why in words that never print, so Chapisha would print a blank page (WAGE-5's review). */
+  printable: boolean;
   /** The paper itself: one A4 page or more, each a <PaperSheet>. */
   children: ReactNode;
 }) {
@@ -67,16 +71,17 @@ export function Paper({
             <Button
               kind="main"
               size="normal"
-              disabled={!ready}
+              disabled={!printable || !ready}
               onClick={() => window.print()}
             >
               {t("print")}
             </Button>
           }
         />
-        {/* Why Chapisha waits, said while it does; a screen reader hears it as it changes. */}
+        {/* Why Chapisha waits for the pictures, said while it does; a screen reader hears it as it changes. With nothing
+            to print, the screen's own lines say why. */}
         <p role="status" className="text-muted-foreground">
-          {ready ? "" : t("picturesLoading")}
+          {printable && !ready ? t("picturesLoading") : ""}
         </p>
       </div>
       <div ref={paper} className="grid gap-4 print:block">

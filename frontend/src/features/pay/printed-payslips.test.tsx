@@ -327,6 +327,11 @@ describe("the printed payslips", () => {
       ),
     ).toBeDefined();
     expect(screen.queryByRole("table")).toBeNull();
+    // Nothing to print: Chapisha would print a blank page.
+    expect(screen.getByRole("button", { name: "Chapisha" })).toHaveProperty(
+      "disabled",
+      true,
+    );
     // Mishahara's arrow, when it was opened from there.
     fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
     expect(router.push).toHaveBeenCalledWith("/pay/?month=2026-11");

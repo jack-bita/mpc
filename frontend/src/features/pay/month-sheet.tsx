@@ -65,7 +65,14 @@ export function MonthSheetScreen({ asked }: { asked: string | null }) {
     answer.data && !answer.isPending ? answer.data.approval : null;
 
   return (
-    <Paper title={t("title")} fallback={fallback}>
+    <Paper
+      title={t("title")}
+      fallback={fallback}
+      // Only once the sheet itself is drawn.
+      printable={
+        who.data !== undefined && answer.data !== undefined && approval !== null
+      }
+    >
       {/* The screen's own lines, never on paper: the wait, a refusal, and why there is nothing to print. */}
       <div className="grid gap-4 print:hidden">
         <p role="status" className={waiting ? "text-lg" : "sr-only"}>
