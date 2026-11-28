@@ -303,6 +303,41 @@ describe("the month's pay as an Excel file", () => {
     expect(valuesOf(month)[3]?.slice(9)).toEqual([0, 0, null, null, null]);
   });
 
+  it("writes only the payment that counts, never one crossed out", () => {
+    // Asha marked paid by M-Pesa by mistake, crossed out, then paid in cash: the file has the cash. Baraka's one payment
+    // was crossed out: he waits again.
+    const crossedOut = {
+      voided: { by: "Baba", at: "2026-12-02T05:00:00Z", reason: "Si yeye" },
+    };
+    const month = payMonth(
+      [
+        slip({
+          display_name: "Asha",
+          total: "152000.00",
+          payments: [
+            payment({
+              method: "mobile_money",
+              reference: "QX1",
+              signature: null,
+              ...crossedOut,
+            }),
+            payment(),
+          ],
+        }),
+        slip({
+          display_name: "Baraka",
+          total: "117000.00",
+          to_hand_out: "117000.00",
+          payments: [payment({ amount: "117000.00", ...crossedOut })],
+        }),
+      ],
+      { total: "269000.00", approval: APPROVED },
+    );
+    const [asha, baraka] = valuesOf(month).slice(3, 5);
+    expect(asha?.slice(10)).toEqual([152000, "02/12/2026", "Taslimu", null]);
+    expect(baraka?.slice(10)).toEqual([117000, null, "Hajalipwa", null]);
+  });
+
   it("says both rates of one whose rate changed in the month", () => {
     const month = payMonth(
       [

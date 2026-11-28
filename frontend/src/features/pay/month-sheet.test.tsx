@@ -288,6 +288,45 @@ describe("the month's sheet", () => {
     ).toEqual(["Sahihi ya Asha"]);
   });
 
+  it("gives one hired again in the month a row for each job", async () => {
+    // Neema left on the 10th, paid for it, and came back on the 20th (PPL-11): two jobs, two payslips, two rows.
+    theShopPays(
+      payMonth(
+        [
+          workerPay({
+            staff: "019a8600-0000-7000-8000-0000000000e1",
+            display_name: "Neema",
+            left_on: "2026-11-10",
+            total: "60000.00",
+            payslip: "019a8900-0000-7000-8000-000000000011",
+            approval: APPROVED,
+            payments: [
+              payment({
+                id: "019a8700-0000-7000-8000-000000000011",
+                amount: "60000.00",
+              }),
+            ],
+          }),
+          workerPay({
+            staff: "019a8600-0000-7000-8000-0000000000e2",
+            display_name: "Neema",
+            total: "50000.00",
+            payslip: "019a8900-0000-7000-8000-000000000012",
+            approval: APPROVED,
+            to_hand_out: "50000.00",
+          }),
+        ],
+        { total: "110000.00", approval: APPROVED, still_to_pay: "50000.00" },
+      ),
+    );
+    render(<MonthSheetScreen asked="2026-11" />);
+
+    expect(await rows()).toEqual([
+      ["1", "Neema", "60,000", "02/12/2026", "Taslimu", "", ""],
+      ["2", "Neema", "50,000", "", "Hajalipwa", "", ""],
+    ]);
+  });
+
   it("says the demo keeps no signature", async () => {
     theShopPays(
       payMonth(
