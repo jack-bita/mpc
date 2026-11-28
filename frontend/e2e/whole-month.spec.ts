@@ -5,10 +5,11 @@
 // wote, the total the page read before the approval. Through the real server: the seed's days from the 1st of last month
 // (backend/apps/demo/services.py), the book, the sum, the approval (approve_month) and the sheet's page.
 //
-// On a month's first working days the newest days to decide, counted back from yesterday, fall in last month, and the
-// sheet names them, Amua siku hii kwanza, in place of a working Idhinisha: the test opens each, decides it a full day with
-// the demo's ready reason, as a visitor would, and comes back. Other tests may have decided some already; on any other
-// day none waits.
+// A day of last month waits on every run, so the way through a waiting day is proven every time (DATA-2's review):
+// the test first crosses out Asha's Toka of last month's 10th working day (ATT-13), an ordinary day on any date, and the
+// sheet then names it, Amua siku hii kwanza, in place of a working Idhinisha. On a month's first working days the
+// newest days to decide, counted back from yesterday, fall in last month too, unless other tests decided them. The test
+// opens each, decides it a full day with the demo's ready reason, as a visitor would, and comes back.
 //
 // It runs last of the tests that touch last month, by its name, as the tests run one at a time, file by file in their
 // names' order (playwright.config.ts): an approved month takes no change, so a test after it that decided, typed or
@@ -58,6 +59,10 @@ const APPROVE_MONTH = shaped(APPROVAL.monthButton, A_MONTH);
 const WAITING = eitherForm(APPROVAL.waiting);
 // "Amua siku ya Asha", the sheet a day is decided in (ATT-6), whoever's day.
 const DECIDE = shaped(WORKER.sheetTitle, "\\S+");
+// A day of a worker's calendar on time, "Ijumaa 14/10: kwa wakati" (ATT-12).
+const ON_TIME_DAY = new RegExp(`: ${exactly(MONTH.kind.on_time)}$`);
+// A Toka's line among a day's taps, "Toka 18:52 jioni …".
+const TOKA_LINE = new RegExp(`^${exactly(WORKER.tapKind.out)} `);
 // An amount as the page writes it, "TSh 986,500": Intl puts a hard space after TSh, which \s matches.
 const AN_AMOUNT = /TSh\s[\d,]+/;
 
@@ -78,8 +83,12 @@ test("Meneja approves last month for everyone on the demo, and prints its sheet"
   const approveButton = phone.getByRole("button", { name: APPROVE_MONTH });
   const approveSheet = phone.getByRole("dialog", { name: APPROVE_MONTH });
   const totalOfAll = phone.locator("p").filter({ hasText: PAY.totalOfAll });
+  // The day open under a worker's calendar: the page's one third-level heading is its date (worker-day.tsx).
+  const theDay = phone
+    .getByRole("region")
+    .filter({ has: phone.getByRole("heading", { level: 3 }) });
 
-  await test.step("Meneja logs in on the phone and opens Mishahara on last month", async () => {
+  await test.step("Meneja logs in on the phone", async () => {
     await phone.goto("/login/");
     await phone.getByLabel(sw.login.password.name).fill(MANAGER_EMAIL);
     // exact: the eye beside the box is labelled "Onyesha nenosiri", which holds the word too (the-shop.ts).
@@ -89,6 +98,50 @@ test("Meneja approves last month for everyone on the demo, and prints its sheet"
     await phone
       .getByRole("button", { name: sw.login.password.send, exact: true })
       .click();
+  });
+
+  await test.step("a day of last month waits: Asha's Toka of its 10th working day crossed out", async () => {
+    await phone.getByRole("link", { name: MONTH.title, exact: true }).click();
+    await expect(
+      phone.getByRole("heading", { name: MONTH.title, level: 1, exact: true }),
+    ).toBeVisible();
+    await phone
+      .getByRole("button", { name: MONTH.before, exact: true })
+      .click();
+    await phone.getByRole("link", { name: "Asha", exact: true }).click();
+    await expect(
+      phone.getByRole("heading", { name: "Asha", level: 1, exact: true }),
+    ).toBeVisible();
+    // Her days on time, in the month's order: the 8th is its 10th working day, as her 3rd is late and her 6th a half
+    // day (DATA-2), and the newest days reach no further back than its 12th, so it is an ordinary day on any date.
+    await phone.getByRole("button", { name: ON_TIME_DAY }).nth(7).click();
+    await theDay
+      .getByRole("listitem")
+      .filter({ hasText: TOKA_LINE })
+      .getByRole("button", { name: WORKER.voidTap, exact: true })
+      .click();
+    const sheet = phone.getByRole("dialog", {
+      name: words(WORKER.voidSheetTitle, {
+        kind: WORKER.tapKind.out,
+        name: "Asha",
+      }),
+    });
+    // On the demo, the reason is the ready one to tap (ATT-13), never typed.
+    await sheet
+      .getByText(WORKER.readyTapReason.wrong_tap, { exact: true })
+      .click();
+    await sheet
+      .getByRole("button", { name: WORKER.voidTap, exact: true })
+      .click();
+    await expect(sheet).toBeHidden();
+    // No Toka now, so the day waits for a decision.
+    await expect(theDay.getByText(WORKER.noOut, { exact: true })).toBeVisible();
+    // Back to the office home: the month's page, then the home.
+    await back(phone);
+    await back(phone);
+  });
+
+  await test.step("Meneja opens Mishahara on last month", async () => {
     await phone.getByRole("link", { name: PAY.title, exact: true }).click();
     await expect(
       phone.getByRole("heading", { name: PAY.title, level: 1, exact: true }),
@@ -101,15 +154,18 @@ test("Meneja approves last month for everyone on the demo, and prints its sheet"
   });
 
   const read =
-    await test.step("on a month's first days, each of its newest days to decide is decided first", async () => {
-      // At most the seed's three, then the sheet with nothing to wait for. Each round reads the total before the sheet
-      // opens, as the sheet approves what the page showed then.
-      for (let round = 0; round < 4; round += 1) {
+    await test.step("each day the month waits for is decided first: Asha's, and on a month's first days the newest", async () => {
+      // At most the test's own and the seed's three, then the sheet with nothing to wait for. Each round reads the total
+      // before the sheet opens, as the sheet approves what the page showed then. The first round always finds one.
+      for (let round = 0; round < 5; round += 1) {
         const total = amountIn(await totalOfAll.innerText());
         await approveButton.click();
         await expect(approveSheet).toBeVisible();
         const waiting = approveSheet.getByRole("list", { name: WAITING });
-        if ((await waiting.count()) === 0) return total;
+        if ((await waiting.count()) === 0) {
+          expect(round).toBeGreaterThan(0);
+          return total;
+        }
         // Its first day opens under its worker's calendar, where it is decided, as a person mends it.
         await waiting.getByRole("link").first().click();
         await phone
@@ -135,7 +191,7 @@ test("Meneja approves last month for everyone on the demo, and prints its sheet"
         await expect(approveButton).toBeVisible();
       }
       throw new Error(
-        "The month still waits for a day after the seed's three.",
+        "The month still waits for a day after the test's own and the seed's three.",
       );
     });
 
