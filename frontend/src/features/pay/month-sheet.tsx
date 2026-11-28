@@ -243,12 +243,15 @@ function Proof({ worker }: { worker: WorkerPay }) {
       payment("signatureFailed")
     ) : (
       // Not shrunk by Next.js, which a static app can't (images.unoptimized); as tall as the pen's space beside it.
+      // Fetched at once, never as it nears the screen (Next's own lazy), as Chapisha waits for every signature, and a
+      // lazy one far down a long sheet is fetched only once someone scrolls to it (WAGE-5's review).
       <Image
         unoptimized
         src={photoAddress(paid.signature)}
         alt={payment("signature", { name: worker.display_name })}
         width={600}
         height={160}
+        loading="eager"
         className="h-12 w-auto"
         onError={() => setFailed(true)}
       />

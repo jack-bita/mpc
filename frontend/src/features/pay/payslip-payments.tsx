@@ -207,9 +207,14 @@ export function useSaid(timezone: string) {
 export function Proof({
   payment,
   name,
+  loading = "lazy",
 }: {
   payment: PaymentLine;
   name: string;
+  /** When the signature is fetched: as it nears the screen (lazy, Next's own), on a page that is read; at once (eager)
+   * on a paper, whose Chapisha waits for every picture, and the browser fetches a lazy one far down the page only
+   * once someone scrolls to it (WAGE-5's review). */
+  loading?: "lazy" | "eager";
 }) {
   const t = useTranslations("pay.payment");
   const [failed, setFailed] = useState(false);
@@ -229,6 +234,7 @@ export function Proof({
           alt={t("signature", { name })}
           width={600}
           height={160}
+          loading={loading}
           className="h-auto w-64 rounded-lg border border-border bg-white"
           onError={() => setFailed(true)}
         />

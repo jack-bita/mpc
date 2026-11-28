@@ -165,7 +165,10 @@ describe("the printed payslips", () => {
     expect(
       page.getByText("Amelipwa taslimu na Baba · 02/12/2026 08:10 asubuhi"),
     ).toBeDefined();
-    expect(page.getByRole("img", { name: "Sahihi ya Asha" })).toBeDefined();
+    // Fetched at once, never lazily as it nears the screen: Chapisha waits for it (WAGE-5's review).
+    expect(
+      page.getByRole("img", { name: "Sahihi ya Asha" }).getAttribute("loading"),
+    ).toBe("eager");
   });
 
   it("prints every payslip of the month, each on a page of its own", async () => {

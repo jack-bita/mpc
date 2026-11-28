@@ -138,6 +138,12 @@ describe("the month's sheet", () => {
       new URL(asha.getAttribute("src") ?? "", "http://shop").pathname,
     ).toBe(photoAddress("019a8700-0000-7000-8000-0000000000a1"));
     expect(screen.getByRole("img", { name: "Sahihi ya Juma" })).toBeDefined();
+    // Each fetched at once, never lazily as it nears the screen: Chapisha waits for every one (WAGE-5's review).
+    expect(
+      screen
+        .getAllByRole("img")
+        .map((picture) => picture.getAttribute("loading")),
+    ).toEqual(["eager", "eager"]);
     // The top and the foot.
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe(
       "Mishahara ya Novemba 2026",

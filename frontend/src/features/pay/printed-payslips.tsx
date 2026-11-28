@@ -248,7 +248,12 @@ function PrintedPayslip({
           {paid !== null ? (
             <>
               <p>{said.paid(paid)}</p>
-              <Proof payment={paid} name={worker.display_name} />
+              {/* At once, as Chapisha waits for every signature (paper.tsx). */}
+              <Proof
+                payment={paid}
+                name={worker.display_name}
+                loading="eager"
+              />
             </>
           ) : total.gt("0") ? (
             <p>{payment("notPaid")}</p>
