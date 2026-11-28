@@ -58,6 +58,15 @@ export function daysAfter(day: string, count: number): string {
   return next.toISOString().slice(0, 10);
 }
 
+/** The 1st of the month before `day`'s, as a date box writes it: "2026-11-28" → "2026-10-01", and "2027-01-05" →
+ * "2026-12-01". The demo seed's first day, where its rules, its people and their days start (DATA-2,
+ * `_history_starts` in backend/apps/demo/services.py): change both together. In UTC, as daysAfter. */
+export function firstOfLastMonth(day: string): string {
+  const first = new Date(`${day.slice(0, 7)}-01T00:00:00Z`);
+  first.setUTCMonth(first.getUTCMonth() - 1);
+  return first.toISOString().slice(0, 10);
+}
+
 /** "2026-11-16" as the page writes a day: "16/11/2026" (formatDay, src/lib/format.ts). */
 export function asShown(day: string): string {
   const [year, month, date] = day.split("-");

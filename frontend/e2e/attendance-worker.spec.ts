@@ -1,7 +1,7 @@
 // attendance-worker.spec.ts — a worker's month and a day of it on the demo, end to end (ATT-12): Meneja opens
 // Mahudhurio ya mwezi on his phone, taps Asha's day to decide, and sees it open under her calendar, with its reason,
 // her Ingia from the demo's laptop and why it has no photo; the back arrow takes him back to the same month. Through
-// the real server: the demo seed's three weeks of taps (DATA-8), worked out by the book of days (ATT-10), the worker's
+// the real server: the demo seed's taps (DATA-8), worked out by the book of days (ATT-10), the worker's
 // month's route (ATT-12), and the page.
 //
 // The seed gives three days to decide (attendance-month.spec.ts says which); the latest is Asha's, an Ingia with no

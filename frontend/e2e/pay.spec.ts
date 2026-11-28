@@ -1,7 +1,7 @@
 // pay.spec.ts — the month's pay on the demo, end to end (WAGE-2): Meneja opens Mishahara on his phone, sees a total for
 // each worker paid by the day and the total of all; taps his own name and reads his pay line by line, each line
 // multiplying to what it shows and all of them adding up to the total; and finds Asha's same total on her own page.
-// Through the real server: the demo seed's three weeks of taps (DATA-8), rates and meal money, worked out by the book of
+// Through the real server: the demo seed's taps (DATA-8), rates and meal money, worked out by the book of
 // days, the sum, its routes and the pages.
 //
 // The sums are checked here as the owner would with a calculator, on whatever days the seed made: the test types no

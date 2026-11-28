@@ -15,10 +15,13 @@ attendance switched on and two made-up fines (DEMO_RULES, ATT-2), closed on the 
 (PUBLIC_HOLIDAYS, ATT-8), and each of its people paid a made-up daily rate from their first day (DemoPerson.daily_rate,
 WAGE-1), which a visitor sees on Meneja's Wafanyakazi and can't change, as the seed's people stay as made.
 
-And the 21 days before today (DATA-8): the demo is made again every morning, and the book keeps only days that are
-over (ATT-10), so Mahudhurio ya mwezi (ATT-5) would list nobody. So the shop's rules, its people's first days and their
-rates start that far back, and the demo's laptop, Laptop ya Dawa, sends three weeks of Ingia and Toka through the push,
-as a laptop back online does: most days on time, a few late with their fine, a half day, an absent day, and one day to
+And the days before today, from the 1st of last month (DATA-8, DATA-2): the demo is made again every morning, and the
+book keeps only days that are over (ATT-10), so Mahudhurio ya mwezi (ATT-5) would list nobody; and a month's pay is
+approved once the month is over (WAGE-3), so a visitor finds one to approve on any day only if the demo holds a whole
+month gone by. So the shop's rules, its people's first days and their rates start on the 1st of the month before
+today's (_history_starts): on 28 November, 1 October, the whole of October and November up to yesterday. The demo's
+laptop, Laptop ya Dawa, sends those days' Ingia and Toka through the push, as a laptop back online does: most days on
+time, and the newest few, counted back from yesterday, late with their fine, a half day, an absent day, and days to
 decide (DemoPerson.odd_days). The minutes come from a fixed random seed, so every reset makes the same taps.
 
 And three flags for Meneja's Tofauti (CTRL-4), made by the same laptop's pushes: one of its taps is sent last, after the
@@ -36,9 +39,9 @@ Asha's and Baraka's, which Advansi lists and their pay takes off, and one of whi
 ready reason, as for the meal money (record_advance, void_advance).
 
 And Meneja holds pay.approve (WAGE-3), the owner's own key to Idhinisha: a visitor adds a worker with a daily pay, marks
-them left once a day of theirs is over, and approves their pay alone, on their own page; or, once a month of the weeks
-is over, approves it for everyone. The seed approves nothing itself, as a closed month takes no change and a visitor
-should find each of them open; what a visitor approves stays closed until the next reset.
+them left once a day of theirs is over, and approves their pay alone, on their own page; or approves last month for
+everyone, which the demo always holds whole (DATA-2). The seed approves nothing itself, as a closed month takes no
+change and a visitor should find each of them open; what a visitor approves stays closed until the next reset.
 
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
@@ -153,7 +156,7 @@ class DemoPerson:
     # a person who logs in only with their password. `keys`: extra keys beyond the role's, each on the whole shop,
     # given as an owner gives one (grant_permission). `daily_rate`: their made-up pay for a day, in whole shillings,
     # from their first day (set_pay_rate, WAGE-1), or None for one paid no day, as a shop's owner is. `odd_days`: the
-    # days of the three weeks before today that aren't ordinary (DATA-8); every other working day, they came on time.
+    # newest days before today that aren't ordinary (DATA-8); every other working day, they came on time.
     full_name: str
     display_name: str
     role: RoleTemplate
@@ -234,11 +237,6 @@ PEOPLE = (
     ),
 )
 
-# How far back the demo's attendance goes (DATA-8): the 21 days before today, so the month page has days to show, this
-# month's and, early in a month, the last one's. Three weeks hold three Sundays, so 18 working days, enough for every
-# odd day above. The shop's rules, its people's first days and their rates start on the first of them.
-HISTORY_DAYS = 21
-
 # The meal money of each working day before today (WAGE-7), a made-up 3,000: 1,000 each when all three came. But one
 # day, its place among them as an OddDay's `back`, an ordinary day, has none: forgotten, Haijaandikwa.
 MEALS_A_DAY = Decimal("3000")
@@ -271,14 +269,14 @@ CLOSING_FROM = time(18, 40)
 OFF_TAPS = 25
 
 # When the demo's laptop last heard from the server (`last_server_time`, ATT-1's sign 2): 06:50 on the first of the
-# three weeks, before any tap, as a laptop offline since that morning, which sends them all as it comes back.
+# demo's days, before any tap, as a laptop offline since that morning, which sends them all as it comes back.
 LAST_HEARD = time(6, 50)
 
 # The side a one-tap demo device serves (OPS-3): Dawa, where Asha sells. Any seller can still log in on it.
 DEMO_DEVICE_SIDE = "D"
 
-# The demo's own rules (ATT-2), set by the system from three weeks before the day it is made, as its laptop's taps
-# start there (HISTORY_DAYS, DATA-8). Attendance switched on, as an owner switches
+# The demo's own rules (ATT-2), set by the system from the demo's first day, the 1st of last month, as its laptop's
+# taps start there (_history_starts, DATA-2). Attendance switched on, as an owner switches
 # a real shop's on at its go-live (ADR-0033): the demo shows a shop at work, so its laptops keep Mahudhurio. And two
 # made-up fines: a shop's fines start at nothing, as this public repo names no real amount (rule 10, Jack, 16 Nov
 # 2026), and a visitor should still see a late day's fine. Not the owner's amounts: those he types on the real server.
@@ -569,17 +567,17 @@ def _the_shop_and_its_people(shop_id: uuid.UUID) -> tuple[Shop, dict[str, StaffM
         sides = {
             side.code: switch_side(side, version=side.version, is_live=True, by=None) for side in Side.objects.all()
         }
-        # The demo's rules, from three weeks back, as the system, saying it is the demo's seed, which alone may start
-        # a rule on a day gone by, and only on the demo (as_the_demo_seed, DATA-8): the book counts a day only once
-        # attendance is on (ATT-10), and fines a late one by that day's rules. A visitor's new value starts tomorrow
-        # at the earliest (demo.rules_from_tomorrow). Each row gets its line in this block, as a laptop needs every
-        # rule's rows (SYNC-2).
+        # The demo's rules, from the 1st of last month, as the system, saying it is the demo's seed, which alone may
+        # start a rule on a day gone by, and only on the demo (as_the_demo_seed, DATA-8): the book counts a day only
+        # once attendance is on (ATT-10), and fines a late one by that day's rules. A visitor's new value starts
+        # tomorrow at the earliest (demo.rules_from_tomorrow). Each row gets its line in this block, as a laptop needs
+        # every rule's rows (SYNC-2).
         # The shop's day, asked once, here, as the shop's zone is known from now on: every part of the demo is made
         # from this one answer. A reset that runs across midnight in Arusha and asked again later would make the
         # taps from another day than the rules and the people, and the first day's taps would be flagged, days to
         # decide nobody made (DATA-8's review).
         today = shop_today(shop)
-        first_day = today - timedelta(days=HISTORY_DAYS)
+        first_day = _history_starts(today)
         for rule, value in DEMO_RULES:
             set_setting(shop, key=rule.key, value=value, effective_from=first_day, by=None, as_the_demo_seed=True)
         # The coming public holidays, closed, as the system, from the shop's own today (ATT-8): Mipangilio ya duka then
@@ -593,8 +591,8 @@ def _the_shop_and_its_people(shop_id: uuid.UUID) -> tuple[Shop, dict[str, StaffM
             # stores one that nothing can match, so a seller can log in only with her PIN.
             user = User.objects.create_user(full_name=person.full_name, email=person.email, password=person.password)
             # by=None everywhere: the system sets the demo up, not one of its people, so no giver is named (02 §1).
-            # Working from three weeks back, as the rules start (DATA-8): the book counts no day before a job's first
-            # (02 §5), and a tap before it would go to review (ATT-11).
+            # Working from the 1st of last month, as the rules start (DATA-2): the book counts no day before a job's
+            # first (02 §5), and a tap before it would go to review (ATT-11).
             staff = add_staff(shop=shop, user=user, display_name=person.display_name, started_on=first_day, by=None)
             role = Role.objects.get(template=person.role)
             side = None if person.side is None else sides[person.side]
@@ -622,10 +620,19 @@ def _demo_laptop(manager: StaffMember, side: Side) -> Device:
     return confirm_pairing(pairing.request.code, name=DEMO_LAPTOP_NAME, home_side=side, by=manager)
 
 
+def _history_starts(today: date) -> date:
+    # The demo's first day (DATA-2): the 1st of the month before `today`'s. A month's pay is approved once the month
+    # is over (WAGE-3), so the demo always holds one whole month gone by, and the one before it has nobody, so nothing
+    # waits on it (pay_run.earlier_month_open): on 28 November, 1 October; on 1 December, 1 November; on 1 January,
+    # 1 December of the year before. 28 to 61 days, where DATA-8's 21 held a month whole only early in one. The day
+    # before the 1st of this month is the last of the one before, whose 1st it is.
+    return (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+
+
 def _working_days_back(today: date) -> list[date]:
-    # The working days of the HISTORY_DAYS before today, the latest first: Sunday is off at every shop, and paid
-    # outside the system (01 §8.1), so it has no taps. An OddDay's `back` counts in this list, from 1.
-    days = (today - timedelta(days=n) for n in range(1, HISTORY_DAYS + 1))
+    # The working days from the demo's first day to the day before today, the latest first: Sunday is off at every
+    # shop, and paid outside the system (01 §8.1), so it has no taps. An OddDay's `back` counts in this list, from 1.
+    days = (today - timedelta(days=n) for n in range(1, (today - _history_starts(today)).days + 1))
     return [day for day in days if day.weekday() != SUNDAY]
 
 
@@ -670,7 +677,7 @@ def _send_the_taps(laptop: Device, people: dict[str, StaffMember], taps: list[_D
     # clock is right (sent_at, the server's now): so the server keeps each at the laptop's time (device_ok, ATT-1). No
     # photo: the demo keeps none (Jack, ATT-3: A). `today`: the shop's day the taps were made from.
     zone = ZoneInfo(laptop.shop.timezone)
-    last_heard = datetime.combine(today - timedelta(days=HISTORY_DAYS), LAST_HEARD, tzinfo=zone)
+    last_heard = datetime.combine(_history_starts(today), LAST_HEARD, tzinfo=zone)
     documents = [
         Sent(
             id=uuid.uuid7(),

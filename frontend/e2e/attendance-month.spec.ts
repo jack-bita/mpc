@@ -1,6 +1,6 @@
 // attendance-month.spec.ts — the month's attendance on the demo, end to end (DATA-8, ATT-5): Meneja opens Mahudhurio
 // ya mwezi on his phone and sees the demo's weeks, a line per worker paid by the day, and Asha's day to decide at the
-// top. The card's last Done when: through the real server, the demo seed's three weeks of taps (sent by its laptop
+// top. The card's last Done when: through the real server, the demo seed's taps (sent by its laptop
 // through the push), worked out by the book of days (ATT-10), and the month's route (ATT-5).
 //
 // The seed gives three days to decide, on the three latest working days before today (DemoPerson in
