@@ -1,7 +1,7 @@
 // my-days-and-pay.spec.ts — Siku na malipo yangu on the demo, end to end (WAGE-4): Asha logs in by PIN on a new shop
 // laptop, taps Siku na malipo yangu on her welcome, reads her own month, opens a day in its sheet and closes it with
 // Funga, then reads her pay on the Malipo tab, with no one else's name anywhere; the server says to keep none of it, and
-// after Toka the laptop's caches hold nothing of the API. Through the real server: the demo seed's three weeks of taps
+// after Toka the laptop's caches hold nothing of the API. Through the real server: the demo seed's taps
 // (DATA-8), her rate, the worker's own routes (MineViewSet) and the page, with its service worker.
 //
 // It only reads, so it leaves the shop as it found it, and reads nothing another test must have done: the tests share
@@ -48,7 +48,7 @@ test("Asha reads her own days and pay at the laptop, and the laptop keeps none o
     await expect(
       counter.getByRole("table", { name: /^Siku za Asha, / }),
     ).toBeVisible();
-    // On a month's first days nothing is over yet: the month before, which the seed's weeks reach.
+    // On a month's first days nothing is over yet: the month before, which the seed's days reach.
     if ((await onTime.count()) === 0) {
       await counter
         .getByRole("button", { name: MONTH.before, exact: true })

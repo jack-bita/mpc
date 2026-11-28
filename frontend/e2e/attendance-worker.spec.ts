@@ -1,7 +1,7 @@
 // attendance-worker.spec.ts — a worker's month and a day of it on the demo, end to end (ATT-12): Meneja opens
 // Mahudhurio ya mwezi on his phone, taps Asha's day to decide, and sees it open under her calendar, with its reason,
 // her Ingia from the demo's laptop and why it has no photo; the back arrow takes him back to the same month. Through
-// the real server: the demo seed's three weeks of taps (DATA-8), worked out by the book of days (ATT-10), the worker's
+// the real server: the demo seed's taps (DATA-8), worked out by the book of days (ATT-10), the worker's
 // month's route (ATT-12), and the page.
 //
 // The seed gives three days to decide (attendance-month.spec.ts says which); the latest is Asha's, an Ingia with no
@@ -10,14 +10,14 @@
 // attendance-month.spec.ts does, so it never reads the clock of the machine it runs on.
 //
 // The tests share one database (the-shop.ts). Others clock Asha in today, which shows on today's square, not on the
-// day to decide; none moves a day of the seed's weeks (demo.people_fixed).
+// day to decide; none before it moves a day of the seed's (demo.people_fixed).
 //
 // The second test decides that day (ATT-6): Meneja opens it, taps Amua siku hii, picks Siku kamili and one of the demo's
 // ready reasons in the sheet, and the day shows his decision beside what the system said, and leaves Zinahitaji
 // uamuzi. A decision is never taken back, so it runs last of the tests that read Asha's day to decide: after
 // attendance-month.spec.ts, as the tests run one at a time, file by file in their names' order (playwright.config.ts),
-// and after the test above, in this file's order. Of the later files, only pay.spec.ts reads the month, and asks nothing
-// of a day to decide.
+// and after the test above, in this file's order. Of the later files, pay.spec.ts reads the month and asks nothing of a
+// day to decide, and whole-month.spec.ts decides whatever of last month still waits, however many.
 //
 // The third fixes the taps of another of Asha's days to decide, her third latest, out at 15:00 (ATT-13): Meneja crosses
 // out the 15:00 Toka in its sheet, as tapped by mistake, adds Toka 18:45, as she left after closing, and the day is a

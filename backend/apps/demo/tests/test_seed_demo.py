@@ -9,10 +9,12 @@ tests prove what it refuses, and that a refusal writes nothing:
     today's demo shop         → kept: a visitor back from a break finds their work
     an earlier day's          → made again, the day being Arusha's, not UTC's
 
-And the 21 days before today (DATA-8): Asha, Baraka and Meneja tapping Ingia and Toka on the demo's laptop, so the month
-page (ATT-5) has days to show. Those tests work the days out through the book (ATT-10) and count them. Only the tests
-that take `three_weeks` get them; the others make the shop with no day before today, as the taps cost the seed some 3
-seconds (conftest.py).
+And the days before today, from the 1st of last month (DATA-8, DATA-2): Asha, Baraka and Meneja tapping Ingia and Toka
+on the demo's laptop, so the month page (ATT-5) has days to show, and a whole month gone by waits for its pay to be
+approved (WAGE-3). Those tests work the days out through the book (ATT-10) and count them, or approve the month. Only
+the tests that take `three_weeks` or `from_last_month` get them; the others make the shop with no day before today, as
+the taps cost the seed some seconds (conftest.py). A test about one day of the month stops the clock there, so it means
+the same on any day it runs.
 
 The logins are written here as the visitors read them (README, docs/runbooks/demo.md, 04's notes, the browser test),
 never imported from the seed: a changed PIN must turn a test red, not pass quietly while the README says another.
@@ -30,6 +32,7 @@ from decimal import Decimal
 from io import StringIO
 from typing import Any
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
@@ -64,19 +67,25 @@ from apps.people.services import add_worker, end_permission, mark_left, suspend
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, Side
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
+from apps.staffpay.calculations import PaidAs
 from apps.staffpay.models import (
     Advance,
     AttendanceEvent,
+    DayChoice,
     DayStatus,
     MealMoney,
     NoPhoto,
     PayRate,
+    PayRun,
+    Payslip,
     ReviewReason,
     TimeCheck,
 )
 from apps.staffpay.services import (
     advances_month,
+    approve_month,
     attendance_month,
+    decide_day,
     meal_money_days,
     pay_month,
     record_advance,
@@ -113,6 +122,29 @@ def fresh_content_types() -> Iterator[None]:
 
 def the_demo_shop() -> Shop:
     return Shop.objects.get(kind=ShopKind.DEMO, code=SHOP_CODE)
+
+
+def first_of_last_month(today: date) -> date:
+    # The demo's first day (DATA-2), worked out here another way than the seed's: a month back, or a year back in
+    # January.
+    return date(today.year, today.month - 1, 1) if today.month > 1 else date(today.year - 1, 12, 1)
+
+
+def working_days_from(first: date, today: date) -> int:
+    # How many working days from `first` to the day before `today`: every day but Sunday, as the demo closes on no day
+    # gone by (a closure starts today or later).
+    return sum(1 for n in range((today - first).days) if (first + timedelta(days=n)).weekday() != 6)
+
+
+def stop_the_clock(monkeypatch: pytest.MonkeyPatch, moment: datetime) -> None:
+    # Every "now" the seed, the book and the approval read (shop_today, the push's times), at one moment.
+    monkeypatch.setattr(timezone, "now", lambda: moment)
+
+
+def approve_as_read(shop: Shop, month: date, by: StaffMember) -> Any:
+    # A month's pay read as Mishahara shows it, then approved as it was read (WAGE-3), as a visitor's tap does.
+    seen = {line.staff_id: line.total for line in pay_month(shop, month).workers}
+    return approve_month(shop, month, run_id=uuid.uuid7(), seen=seen, by=by)
 
 
 def what_the_shop_holds() -> dict[str, Any]:
@@ -256,7 +288,7 @@ def test_seed_demo_refused_without_the_sign_writes_nothing(settings: Settings) -
     assert row_counts() == before
 
 
-def test_seed_demo_is_repeatable(three_weeks: None) -> None:
+def test_seed_demo_is_repeatable(from_last_month: None) -> None:
     # The card's first box: the same shop every time. Built twice, both builds hold the same shop, sides, people, roles
     # and logins, and the shop as Jack chose it (8 Nov 2026). The taps' minutes are picked at random from a fixed seed
     # (TAPS_SEED, DATA-8), so both builds pick the same.
@@ -266,17 +298,26 @@ def test_seed_demo_is_repeatable(three_weeks: None) -> None:
     second = what_the_shop_holds()
 
     assert first == second
-    # The taps, the same in both builds above (DATA-8), and as many as the card's days give: two a working day, of 18,
-    # but none on Baraka's absent day and no Toka on Asha's day to decide.
+    # The demo's working days, from the 1st of last month to yesterday (DATA-2): 50 on 28 November 2026.
+    today = shop_today(the_demo_shop())
+    working = working_days_from(first_of_last_month(today), today)
+    # The taps, the same in both builds above (DATA-8), and as many as the card's days give: two a working day, but
+    # none on Baraka's two absent days, the newest's and last month's own (DATA-2), and no Toka on Asha's day to decide.
     taps = first.pop("taps")
-    assert Counter(name for name, _kind, _at in taps) == {"Asha": 35, "Baraka": 34, "Meneja": 36}
-    # The meal money of those 18 working days but one, 3,000 a day, typed by Meneja (WAGE-7).
+    assert Counter(name for name, _kind, _at in taps) == {
+        "Asha": 2 * working - 1,
+        "Baraka": 2 * working - 4,
+        "Meneja": 2 * working,
+    }
+    # The meal money of those working days but one, 3,000 a day, typed by Meneja (WAGE-7).
     meals = first.pop("meals")
-    assert len(meals) == len({day for day, _amount, _by in meals}) == 17
+    assert len(meals) == len({day for day, _amount, _by in meals}) == working - 1
     assert {(str(amount), by) for _day, amount, by in meals} == {("3000.00", "Meneja")}
-    # The two advances, typed by Meneja, with no note, as none is kept on the demo (WAGE-8).
+    # The three advances, typed by Meneja, with no note, as none is kept on the demo (WAGE-8): last month's own of
+    # Asha's first (DATA-2), then the two newest.
     advances = first.pop("advances")
     assert [(name, str(amount), by, note) for name, _day, amount, by, note in advances] == [
+        ("Asha", "15000.00", "Meneja", ""),
         ("Asha", "20000.00", "Meneja", ""),
         ("Baraka", "30000.00", "Meneja", ""),
     ]
@@ -434,7 +475,7 @@ def test_seed_demo_makes_todays_shop_again_without_its_taps(three_weeks: None, m
     # As for its rules, closures, keys and rates: DATA-8's deploy finds the demo the older seed made that morning, with
     # no day before today, and makes the shop again at once, so the month page (ATT-5) shows its weeks the same day.
     with monkeypatch.context() as older_seed:
-        older_seed.setattr(services, "HISTORY_DAYS", 0)
+        older_seed.setattr(services, "_history_starts", lambda today: today)
         seed_demo(fresh=True)
     made = the_demo_shop()
 
@@ -443,6 +484,26 @@ def test_seed_demo_makes_todays_shop_again_without_its_taps(three_weeks: None, m
     assert shop != made
     with shop_context(shop):
         assert AttendanceEvent.objects.exists()
+    # Then kept, as it holds them now.
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_makes_todays_shop_again_with_three_weeks_only(
+    from_last_month: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # DATA-2's deploy finds the demo DATA-8's seed made that morning, from 21 days back, and makes the shop again at
+    # once, so last month is whole the same day: the checks count the taps and the meal money from the 1st of last
+    # month, at least 28 days back.
+    with monkeypatch.context() as older_seed:
+        older_seed.setattr(services, "_history_starts", lambda today: today - timedelta(days=21))
+        seed_demo(fresh=True)
+    made = the_demo_shop()
+
+    assert seed_demo() == Seeded.MADE
+    shop = the_demo_shop()
+    assert shop != made
+    with shop_context(shop):
+        assert StaffMember.objects.filter(started_on=first_of_last_month(shop_today(shop))).count() == 3
     # Then kept, as it holds them now.
     assert seed_demo() == Seeded.KEPT
 
@@ -749,28 +810,118 @@ def test_coming_public_holidays() -> None:
     assert coming_public_holidays(date(2026, 12, 26)) == [mwaka_mpya, mapinduzi, karume]
 
 
+def test_seed_demo_starts_on_the_first_of_last_month(from_last_month: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # DATA-2: the demo's first day is the 1st of the month before today's, so it always holds one month whole and over,
+    # and the month before that has nobody to pay. Mid-month, on a month's first day, across a year's end, and on the
+    # last day of a month after February's 28 days.
+    assert services._history_starts(date(2026, 11, 28)) == date(2026, 10, 1)
+    assert services._history_starts(date(2026, 12, 1)) == date(2026, 11, 1)
+    assert services._history_starts(date(2027, 1, 1)) == date(2026, 12, 1)
+    assert services._history_starts(date(2027, 3, 31)) == date(2027, 2, 1)
+    # And the seed itself, made on 1 January 2027, across the year's end (DATA-2's review): every part it starts starts
+    # on 1 December 2026, a Tuesday, a working day: the rules, each person's first day and rate, the first tap and the
+    # first meal money; and its laptop last heard from the server at 06:50 that morning. 06:00 UTC is 09:00 in Arusha.
+    stop_the_clock(monkeypatch, datetime(2027, 1, 1, 6, 0, tzinfo=UTC))
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    first = date(2026, 12, 1)
+    zone = ZoneInfo(shop.timezone)
+    with shop_context(shop):
+        assert set(Setting.objects.filter(created_by__isnull=True).values_list("effective_from", flat=True)) == {first}
+        assert set(StaffMember.objects.values_list("started_on", flat=True)) == {first}
+        assert set(PayRate.objects.values_list("effective_from", flat=True)) == {first}
+        taps = list(AttendanceEvent.objects.order_by("client_time"))
+        # Every seed tap has the laptop's time; only a tap added in the office has none (ATT-13).
+        first_tap = taps[0].client_time
+        assert first_tap is not None
+        assert first_tap.astimezone(zone).date() == first
+        assert {tap.last_server_time for tap in taps} == {datetime(2026, 12, 1, 6, 50, tzinfo=zone)}
+        assert MealMoney.objects.order_by("date").values_list("date", flat=True)[0] == first
+
+
 def test_seed_demo_sets_its_fines_and_switches_attendance_on(three_weeks: None) -> None:
     # A shop's fines start at nothing, as this public repo names no real amount (rule 10), so the demo types made-up
     # ones, and a visitor sees a late day's fine. Attendance is on (ADR-0033), so its laptops keep Mahudhurio (ATT-2):
-    # from three weeks back, as are the fines and each person's first day, so the book counts the days the demo's
-    # laptop tapped on (DATA-8). The day before, the shop had no attendance and no fines.
+    # from the seed's first day, as are the fines and each person's first day and rate, so the book counts the days the
+    # demo's laptop tapped on (DATA-8). The day before, the shop had no attendance and no fines. The first day here is
+    # three weeks back, the test's span; on the demo, the 1st of last month (DATA-2, the test above).
     seed_demo(fresh=True)
 
     shop = the_demo_shop()
     with shop_context(shop):
-        three_weeks_back = shop_today(shop) - timedelta(days=21)
-        assert get_setting(ATTENDANCE_ON, shop, on=three_weeks_back) is True
-        assert get_setting(LATE_FINE, shop, on=three_weeks_back) == Decimal("500.00")
-        assert get_setting(SECOND_FINE, shop, on=three_weeks_back) == Decimal("1500.00")
-        assert get_setting(ATTENDANCE_ON, shop, on=three_weeks_back - timedelta(days=1)) is False
+        first_day = shop_today(shop) - timedelta(days=21)
+        assert get_setting(ATTENDANCE_ON, shop, on=first_day) is True
+        assert get_setting(LATE_FINE, shop, on=first_day) == Decimal("500.00")
+        assert get_setting(SECOND_FINE, shop, on=first_day) == Decimal("1500.00")
+        assert get_setting(ATTENDANCE_ON, shop, on=first_day - timedelta(days=1)) is False
         # Set by the system, with no note, as no person of the demo set them.
         rows = Setting.objects.order_by("key")
         assert [(row.key, row.effective_from, row.note, row.created_by) for row in rows] == [
-            ("attendance.enabled", three_weeks_back, "", None),
-            ("attendance.late_fine", three_weeks_back, "", None),
-            ("attendance.second_fine", three_weeks_back, "", None),
+            ("attendance.enabled", first_day, "", None),
+            ("attendance.late_fine", first_day, "", None),
+            ("attendance.second_fine", first_day, "", None),
         ]
-        assert set(StaffMember.objects.values_list("started_on", flat=True)) == {three_weeks_back}
+        assert set(StaffMember.objects.values_list("started_on", flat=True)) == {first_day}
+        assert set(PayRate.objects.values_list("effective_from", flat=True)) == {first_day}
+
+
+def test_seed_demo_last_month_can_be_approved(from_last_month: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # DATA-2's first box: on 28 November, mid-month, when DATA-8's 21 days held no month whole, the demo holds the
+    # whole of October, over, with no day of it waiting. So Meneja, who holds the approval's keys (WAGE-3), approves it
+    # at once, everyone's pay in one tap, as a visitor does on Mishahara. 06:00 UTC is 09:00 in Arusha.
+    stop_the_clock(monkeypatch, datetime(2026, 11, 28, 6, 0, tzinfo=UTC))
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        meneja = StaffMember.objects.get(display_name="Meneja")
+        run = approve_as_read(shop, date(2026, 10, 1), meneja)
+        paid = sorted(Payslip.objects.filter(pay_run=run).values_list("staff__display_name", flat=True))
+    assert (run.month, paid) == (date(2026, 10, 1), ["Asha", "Baraka", "Meneja"])
+
+    # A visitor's approval stays for every visitor after them until the reset, as the runbook says (DATA-2's review): a
+    # wake-up the same day keeps the shop, its run with it; the next morning's reset wipes the run, a ledger, through
+    # the TRUNCATE its no-delete trigger doesn't watch, and October can be approved again.
+    assert seed_demo() == Seeded.KEPT
+    with shop_context(shop):
+        assert PayRun.objects.filter(pk=run.pk).exists()
+    assert seed_demo(fresh=True) == Seeded.MADE
+    again = the_demo_shop()
+    with shop_context(again):
+        assert not PayRun.objects.exists()
+        meneja = StaffMember.objects.get(display_name="Meneja")
+        assert approve_as_read(again, date(2026, 10, 1), meneja).month == date(2026, 10, 1)
+
+
+def test_seed_demo_first_days_of_a_month_wait_for_decisions(
+    from_last_month: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # On a month's first working days, the newest days to decide, counted back from yesterday (DATA-8), fall in the
+    # month just over: on Tuesday 1 December, Asha's Monday 30/11 with no Toka, Baraka's Saturday 28/11 in at 09:10 and
+    # Asha's Friday 27/11 out at 15:00. November's approval waits for them (pay_run.days_waiting), as Baba's would on
+    # 1 December, and goes through once Meneja has decided each, with a ready reason (DEMO_REASONS) (DATA-2).
+    stop_the_clock(monkeypatch, datetime(2026, 12, 1, 6, 0, tzinfo=UTC))
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    november = date(2026, 11, 1)
+    with shop_context(shop):
+        meneja = StaffMember.objects.get(display_name="Meneja")
+        with pytest.raises(ValidationError) as refused:
+            approve_as_read(shop, november, meneja)
+        waiting = [day for day in work_out_days(shop, november, date(2026, 11, 30)) if day.review_reason]
+        for day in waiting:
+            decide_day(day, choice=DayChoice.ON_TIME, reason="forgot_toka", replaces=None, by=meneja)
+        run = approve_as_read(shop, november, meneja)
+    assert refused.value.code == "pay_run.days_waiting"
+    assert refused.value.params is not None and refused.value.params["count"] == 3
+    assert sorted((day.date, day.staff.display_name) for day in waiting) == [
+        (date(2026, 11, 27), "Asha"),
+        (date(2026, 11, 28), "Baraka"),
+        (date(2026, 11, 30), "Asha"),
+    ]
+    assert run.month == november
 
 
 def test_seed_demo_numbers_every_record_once(three_weeks: None) -> None:
@@ -802,9 +953,10 @@ def test_seed_demo_numbers_every_record_once(three_weeks: None) -> None:
 
 
 def test_seed_demo_gives_three_weeks_of_taps(three_weeks: None) -> None:
-    # The card's first box (DATA-8): the 21 days before today, worked out by the book (ATT-10), give each of the demo's
-    # people the days the card names, wherever today falls. 21 days hold three Sundays, off, so 18 working days each:
-    # Asha late twice, a half day and a day to decide; Baraka late once and absent once; Meneja late once.
+    # The card's first box (DATA-8): the newest three weeks, the test's span (three_weeks), worked out by the book
+    # (ATT-10), give each of the demo's people the days the card names, wherever today falls. 21 days hold three
+    # Sundays, off, so 18 working days each: Asha late twice, a half day and a day to decide; Baraka late once and
+    # absent once; Meneja late once.
     seed_demo(fresh=True)
 
     shop = the_demo_shop()
@@ -851,17 +1003,112 @@ def test_seed_demo_gives_three_weeks_of_taps(three_weeks: None) -> None:
     ]
 
 
-def test_seed_demo_fills_the_month_page(three_weeks: None) -> None:
-    # The card's first box, as the month page reads it (attendance_month, ATT-5), not only the book: the 21 days fall in
-    # one month or two, and over them each of the three people is listed, by their daily rate, with the card's counts,
-    # and the three days to decide on the three latest working days (DATA-8's review, ATT-6's).
+def test_seed_demo_last_month_has_its_own_days(from_last_month: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # DATA-2's second box (Jack: A): last month is like a real one, so its payslips show every kind of line. On 28
+    # November 2026, October's 27 working days, counted from its 1st, a Thursday: Meneja late on Friday 2/10; Asha late
+    # on Saturday 3/10, her advance on Tuesday 6/10, her half day on Wednesday 7/10; Baraka absent on Monday 5/10 and
+    # late after 08:00 on Thursday 8/10. Every other working day on time, the four Sundays off, none to decide.
+    stop_the_clock(monkeypatch, datetime(2026, 11, 28, 6, 0, tzinfo=UTC))
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    october = date(2026, 10, 1)
+    with shop_context(shop):
+        days = work_out_days(shop, october, date(2026, 10, 31))
+        pay = {worker.display_name: worker for worker in pay_month(shop, october).workers}
+    kinds = {name: Counter(day.status for day in days if day.staff.display_name == name) for name in pay}
+    assert kinds == {
+        "Asha": {DayStatus.ON_TIME: 25, DayStatus.LATE: 1, DayStatus.HALF: 1, DayStatus.OFF: 4},
+        "Baraka": {DayStatus.ON_TIME: 25, DayStatus.LATE: 1, DayStatus.ABSENT: 1, DayStatus.OFF: 4},
+        "Meneja": {DayStatus.ON_TIME: 26, DayStatus.LATE: 1, DayStatus.OFF: 4},
+    }
+    odd = sorted(
+        (day.date, day.staff.display_name, day.status, day.fine)
+        for day in days
+        if day.status not in (DayStatus.ON_TIME, DayStatus.OFF)
+    )
+    assert odd == [
+        (date(2026, 10, 2), "Meneja", DayStatus.LATE, Decimal("500")),
+        (date(2026, 10, 3), "Asha", DayStatus.LATE, Decimal("500")),
+        (date(2026, 10, 5), "Baraka", DayStatus.ABSENT, Decimal("0")),
+        (date(2026, 10, 7), "Asha", DayStatus.HALF, Decimal("0")),
+        (date(2026, 10, 8), "Baraka", DayStatus.LATE, Decimal("1500")),
+    ]
+
+    def lines(name: str) -> tuple[Any, ...]:
+        # A worker's pay as Mishahara lists it: the days, full then half; the fines; the meals; the advances; the total.
+        worker = pay[name].pay
+        days_paid = [(line.paid_as, line.days, line.each, line.amount) for line in worker.lines]
+        return (days_paid, worker.fined_days, worker.fines, worker.meal_days, worker.meals, worker.advances)
+
+    # The meal money, 3,000 a day, handed out each day and taken off the month's pay (WAGE-7): 1,000 each, but 1,500 to
+    # each of the two who came on Baraka's absent day; Asha's half day shares it.
+    assert lines("Asha") == (
+        [(PaidAs.FULL, 26, Decimal("10000"), Decimal("260000")), (PaidAs.HALF, 1, Decimal("5000"), Decimal("5000"))],
+        1,
+        Decimal("500"),
+        27,
+        Decimal("27500"),
+        Decimal("15000"),
+    )
+    assert lines("Baraka") == (
+        [(PaidAs.FULL, 26, Decimal("10000"), Decimal("260000"))],
+        1,
+        Decimal("1500"),
+        26,
+        Decimal("26000"),
+        Decimal("0"),
+    )
+    assert lines("Meneja") == (
+        [(PaidAs.FULL, 27, Decimal("15000"), Decimal("405000"))],
+        1,
+        Decimal("500"),
+        27,
+        Decimal("27500"),
+        Decimal("0"),
+    )
+    # The days less the fines, the meals and the advances: 260,000 + 5,000 − 500 − 27,500 − 15,000;
+    # 260,000 − 1,500 − 26,000; 405,000 − 500 − 27,500.
+    assert {name: worker.total for name, worker in pay.items()} == {
+        "Asha": Decimal("222000"),
+        "Baraka": Decimal("232500"),
+        "Meneja": Decimal("377000"),
+    }
+
+
+def test_seed_demo_odd_days_never_meet(from_last_month: None) -> None:
+    # A newest odd day counts back from yesterday (OddDay.back), last month's own forward from its 1st
+    # (LastMonthDay.place, DATA-2): on a month's first days both fall in last month, and two on one day would leave one
+    # unseen, a fine or an absence lost with no test the wiser. Nor may last month's own fall on the forgotten meal
+    # money, which all three share on the meal page (meal-money.spec.ts), or on a newest advance. From the dates
+    # alone, on every day of three years: a month holds at least 24 working days, and every place is among them.
+    for place in [odd.place for person in services.PEOPLE for odd in person.last_month_days]:
+        assert 1 <= place <= 24
+    for n in range(3 * 366):
+        today = date(2026, 1, 1) + timedelta(days=n)
+        back = services._working_days_back(today)
+        last_month = services._last_months_days(today)
+        assert len(last_month) >= 24, today
+        newest = {back[odd.back - 1] for person in services.PEOPLE for odd in person.odd_days}
+        newest |= {back[services.FORGOTTEN_MEALS_BACK - 1]} | {back[place - 1] for _, place, _ in services.ADVANCES}
+        own = {last_month[odd.place - 1] for person in services.PEOPLE for odd in person.last_month_days}
+        own |= {last_month[place - 1] for _, place, _ in services.LAST_MONTH_ADVANCES}
+        assert not newest & own, today
+
+
+def test_seed_demo_fills_the_month_page(from_last_month: None) -> None:
+    # The card's first box, as the month page reads it (attendance_month, ATT-5), not only the book: the demo's days,
+    # from the 1st of last month (DATA-2), fall in two months, and over them each of the three people is listed, by
+    # their daily rate, with the card's counts, every other working day on time, and the three days to decide on the
+    # three latest working days (DATA-8's review, ATT-6's).
     seed_demo(fresh=True)
 
     shop = the_demo_shop()
     with shop_context(shop):
         today = shop_today(shop)
-        months = sorted({(today - timedelta(days=21)).replace(day=1), (today - timedelta(days=1)).replace(day=1)})
+        months = [first_of_last_month(today), today.replace(day=1)]
         answers = [attendance_month(shop, month) for month in months]
+    working = working_days_from(months[0], today)
     kinds = ("on_time", "late", "half", "absent", "needs_review")
     listed = {worker.display_name for answer in answers for worker in answer.workers}
     assert listed == {"Asha", "Baraka", "Meneja"}
@@ -873,7 +1120,13 @@ def test_seed_demo_fills_the_month_page(three_weeks: None) -> None:
         for name in listed
     }
     # ✓ Ch ½ H !, as the page shows them.
-    assert counted == {"Asha": [13, 2, 1, 0, 2], "Baraka": [15, 1, 0, 1, 1], "Meneja": [17, 1, 0, 0, 0]}
+    # The newest days' (DATA-8) and last month's own (DATA-2): Asha late once more and a half day more, Baraka absent
+    # once more and late once more, Meneja late once more.
+    assert counted == {
+        "Asha": [working - 7, 3, 2, 0, 2],
+        "Baraka": [working - 5, 2, 0, 2, 1],
+        "Meneja": [working - 2, 2, 0, 0, 0],
+    }
     # The three days to decide, oldest first, as the list shows them, in one month or across two (ATT-6's review).
     first, second, third = services._working_days_back(today)[:3]
     to_decide = [
@@ -918,7 +1171,7 @@ def test_seed_demo_fills_the_meal_money(three_weeks: None) -> None:
 def test_the_forgotten_meals_are_an_ordinary_day() -> None:
     # A day somebody was away or waits would show another number of people, and the forgotten day would be about that.
     assert all(odd.back != services.FORGOTTEN_MEALS_BACK for person in services.PEOPLE for odd in person.odd_days)
-    assert 1 <= services.FORGOTTEN_MEALS_BACK <= 18
+    assert 1 <= services.FORGOTTEN_MEALS_BACK <= 24
 
 
 def test_seed_demo_makes_todays_shop_again_without_its_meal_money(
@@ -1014,16 +1267,19 @@ def test_seed_demo_keeps_todays_shop_whose_advances_a_visitor_changed(three_week
     assert the_demo_shop() == made
 
 
-def test_every_odd_day_falls_in_the_weeks(three_weeks: None) -> None:
+def test_every_odd_day_falls_in_the_days(from_last_month: None) -> None:
     # Each odd day counts back among the working days before today (OddDay.back): one past them would quietly never
     # happen, and the month page would lose a late day or the day to decide with no test the wiser (DATA-8's review).
-    # 21 days always hold three Sundays, so 18 working days, wherever today falls; nor may one person have two odd
-    # days in one place, as only the first would count.
-    for today in (date(2026, 11, 20), date(2026, 11, 23), date(2026, 12, 1), date(2027, 3, 1)):
-        assert len(services._working_days_back(today)) == 18
+    # From the 1st of last month (DATA-2), the demo holds the fewest on a month's 1st after a February of 28 days with
+    # four Sundays: 24, on every day of three years; nor may one person have two odd days in one place, as only the
+    # first would count. On 28 November 2026: October's 27 and November's 23.
+    every_day = [date(2026, 1, 1) + timedelta(days=n) for n in range(3 * 366)]
+    fewest = min(len(services._working_days_back(today)) for today in every_day)
+    assert fewest == 24
+    assert len(services._working_days_back(date(2026, 11, 28))) == 50
     for person in services.PEOPLE:
         places = [odd.back for odd in person.odd_days]
-        assert all(1 <= place <= 18 for place in places), person.display_name
+        assert all(1 <= place <= fewest for place in places), person.display_name
         assert len(set(places)) == len(places), person.display_name
 
 

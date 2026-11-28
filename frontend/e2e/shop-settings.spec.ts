@@ -4,9 +4,9 @@
 // on the shop's today or later, and its get_setting, which decides the value today.
 //
 // The demo's Meneja holds settings.manage on the whole shop, given by the demo seed (SHOP-5), as the demo has no
-// owner. The demo's late fine is the seed's made-up 500, set by the system from three weeks before the day the demo is
-// made, as its laptop's taps start there (DATA-8): a shop's fines start at nothing, as this public repo names no real
-// amount (ATT-2, DEMO_RULES). The tests share one
+// owner. The demo's late fine is the seed's made-up 500, set by the system from the 1st of the month before the day the
+// demo is made, as its laptop's taps start there (DATA-8, DATA-2): a shop's fines start at nothing, as this public repo
+// names no real amount (ATT-2, DEMO_RULES). The tests share one
 // database (the-shop.ts): this one only adds a row from a day to come, which no other test reads.
 //
 // The day is read from the page itself: the date box starts at the shop's today, as the server sends it, so the
@@ -21,6 +21,7 @@ import {
   asShown,
   daysAfter,
   expect,
+  firstOfLastMonth,
   MANAGER_EMAIL,
   MANAGER_PASSWORD,
   test,
@@ -28,8 +29,6 @@ import {
 } from "./the-shop";
 
 const FINE = sw.shopSettings.rules.attendance.late_fine.name;
-// How far back the demo seed starts its rules (HISTORY_DAYS in backend/apps/demo/services.py): change both together.
-const SEEDS_DAYS_BACK = 21;
 
 test("the owner sets the late fine to 2,000 from a day to come: 500 today, 2,000 coming", async ({
   managersPhone,
@@ -120,7 +119,7 @@ test("the owner sets the late fine to 2,000 from a day to come: 500 today, 2,000
     await expect(lines.nth(1)).toContainText(
       words(sw.shopSettings.past.row, {
         value: "TSh 500",
-        date: asShown(daysAfter(today, -SEEDS_DAYS_BACK)),
+        date: asShown(firstOfLastMonth(today)),
       }),
     );
     await expect(lines.nth(1)).toContainText(sw.shopSettings.past.inUse);

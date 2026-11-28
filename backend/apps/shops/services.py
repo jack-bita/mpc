@@ -241,8 +241,8 @@ def set_setting(
     ("2000.00"). `setting_id`: the id the client made for the row (ADR-0007), if it made one. `by`: who sets it; None
     for the system or the superuser. `as_the_demo_seed`: True from the demo's seed alone (DATA-8). Refuses, all
     together, with their codes: a day before the shop's today (but from the demo's seed, as the system, on the demo,
-    which starts the demo's rules three weeks back), a side's rule with no side, and whatever Setting.clean() refuses
-    (an unknown key, a wrong value, a side on a shop's rule).
+    which starts the demo's rules on the 1st of last month, DATA-2), a side's rule with no side, and whatever
+    Setting.clean() refuses (an unknown key, a wrong value, a side on a shop's rule).
     On the demo, a person's value from today, and a person's note (demo.rules_from_tomorrow, demo.no_note). Then, once
     all of those pass, a time of the attendance day that breaks the day's order (setting.out_of_order, ATT-2)."""
     _check_shop(shop, by)
@@ -270,7 +270,8 @@ def set_setting(
     # is fixed with one more row for today, which wins (T2). The shop's today, not the server's, which runs in UTC.
     today = shop_today(shop)
     # But the demo's seed may (DATA-8): it makes a new shop each morning, where no day has been worked out yet, and
-    # starts its rules three weeks back, so the month page has days to show. Asked by name, never guessed from `by`
+    # starts its rules on the 1st of last month (DATA-2), so the month page has days to show and a whole month gone by
+    # waits for its pay to be approved. Asked by name, never guessed from `by`
     # None, which is also the superuser and any system job to come, as the night's book (ATT-7), which must never
     # change a past day (DATA-8's review). And only as the system, with the same sign as the demo's locks below: a
     # person is still refused, there as everywhere, and on the real server, which never has the sign, the word means

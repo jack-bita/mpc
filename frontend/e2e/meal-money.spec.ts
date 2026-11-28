@@ -4,10 +4,11 @@
 // row struck through. Through the real server: the demo seed's meal money, its routes, the book of days, the sheets and
 // the pages.
 //
-// The seed types 3,000 for each of the 18 working days before today but one, forgotten (backend/apps/demo/services.py), so
-// the whole is 51,000 whatever day the test runs, and one line says Haijaandikwa. On that day all three came, whatever
-// other tests decided: theirs are Asha's latest. The test ends with the total as it found it, as the tests share one
-// database (the-shop.ts). No other file reads the meal money.
+// The seed types 3,000 for each working day before today, from the 1st of last month, but one, forgotten, the fifth
+// latest (backend/apps/demo/services.py, DATA-2). The three weeks before today hold 18 of them, the forgotten one
+// among them, so the whole is 51,000 whatever day the test runs, and one line says Haijaandikwa. On that day all three
+// came, whatever other tests decided: theirs are Asha's latest. The test ends with the total as it found it, as the
+// tests share one database (the-shop.ts). No other file reads the meal money.
 import sw from "../messages/sw.json";
 
 import {

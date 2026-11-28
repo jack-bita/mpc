@@ -50,12 +50,33 @@ export function words(
   );
 }
 
+/** A regular expression's text that matches `text` as it is, its dots and brackets too. */
+export function exactly(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** A sentence of the book with each {name} matching `pattern`, as a page fills it with words a test can't know:
+ * "Idhinisha {month}" with "\\S+ \\d{4}" → /^Idhinisha \S+ \d{4}$/. */
+export function shaped(sentence: string, pattern: string): RegExp {
+  const parts = sentence.split(/\{\w+\}/).map(exactly);
+  return new RegExp(`^${parts.join(pattern)}$`);
+}
+
 /** `count` days after `day`, both as a date box writes them: "2026-11-15", 2 → "2026-11-17". Days only, in UTC, so no
  * zone moves it. */
 export function daysAfter(day: string, count: number): string {
   const next = new Date(`${day}T00:00:00Z`);
   next.setUTCDate(next.getUTCDate() + count);
   return next.toISOString().slice(0, 10);
+}
+
+/** The 1st of the month before `day`'s, as a date box writes it: "2026-11-28" → "2026-10-01", and "2027-01-05" →
+ * "2026-12-01". The demo seed's first day, where its rules, its people and their days start (DATA-2,
+ * `_history_starts` in backend/apps/demo/services.py): change both together. In UTC, as daysAfter. */
+export function firstOfLastMonth(day: string): string {
+  const first = new Date(`${day.slice(0, 7)}-01T00:00:00Z`);
+  first.setUTCMonth(first.getUTCMonth() - 1);
+  return first.toISOString().slice(0, 10);
 }
 
 /** "2026-11-16" as the page writes a day: "16/11/2026" (formatDay, src/lib/format.ts). */
