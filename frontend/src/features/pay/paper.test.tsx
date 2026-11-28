@@ -148,6 +148,8 @@ describe("a page printed on A4", () => {
     const sheet = screen.getByText("Asha").closest("section");
     expect(sheet?.className).toContain("break-after-page");
     expect(sheet?.className).toContain("last:break-after-auto");
+    // A sheet longer than a page gets its padding again on each page it runs onto (WAGE-5's review).
+    expect(sheet?.className).toContain("box-decoration-clone");
   });
 
   it("asks for A4, with no margin left for Chrome's own header and footer", () => {

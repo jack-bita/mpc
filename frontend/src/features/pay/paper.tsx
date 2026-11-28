@@ -112,10 +112,13 @@ export function PaperHeading({
 }
 
 /** One A4 page of a paper: on the screen a white page with an edge, A4 wide at most; on paper the whole sheet, with
- * the page's own padding, and the next sheet starting on a new page (break-after). */
+ * the page's own padding, and the next sheet starting on a new page (break-after). A sheet longer than a page, a month's
+ * of twenty workers or more, gets its padding again on each page it runs onto (box-decoration-clone), or page 2's rows
+ * would start at the paper's very edge, which a printer can't reach (WAGE-5's review). Checked by printing a 60-row
+ * table to PDF in Playwright's Chromium: with it, page 1's last row ends 34 pt (12 mm) higher. */
 export function PaperSheet({ children }: { children: ReactNode }) {
   return (
-    <section className="bg-background text-foreground mx-auto w-full max-w-[210mm] break-after-page border border-border p-[12mm] print:max-w-none print:border-0 last:break-after-auto">
+    <section className="bg-background text-foreground mx-auto w-full max-w-[210mm] break-after-page border border-border p-[12mm] box-decoration-clone print:max-w-none print:border-0 last:break-after-auto">
       {children}
     </section>
   );
