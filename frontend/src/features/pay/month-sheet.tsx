@@ -48,7 +48,7 @@ import {
   usePayMonth,
   type WorkerPay,
 } from "./pay";
-import { paymentOf } from "./payments";
+import { paymentOf, waitsForLipa } from "./payments";
 
 export function MonthSheetScreen({ asked }: { asked: string | null }) {
   const t = useTranslations("pay.sheet");
@@ -185,7 +185,11 @@ function SheetRow({
   const t = useTranslations("pay.sheet");
   const payment = useTranslations("pay.payment");
   const paid = paymentOf(worker);
-  // A payslip below 0 hands nothing over: the worker owes the rest, which their next pay takes (WAGE-3).
+  // Not paid yet: the payslip pays something, and nobody has handed it over (waitsForLipa), as Mishahara says it. A
+  // payslip below 0 hands nothing over: the worker owes the rest, which their next pay takes (WAGE-3). One of exactly
+  // 0 hands nothing over and owes nothing: neither, a dash, never Hajalipwa, which would stand on the paper for ever
+  // (WAGE-5's review).
+  const waits = waitsForLipa(worker);
   const total = new Decimal(worker.total);
   const owes = total.lt("0");
   // What was handed over, or is still to hand over: the payment's own amount, or what the payslip pays (to_hand_out),
@@ -200,11 +204,11 @@ function SheetRow({
         {formatAmount(new Decimal(amount))}
       </td>
       <td className={`${cell} tabular-nums`}>
-        {paid === null
-          ? owes
-            ? t("none")
-            : null
-          : formatDate(paid.at, timezone)}
+        {paid !== null
+          ? formatDate(paid.at, timezone)
+          : waits
+            ? null
+            : t("none")}
       </td>
       <td className={cell}>
         {paid !== null ? (
@@ -212,10 +216,12 @@ function SheetRow({
             {payment(`methods.${paid.method}`)}
             {paid.reference === "" ? null : <> {paid.reference}</>}
           </>
+        ) : waits ? (
+          payment("notPaid")
         ) : owes ? (
           t("owes", { amount: formatAmount(total.abs()) })
         ) : (
-          payment("notPaid")
+          t("none")
         )}
       </td>
       <td className={cell}>
@@ -228,15 +234,14 @@ function SheetRow({
 }
 
 /** The signature's box: the worker's drawing, opened from the photos' own route; that the demo keeps none; a dash for
- * M-Pesa and a bank, proven by their numbers instead, and for one who owes, who was handed nothing; or empty, not paid
- * yet. */
+ * M-Pesa and a bank, proven by their numbers instead, and for one handed nothing, who owes or was paid 0; or empty, not
+ * paid yet. */
 function Proof({ worker }: { worker: WorkerPay }) {
   const t = useTranslations("pay.sheet");
   const payment = useTranslations("pay.payment");
   const [failed, setFailed] = useState(false);
   const paid = paymentOf(worker);
-  if (paid === null)
-    return new Decimal(worker.total).lt("0") ? t("none") : null;
+  if (paid === null) return waitsForLipa(worker) ? null : t("none");
   if (paid.signature !== null) {
     // A drawing that can't be opened says so, so a paper never prints a box that looks signed and isn't.
     return failed ? (

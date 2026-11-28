@@ -292,6 +292,17 @@ describe("the month's pay as an Excel file", () => {
     ]);
   });
 
+  it("says nothing in Njia of a payslip of exactly 0: neither Hajalipwa nor Hakulipwa", () => {
+    const month = payMonth(
+      [slip({ display_name: "Baraka", total: "0.00", to_hand_out: "0.00" })],
+      {
+        total: "0.00",
+        approval: APPROVED,
+      },
+    );
+    expect(valuesOf(month)[3]?.slice(9)).toEqual([0, 0, null, null, null]);
+  });
+
   it("says both rates of one whose rate changed in the month", () => {
     const month = payMonth(
       [

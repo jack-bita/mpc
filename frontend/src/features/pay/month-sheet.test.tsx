@@ -193,6 +193,28 @@ describe("the month's sheet", () => {
     ]);
   });
 
+  it("says neither Hajalipwa nor a debt of a payslip of exactly 0", async () => {
+    // Baraka earned 117,000 and took 117,000 before payday: nothing to hand over, nothing owed, and so no Lipa. The
+    // paper says a dash, never Hajalipwa, which would stand on it for ever (WAGE-5's review).
+    theShopPays(
+      payMonth(
+        [
+          workerPay({
+            display_name: "Baraka",
+            total: "0.00",
+            payslip: "019a8900-0000-7000-8000-000000000002",
+            approval: APPROVED,
+            to_hand_out: "0.00",
+          }),
+        ],
+        { total: "0.00", approval: APPROVED, still_to_pay: "0.00" },
+      ),
+    );
+    render(<MonthSheetScreen asked="2026-11" />);
+
+    expect(await rows()).toEqual([["1", "Baraka", "0", "—", "—", "—", ""]]);
+  });
+
   it("shows only the payment that counts, never one crossed out", async () => {
     // Asha was marked paid by M-Pesa by mistake, crossed out, then paid in cash and signed: the sheet has the cash
     // alone. And Baraka's one payment was crossed out, so he waits again.

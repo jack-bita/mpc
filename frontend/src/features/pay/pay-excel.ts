@@ -35,7 +35,7 @@ import { formatAmount, formatDate } from "@/lib/format";
 
 import { useMonthTitle } from "./approve-sheet";
 import type { Approval, PayMonth, WorkerPay } from "./pay";
-import { paymentOf, type PaymentMethod } from "./payments";
+import { paymentOf, type PaymentMethod, waitsForLipa } from "./payments";
 
 /** The words the file is written in, in the person's own language. */
 export type ExcelWords = {
@@ -117,6 +117,8 @@ function daysOf(worker: WorkerPay, kind: "full" | "half"): number {
 /** One payslip's row, its cells in the headings' order. */
 function rowOf(worker: WorkerPay, words: ExcelWords, timezone: string): Row {
   const paid = paymentOf(worker);
+  // As on the month's sheet: not paid yet (waitsForLipa), one who owes, or, of exactly 0, neither, an empty cell.
+  const waits = waitsForLipa(worker);
   const owes = new Decimal(worker.total).lt("0");
   return [
     text(worker.display_name),
@@ -134,13 +136,13 @@ function rowOf(worker: WorkerPay, words: ExcelWords, timezone: string): Row {
     // who owes, as on the month's sheet.
     money(paid === null ? worker.to_hand_out : paid.amount),
     paid === null ? null : text(formatDate(paid.at, timezone)),
-    text(
-      paid === null
-        ? owes
-          ? words.owes
-          : words.notPaid
-        : words.method(paid.method),
-    ),
+    paid !== null
+      ? text(words.method(paid.method))
+      : waits
+        ? text(words.notPaid)
+        : owes
+          ? text(words.owes)
+          : null,
     paid === null || paid.reference === "" ? null : text(paid.reference),
   ];
 }

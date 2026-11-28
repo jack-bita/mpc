@@ -271,6 +271,26 @@ describe("the printed payslips", () => {
     expect(within(slip as HTMLElement).getByText("Hajalipwa")).toBeDefined();
   });
 
+  it("says no Hajalipwa of a payslip of exactly 0, which pays nothing", async () => {
+    const nothing = {
+      ...ASHA,
+      total: "0.00",
+      payments: [],
+      to_hand_out: "0.00",
+    };
+    theShopPays(
+      payMonth([nothing], {
+        total: "0.00",
+        approval: APPROVED,
+        still_to_pay: "0.00",
+      }),
+    );
+    render(<PrintedPayslipsScreen asked="2026-11" staff={null} />);
+
+    const [slip] = await payslips();
+    expect(within(slip as HTMLElement).queryByText("Hajalipwa")).toBeNull();
+  });
+
   it("words the demo's ready reason for a correction", async () => {
     const demo = {
       ...NEEMA,

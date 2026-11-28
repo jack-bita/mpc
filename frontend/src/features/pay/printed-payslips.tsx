@@ -50,7 +50,7 @@ import { Paper, PaperHeading, PaperSheet } from "./paper";
 import { payPage, usePayMonth, type WorkerPay, workerPayPage } from "./pay";
 import { useSignedAmount } from "./pay-lines";
 import { Left } from "./pay-notes";
-import { paymentOf } from "./payments";
+import { paymentOf, waitsForLipa } from "./payments";
 import { Proof, useSaid } from "./payslip-payments";
 
 export function PrintedPayslipsScreen({
@@ -255,7 +255,8 @@ function PrintedPayslip({
                 loading="eager"
               />
             </>
-          ) : total.gt("0") ? (
+          ) : waitsForLipa(worker) ? (
+            // Not paid yet, as Mishahara says it: never of a payslip that pays nothing, below 0 or of exactly 0.
             <p>{payment("notPaid")}</p>
           ) : null}
         </div>
