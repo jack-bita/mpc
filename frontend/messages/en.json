@@ -1047,6 +1047,13 @@
       "reference": "Transaction number",
       "owes": "Not paid",
       "sheet": "Pay"
+    },
+    "papers": {
+      "printSheet": "Print the list",
+      "printPayslips": "Print the payslips",
+      "printPayslip": "Print the payslip",
+      "excel": "Download Excel",
+      "excelFailed": "The Excel file could not be made. Try again."
     }
   },
   "attendanceWorker": {

@@ -546,3 +546,37 @@ describe("who is paid (WAGE-9)", () => {
     expect(screen.queryByText("Bado kulipa")).toBeNull();
   });
 });
+
+describe("an approved month's papers (WAGE-5)", () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2026-12-02T06:00:00Z"));
+    window.history.replaceState(null, "", "/pay/?month=2026-11");
+  });
+
+  it("offers the sheet, the payslips and the Excel file once the month is approved", async () => {
+    answer("GET", ME, { status: 200, body: OWNER });
+    answer("GET", PAY_ROUTE, () => Response.json(APPROVED));
+    render(<PayScreen />);
+
+    expect(
+      await screen.findByRole("link", { name: "Chapisha orodha" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Chapisha hati za malipo" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Pakua Excel" })).toBeTruthy();
+  });
+
+  it("offers none of them on a month still open, whose pay can still change", async () => {
+    answer("GET", ME, { status: 200, body: OWNER });
+    answer("GET", PAY_ROUTE, () => Response.json(NOVEMBER));
+    render(<PayScreen />);
+
+    await lines();
+    expect(screen.queryByRole("link", { name: "Chapisha orodha" })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Chapisha hati za malipo" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Pakua Excel" })).toBeNull();
+  });
+});

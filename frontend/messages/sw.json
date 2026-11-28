@@ -1047,6 +1047,13 @@
       "reference": "Namba ya muamala",
       "owes": "Hakulipwa",
       "sheet": "Mishahara"
+    },
+    "papers": {
+      "printSheet": "Chapisha orodha",
+      "printPayslips": "Chapisha hati za malipo",
+      "printPayslip": "Chapisha hati ya malipo",
+      "excel": "Pakua Excel",
+      "excelFailed": "Faili la Excel halikuweza kutengenezwa. Jaribu tena."
     }
   },
   "attendanceWorker": {
