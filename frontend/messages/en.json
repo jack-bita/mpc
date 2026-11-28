@@ -999,6 +999,10 @@
         "reason": "Why it is crossed out",
         "action": "Cross out"
       }
+    },
+    "paper": {
+      "print": "Print",
+      "picturesLoading": "The signatures are still loading, wait a moment."
     }
   },
   "attendanceWorker": {

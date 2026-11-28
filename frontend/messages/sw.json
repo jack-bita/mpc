@@ -999,6 +999,10 @@
         "reason": "Sababu ya kubatilisha",
         "action": "Batilisha"
       }
+    },
+    "paper": {
+      "print": "Chapisha",
+      "picturesLoading": "Sahihi bado zinapakia, subiri kidogo."
     }
   },
   "attendanceWorker": {
