@@ -1028,6 +1028,25 @@
       "heading": "Payslip · {month}",
       "advanceOn": "Advance of {date}",
       "notApproved": "A payslip is ready once the pay is approved."
+    },
+    "excel": {
+      "title": "Pay for {month} · Approved by {by} · {date}",
+      "name": "Name",
+      "rate": "Daily rate",
+      "fullDays": "Full days",
+      "halfDays": "Half days",
+      "fines": "Fines",
+      "meals": "Meals",
+      "advances": "Advances",
+      "carried": "Debt",
+      "corrections": "Corrections",
+      "total": "Total",
+      "handedOver": "Paid",
+      "date": "Date",
+      "way": "How",
+      "reference": "Transaction number",
+      "owes": "Not paid",
+      "sheet": "Pay"
     }
   },
   "attendanceWorker": {

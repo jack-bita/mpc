@@ -1028,6 +1028,25 @@
       "heading": "Hati ya malipo · {month}",
       "advanceOn": "Advansi ya {date}",
       "notApproved": "Hati ya malipo inapatikana malipo yakishaidhinishwa."
+    },
+    "excel": {
+      "title": "Mishahara ya {month} · Imeidhinishwa na {by} · {date}",
+      "name": "Jina",
+      "rate": "Kwa siku",
+      "fullDays": "Siku kamili",
+      "halfDays": "Nusu siku",
+      "fines": "Faini",
+      "meals": "Chakula",
+      "advances": "Advansi",
+      "carried": "Deni",
+      "corrections": "Marekebisho",
+      "total": "Jumla",
+      "handedOver": "Analipwa",
+      "date": "Tarehe",
+      "way": "Njia",
+      "reference": "Namba ya muamala",
+      "owes": "Hakulipwa",
+      "sheet": "Mishahara"
     }
   },
   "attendanceWorker": {
