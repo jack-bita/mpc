@@ -127,8 +127,11 @@ test("Meneja approves last month for everyone on the demo, and prints its sheet"
           .getByRole("button", { name: WORKER.save, exact: true })
           .click();
         await expect(decide).toBeHidden();
-        // Back to Mishahara, on the same month, which the address keeps.
+        // Back to Mishahara, on the same month, which the address keeps; and read again. Coming back, the page first
+        // shows its saved answer, from before the decision, while it asks the server afresh: read then, the day would
+        // still wait, and the total be the old one, which the sheet would hold as moved (DATA-2's review).
         await back(phone);
+        await phone.reload();
         await expect(approveButton).toBeVisible();
       }
       throw new Error(
