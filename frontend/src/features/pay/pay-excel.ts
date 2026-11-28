@@ -31,7 +31,7 @@ import type {
 import { useTranslations } from "use-intl";
 
 import { Decimal } from "@/lib/decimal";
-import { formatAmount, formatDate } from "@/lib/format";
+import { formatAmount, formatDate, wholeShillings } from "@/lib/format";
 
 import { useMonthTitle } from "./approve-sheet";
 import type { Approval, PayMonth, WorkerPay } from "./pay";
@@ -62,17 +62,13 @@ export function excelFileName(month: string): string {
 /** How Excel shows the money: whole shillings with a comma between thousands, "-1,000" below 0. */
 const MONEY = "#,##0";
 
-/** A money string of the server's as a number for a cell of the file: only a whole number of shillings, whose number
- * is exact, and small enough to be (Number.isSafeInteger); else refused, as a part of a shilling here is a bug in
- * what the server sent, never something to round away. */
+/** A money string of the server's as a number for a cell of the file: only a whole number of shillings, by the one
+ * check the screens' money goes through (wholeShillings, which refuses a part of one, never rounding it away, as it is
+ * a bug in what the server sent), and small enough for its number to be exact (Number.isSafeInteger). */
 export function asCellNumber(amount: string): number {
-  const value = new Decimal(amount);
-  const whole = Number(value.toFixed(0));
-  if (
-    !value.eq(value.round(0, Decimal.roundDown)) ||
-    !Number.isSafeInteger(whole)
-  )
-    throw new RangeError(`Not a whole number of shillings: ${amount}`);
+  const whole = Number(wholeShillings(new Decimal(amount)));
+  if (!Number.isSafeInteger(whole))
+    throw new RangeError(`Too big to be exact in a cell: ${amount}`);
   return whole;
 }
 

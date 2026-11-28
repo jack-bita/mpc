@@ -61,8 +61,9 @@ export function formatAmount(amount: Big): string {
   return AMOUNT.format(wholeShillings(amount));
 }
 
-/** An amount's text, whole shillings: one with cents is refused, never rounded (formatMoney). */
-function wholeShillings(amount: Big) {
+/** An amount's text, whole shillings: one with cents is refused, never rounded (formatMoney). The Excel file's cells
+ * take their numbers through it too (asCellNumber, WAGE-5), so the screen and the file refuse alike. */
+export function wholeShillings(amount: Big) {
   const fitted = fit(amount, MONEY_PLACES);
   if (!fitted.round(0, Decimal.roundDown).eq(fitted))
     throw new RangeError(
