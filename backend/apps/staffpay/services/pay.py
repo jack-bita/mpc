@@ -120,6 +120,23 @@ class PaymentLine:
 
 
 @dataclass(frozen=True)
+class KeptLine:
+    # One line of an approved payslip, exactly as it was kept (WAGE-5, T4), for the papers: the printed payslip lists
+    # each advance with its own day, and each correction with its reason, where the worker's line (Pay) adds the
+    # advances into one sum, and the corrections into another, as the screen shows them. So a worker who says they
+    # took two advances, not three, is shown which. Its kind (PayslipLineKind); the days it counts, and what each paid,
+    # on the lines that have them; the day of an advance, or the month of a debt, as its first day; the amount, plus
+    # or minus; and a correction's reason, empty on every other line. What its kind doesn't hold is None, as the
+    # table's rule holds it (staffpay_payslipline_fits_its_kind).
+    kind: str
+    days: int | None
+    each: Decimal | None
+    date: dt.date | None
+    amount: Decimal
+    note: str
+
+
+@dataclass(frozen=True)
 class WorkerPay:
     # One worker's pay of a month (WAGE-2), a job's, as a day is a job's: a person hired again in the month has two,
     # each with its own days and rates (PPL-11). Whose, and their last day if they left, which the page says beside
@@ -143,6 +160,9 @@ class WorkerPay:
     # crossed out among them (WAGE-9). None and nothing on a draft.
     payslip_id: uuid.UUID | None = None
     payments: tuple[PaymentLine, ...] = ()
+    # Once a payslip keeps it: its lines as they were kept, in their order (WAGE-5), which the papers print. Nothing
+    # on a draft, which keeps nothing, and whose lines can still change.
+    kept_lines: tuple[KeptLine, ...] = ()
 
     @property
     def payment(self) -> PaymentLine | None:
@@ -734,6 +754,19 @@ def _line_of(slip: Payslip, lines: list[PayslipLine], payments: tuple[PaymentLin
         approval=_approval_of(slip),
         payslip_id=slip.pk,
         payments=payments,
+        # Each line as the table holds it, in the order the caller read them (by position): nothing added up or
+        # rounded again, so the paper says what the payslip says.
+        kept_lines=tuple(
+            KeptLine(
+                kind=line.kind,
+                days=line.days,
+                each=line.each,
+                date=line.date,
+                amount=line.amount,
+                note=line.note,
+            )
+            for line in lines
+        ),
     )
 
 

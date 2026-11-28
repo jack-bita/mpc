@@ -144,11 +144,13 @@ export function workerPay(fields: Partial<WorkerPay> = {}): WorkerPay {
     total: "132000.00",
     carried_from: null,
     approval: null,
-    // A draft: no payslip keeps it yet, so nothing is handed out, and it is nobody's own (WAGE-9).
+    // A draft: no payslip keeps it yet, so nothing is handed out, and it is nobody's own (WAGE-9); nor any line
+    // kept, which the papers print (WAGE-5).
     payslip: null,
     payments: [],
     to_hand_out: "0.00",
     own: false,
+    kept_lines: [],
     ...fields,
   };
 }

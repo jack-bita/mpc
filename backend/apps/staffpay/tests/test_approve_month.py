@@ -1,5 +1,6 @@
 """apps/staffpay/tests/test_approve_month.py — a month's pay approved, and read back from its payslips (WAGE-3; 02 §12,
-A3): approve_month (apps/staffpay/services/approval.py) and what pay_month answers before and after it.
+A3): approve_month (apps/staffpay/services/approval.py) and what pay_month answers before and after it, each payslip's
+lines as kept among it, for the papers (WAGE-5).
 
 Today is Tuesday 1 December 2026 at MPC, at 19:05, so November is over, and its 25 working days are Asha's to be paid:
 
@@ -45,6 +46,7 @@ from apps.staffpay.models import (
 )
 from apps.staffpay.services import (
     Approval,
+    KeptLine,
     OpenDay,
     PayMonth,
     WorkerPay,
@@ -195,11 +197,14 @@ def test_baba_approves_november(shop_a: Shop, baba: StaffMember, asha: StaffMemb
     said = Approval(by="Baba", at=timezone.now())
     assert (answer.approval, answer.to_approve) == (said, None)
     assert (answer.counted_to, answer.total) == (dt.date(2026, 11, 30), Decimal("44500.00"))
-    # Each worker's line is the very line he read, but for who approved it and the payslip that keeps it, which Lipa
-    # pays (WAGE-9): lines, fines, total, all of it.
+    # Each worker's line is the very line he read, but for who approved it, the payslip that keeps it, which Lipa pays
+    # (WAGE-9), and its lines as kept, for the papers (WAGE-5), which a draft has none of and the test below reads:
+    # lines, fines, total, all of it.
     with shop_context(shop_a):
         slips = dict(Payslip.objects.values_list("staff_id", "pk"))
-    assert answer.workers == [replace(line, approval=said, payslip_id=slips[line.staff_id]) for line in shown.workers]
+    assert [replace(line, kept_lines=()) for line in answer.workers] == [
+        replace(line, approval=said, payslip_id=slips[line.staff_id]) for line in shown.workers
+    ]
     with shop_context(shop_a):
         assert worker_pay(shop_a, juma, NOVEMBER).worker == line_of(answer, "Juma")
 
@@ -310,6 +315,46 @@ def test_each_correction_is_kept_last_with_its_reason(
         [Decimal("9000.00"), Decimal("90000.00"), Decimal("-2000.00")],
         "pay.day_approved",
     )
+
+
+# The papers (WAGE-5).
+
+
+def test_an_approved_payslip_answers_each_of_its_lines_as_kept(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Asha's December, approved on 4 January: three full days; two advances, which her line on the screen adds into
+    # one sum of 4,000, and the printed payslip lists one by one, each with its day; November's debt, with its month;
+    # and a correction, with its reason. Each answered as the table keeps it, in the payslip's order, and together
+    # they are the total, as every payslip's lines are. The draft before the approval answers none: nothing is kept.
+    kept_day(asha, *FULL, date=MON)
+    give(asha, baba, MON, "28000")
+    approve(shop_a, baba)
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2026, 12, 8, 9, 0)))
+    for day in (2, 3, 4):
+        kept_day(asha, *FULL, date=dt.date(2026, 12, day))
+    give(asha, baba, dt.date(2026, 12, 2), "1000")
+    give(asha, baba, dt.date(2026, 12, 3), "3000")
+    correct(asha, baba, "9000", "Novemba: siku ya 17/11 haikuhesabiwa", of=DECEMBER)
+    draft = line_of(month(shop_a, DECEMBER), "Asha")
+    assert (draft.pay.advances, draft.kept_lines) == (Decimal("4000.00"), ())
+
+    monkeypatch.setattr(timezone, "now", at(dt.datetime(2027, 1, 4, 9, 0)))
+    approve(shop_a, baba, DECEMBER)
+
+    kept = line_of(month(shop_a, DECEMBER), "Asha")
+    # Each as KeptLine(kind, days, each, date, amount, note).
+    assert kept.kept_lines == (
+        KeptLine("full", 3, Decimal("10000.00"), None, Decimal("30000.00"), ""),
+        KeptLine("advance", None, None, dt.date(2026, 12, 2), Decimal("-1000.00"), ""),
+        KeptLine("advance", None, None, dt.date(2026, 12, 3), Decimal("-3000.00"), ""),
+        KeptLine("carried", None, None, NOVEMBER, Decimal("-18000.00"), ""),
+        KeptLine("correction", None, None, None, Decimal("9000.00"), "Novemba: siku ya 17/11 haikuhesabiwa"),
+    )
+    assert sum((line.amount for line in kept.kept_lines), NOTHING) == kept.total == Decimal("17000.00")
+    # Her own pay page answers the very same lines as Mishahara.
+    with shop_context(shop_a):
+        assert worker_pay(shop_a, asha, DECEMBER).worker.kept_lines == kept.kept_lines
 
 
 def test_a_correction_alone_is_a_pay_to_approve(shop_a: Shop, baba: StaffMember) -> None:
