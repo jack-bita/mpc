@@ -76,7 +76,9 @@ const READY_REASONS = {
 export function useReasonWords(): (reason: string) => string {
   const t = useTranslations("pay.correction.readyReason");
   return (reason) =>
-    reason in READY_REASONS
+    // The list's own names only (Object.hasOwn): `in` finds an object's built-in ones too, so a reason typed as
+    // "constructor" read as a ready one and broke the page (WAGE-5's review).
+    Object.hasOwn(READY_REASONS, reason)
       ? t(READY_REASONS[reason as keyof typeof READY_REASONS])
       : reason;
 }

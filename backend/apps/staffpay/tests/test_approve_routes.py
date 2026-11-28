@@ -26,7 +26,7 @@ from apps.people.models import Device, StaffMember
 from apps.people.services import mark_left
 from apps.shops.models import Shop
 from apps.staffpay.models import ClockKind, PayRun, Payslip
-from apps.staffpay.services import record_advance, record_meal_money, set_pay_rate
+from apps.staffpay.services import record_advance, record_correction, record_meal_money, set_pay_rate
 from apps.staffpay.tests.days import job, kept_day, rule, tapped
 
 pytestmark = pytest.mark.django_db
@@ -97,14 +97,53 @@ def test_a_month_is_approved_as_it_was_read(
     after = staff_client_a.get(PAY, NOVEMBER).json()
     approval = {"by": staff_a.display_name, "at": AT}
     assert (after["approval"], after["to_approve"], after["counted_to"]) == (approval, None, "2026-11-30")
-    # The line Baba read, now with who approved it, and its payslip, which waits for Lipa (WAGE-9).
+    # The line Baba read, now with who approved it, and its payslip, which waits for Lipa (WAGE-9); and its lines as
+    # kept, for the papers (WAGE-5), each amount a string (rule 3), what a line's kind doesn't hold null.
     with shop_context(shop_a):
         slip = Payslip.objects.get()
-    kept = {"approval": approval, "payslip": str(slip.pk), "to_hand_out": "20000.00"}
+    kept = {
+        "approval": approval,
+        "payslip": str(slip.pk),
+        "to_hand_out": "20000.00",
+        "kept_lines": [
+            {"kind": "full", "days": 2, "each": "10000.00", "date": None, "amount": "20000.00", "note": ""},
+        ],
+    }
     assert after["workers"] == [before["workers"][0] | kept]
     assert after["still_to_pay"] == "20000.00"
     with shop_context(shop_a):
         assert (PayRun.objects.count(), Payslip.objects.count()) == (1, 1)
+
+
+def test_each_kept_line_as_the_paper_reads_it(
+    staff_client_a: APIClient, shop_a: Shop, staff_a: StaffMember, asha: StaffMember
+) -> None:
+    # What the printed payslip reads (WAGE-5): an advance's day as a date, a correction's reason as typed, and what a
+    # line's kind doesn't hold null, each amount a string with its sign (rule 3).
+    with shop_context(shop_a):
+        record_advance(asha, advance_id=uuid.uuid7(), date=MON, amount=Decimal("3000"), by=staff_a)
+        record_correction(
+            asha,
+            correction_id=uuid.uuid7(),
+            month=dt.date(2026, 11, 1),
+            amount=Decimal("9000"),
+            reason="Oktoba: siku ya 7/10 haikuhesabiwa",
+            by=staff_a,
+        )
+    assert approve(staff_client_a, seen((asha, "26000.00"))).status_code == 201
+    line = staff_client_a.get(f"{PAY}{asha.pk}/", NOVEMBER).json()["worker"]
+    assert line["kept_lines"] == [
+        {"kind": "full", "days": 2, "each": "10000.00", "date": None, "amount": "20000.00", "note": ""},
+        {"kind": "advance", "days": None, "each": None, "date": "2026-11-16", "amount": "-3000.00", "note": ""},
+        {
+            "kind": "correction",
+            "days": None,
+            "each": None,
+            "date": None,
+            "amount": "9000.00",
+            "note": "Oktoba: siku ya 7/10 haikuhesabiwa",
+        },
+    ]
 
 
 def test_what_stops_it_as_the_page_reads_it(
@@ -145,6 +184,18 @@ def test_a_debt_as_the_page_reads_it(
     assert approve(staff_client_a, seen((asha, "-18000.00"))).status_code == 201
     line = staff_client_a.get(f"{PAY}{asha.pk}/", {"month": "2026-12"}).json()["worker"]
     assert (line["carried_from"], line["pay"]["carried"], line["total"]) == ("2026-11", "18000.00", "-18000.00")
+    # And once December is approved, its payslip keeps the debt as a line of its own, with its month as its first day,
+    # as the printed payslip reads it: "Deni la Novemba" (WAGE-5).
+    monkeypatch.setattr(
+        timezone, "now", lambda: dt.datetime(2027, 1, 4, 9, 0, tzinfo=dt.timezone(dt.timedelta(hours=3)))
+    )
+    kept_day(asha, *FULL, date=dt.date(2026, 12, 2))
+    assert approve(staff_client_a, seen((asha, "-8000.00")), month="2026-12").status_code == 201
+    december = staff_client_a.get(f"{PAY}{asha.pk}/", {"month": "2026-12"}).json()["worker"]
+    assert december["kept_lines"] == [
+        {"kind": "full", "days": 1, "each": "10000.00", "date": None, "amount": "10000.00", "note": ""},
+        {"kind": "carried", "days": None, "each": None, "date": "2026-11-01", "amount": "-18000.00", "note": ""},
+    ]
 
 
 def test_a_total_that_moved_is_refused_with_its_code(staff_client_a: APIClient, asha: StaffMember) -> None:

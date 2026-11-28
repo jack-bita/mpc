@@ -62,6 +62,7 @@ import {
   type WorkerPayMonth,
 } from "./pay";
 import { PayLines } from "./pay-lines";
+import { PayslipPaper } from "./pay-papers";
 import { useCountedTo } from "./pay-notes";
 import { mayPay } from "./payments";
 import { PayslipPayments } from "./payslip-payments";
@@ -272,6 +273,8 @@ function TheWorkersPay({
         keepsSignatures={answer.keeps_signatures}
         readyReasons={answer.void_reasons}
       />
+      {/* Once a payslip keeps it: their payslip on paper (WAGE-5). */}
+      <PayslipPaper worker={answer.worker} month={answer.month} />
       {/* Only of one who left, with pay still open, as the server says (to_approve), and only for whoever may. */}
       {mayApprove && answer.to_approve !== null ? (
         <Button

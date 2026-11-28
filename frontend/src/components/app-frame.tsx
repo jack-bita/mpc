@@ -60,25 +60,35 @@ export function AppFrame({
   return (
     // data-area: which area a screen is in, for tests and for the eye in the browser's tools.
     // min-h-svh: the full height of the phone's visible screen, browser bars excluded.
-    <div data-area={area} className="flex min-h-svh flex-col">
-      <TopBar
-        shop={shop ?? device?.shop.name}
-        side={side ?? homeSide}
-        actions={
-          <>
-            {/* Who is here, read at a glance from where the next person stands. */}
-            {person ? <p className="text-lg font-semibold">{person}</p> : null}
-            {actions}
-            {/* The laptop's own language, for the tiles and the login pages: only while nobody is logged
+    <div
+      data-area={area}
+      className="flex min-h-svh flex-col print:block print:min-h-0"
+    >
+      {/* The bar and the area's notice belong to the screen, never to paper: a page printed from here, the month's
+          sheet or a payslip (WAGE-5), is the page's own content alone. */}
+      <div className="print:hidden">
+        <TopBar
+          shop={shop ?? device?.shop.name}
+          side={side ?? homeSide}
+          actions={
+            <>
+              {/* Who is here, read at a glance from where the next person stands. */}
+              {person ? (
+                <p className="text-lg font-semibold">{person}</p>
+              ) : null}
+              {actions}
+              {/* The laptop's own language, for the tiles and the login pages: only while nobody is logged
                 in. Someone who is reads their own, and changes it in Mipangilio yangu, the one place for
                 it (Jack, UI-9). */}
-            {person ? null : <LanguageButton />}
-          </>
-        }
-      />
-      {notice}
-      {/* The one <main> of the page: a screen inside an area doesn't write its own. */}
-      <main className="flex-1 p-4">{children}</main>
+              {person ? null : <LanguageButton />}
+            </>
+          }
+        />
+        {notice}
+      </div>
+      {/* The one <main> of the page: a screen inside an area doesn't write its own. No padding on paper, where a
+          paper pads itself (paper.tsx). */}
+      <main className="flex-1 p-4 print:p-0">{children}</main>
     </div>
   );
 }

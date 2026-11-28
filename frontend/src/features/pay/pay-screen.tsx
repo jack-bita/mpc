@@ -83,6 +83,7 @@ import {
   workerPayPage,
 } from "./pay";
 import { PayNotes, useCountedTo } from "./pay-notes";
+import { MonthPapers } from "./pay-papers";
 import { PaySheet } from "./pay-sheet";
 import { PaymentNote } from "./payment-note";
 import { mayPay } from "./payments";
@@ -198,6 +199,14 @@ function TheMonth({
           <ApprovedLine approval={answer.approval} timezone={timezone} />
         )}
       </div>
+      {/* Once approved: the month's sheet, its payslips and its Excel file (WAGE-5). */}
+      {answer.approval === null ? null : (
+        <MonthPapers
+          answer={answer}
+          approval={answer.approval}
+          timezone={timezone}
+        />
+      )}
       {answer.workers.length === 0 ? (
         // Nobody paid by the day; or no working day yet, which the line above says, and is all the page knows: on a
         // Sunday the 1st, ten workers with a rate are listed nowhere (the review, as on the attendance month).

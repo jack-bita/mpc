@@ -999,6 +999,63 @@
         "reason": "Sababu ya kubatilisha",
         "action": "Batilisha"
       }
+    },
+    "paper": {
+      "print": "Chapisha",
+      "picturesLoading": "Sahihi bado zinapakia, subiri kidogo.",
+      "shop": "{code} · {name}"
+    },
+    "sheet": {
+      "title": "Orodha ya malipo",
+      "heading": "Mishahara ya {month}",
+      "number": "Na.",
+      "name": "Jina",
+      "amount": "Kiasi",
+      "date": "Tarehe",
+      "way": "Njia",
+      "signature": "Sahihi",
+      "byPen": "Sahihi kwa kalamu",
+      "owes": "Hakulipwa: deni {amount}",
+      "none": "—",
+      "total": "Jumla ya wote: {total}",
+      "signedBy": "Sahihi ya aliyelipa:",
+      "signedOn": "Tarehe:",
+      "notApproved": "Orodha hii inapatikana mwezi ukishaidhinishwa."
+    },
+    "payslips": {
+      "titleAll": "Hati za malipo",
+      "titleOne": "Hati ya malipo",
+      "heading": "Hati ya malipo · {month}",
+      "advanceOn": "Advansi ya {date}",
+      "notApproved": "Hati ya malipo inapatikana malipo yakishaidhinishwa.",
+      "days": "siku {count}",
+      "nobody": "Mfanyakazi huyu hana malipo katika mwezi huu."
+    },
+    "excel": {
+      "title": "Mishahara ya {month} · Imeidhinishwa na {by} · {date}",
+      "name": "Jina",
+      "rate": "Kwa siku",
+      "fullDays": "Siku kamili",
+      "halfDays": "Nusu siku",
+      "fines": "Faini",
+      "meals": "Chakula",
+      "advances": "Advansi",
+      "carried": "Deni",
+      "corrections": "Marekebisho",
+      "total": "Jumla",
+      "handedOver": "Analipwa",
+      "date": "Tarehe",
+      "way": "Njia",
+      "reference": "Namba ya muamala",
+      "owes": "Hakulipwa",
+      "sheet": "Mishahara"
+    },
+    "papers": {
+      "printSheet": "Chapisha orodha",
+      "printPayslips": "Chapisha hati za malipo",
+      "printPayslip": "Chapisha hati ya malipo",
+      "excel": "Pakua Excel",
+      "excelFailed": "Faili la Excel halikuweza kutengenezwa. Jaribu tena."
     }
   },
   "attendanceWorker": {

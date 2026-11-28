@@ -112,6 +112,10 @@ describe("a worker's pay", () => {
     const note = screen.getByText("Siku 1 inasubiri uamuzi");
     expect(plain(note)).toBe("! Siku 1 inasubiri uamuzi");
     expect(monthsAsked()).toEqual(["2026-11"]);
+    // A draft: no payslip to print yet (WAGE-5).
+    expect(
+      screen.queryByRole("link", { name: "Chapisha hati ya malipo" }),
+    ).toBeNull();
   });
 
   it("splits a raise into two lines, in the server's order", async () => {
@@ -793,6 +797,20 @@ describe("the payslip's foot (WAGE-9)", () => {
       "Amelipwa taslimu na Baba · 02/12/2026 08:10 asubuhi",
     );
     expect(within(foot()).queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("prints the payslip alone from here, once one is kept (WAGE-5)", async () => {
+    jumasPayslip(
+      { payments: [payment({ amount: "132000.00" })], to_hand_out: "0.00" },
+      OWNER,
+    );
+    open();
+
+    expect(
+      (
+        await screen.findByRole("link", { name: "Chapisha hati ya malipo" })
+      ).getAttribute("href"),
+    ).toBe(`/pay/payslips?month=2026-11&staff=${JUMA}`);
   });
 
   it("offers neither on one's own payslip, paid or not", async () => {

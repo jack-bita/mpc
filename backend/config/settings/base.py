@@ -293,6 +293,9 @@ SPECTACULAR_SETTINGS = {
         # How a payslip was handed out (WAGE-9): named after its own list, not after the field `method`, as a sale's
         # payment will have a method of its own (R1).
         "PaymentMethodEnum": "apps.staffpay.models.PaymentMethod",
+        # What a kept payslip line is (WAGE-5): named after its own list, not after the field `kind`, which many answers
+        # have (a flag's, a tap's), and which would rename them all.
+        "PayslipLineKindEnum": "apps.staffpay.models.PayslipLineKind",
         "SettingScopeEnum": "apps.sync.api.serializers.SETTING_SCOPES",
         "SettingKindEnum": "apps.sync.api.serializers.SETTING_KINDS",
         # A rule's key on the settings page (SHOP-3): named after the registry, not after the field `key`.

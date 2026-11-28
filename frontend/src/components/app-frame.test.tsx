@@ -39,6 +39,21 @@ describe.each(AREAS)("the %s area", (area, Layout) => {
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
+  it("keeps the bar off paper, and the screen's padding with it", () => {
+    // A page printed from an area, the month's sheet or a payslip (WAGE-5), is its own content alone. Checked by the
+    // classes, as jsdom doesn't print, as the update bar's test does.
+    render(
+      <Layout>
+        <p>screen</p>
+      </Layout>,
+    );
+
+    expect(screen.getByRole("banner").parentElement?.className).toContain(
+      "print:hidden",
+    );
+    expect(screen.getByRole("main").className).toContain("print:p-0");
+  });
+
   it("switches to English from the bar, with no Swahili left", () => {
     const { container } = render(
       <Layout>

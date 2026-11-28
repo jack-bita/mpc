@@ -11,6 +11,11 @@
 // kept (Jack, ATT-3 and PPL-9), so this proves the pad draws and the payment goes, not that the drawing is sent: the
 // server's tests send one (test_payment_routes.py), and so does the Lipa sheet's (pay-sheet.test.tsx).
 //
+// And then her payslip goes on paper (WAGE-5): Chapisha hati ya malipo opens it on A4, each line as kept, her cash
+// payment alone, never the one crossed out; Chapisha opens the browser's print window; and laid out for paper, the page
+// holds the paper alone, nothing of the screen. The month's sheet and its Excel file need the whole month approved, which
+// no browser test does (below), so their own tests prove them (month-sheet.test.tsx, pay-excel.test.tsx).
+//
 // Neema is the visitor's own worker, as a seed person can't be marked left on the demo (demo.people_fixed). A month of
 // everyone is approved by no browser test: it needs a month that is over, which the demo has only on a month's first
 // days, and nothing may be decided, typed or crossed out in it after, so every other test of it would fail.
@@ -371,6 +376,67 @@ test("Meneja approves and pays the pay of one who left, and none of it changes a
       foot.getByText(/^Amelipwa taslimu na Meneja · /),
     ).toBeVisible();
     await expect(foot.locator("s")).toHaveCount(1);
+  });
+
+  await test.step("her payslip prints on A4, with nothing of the screen on the paper (WAGE-5)", async () => {
+    await phone
+      .getByRole("link", { name: PAY.papers.printPayslip, exact: true })
+      .click();
+    // The paper: one A4 page, hers, each line as her payslip kept it.
+    const paper = phone.locator("section");
+    await expect(paper.getByRole("heading", { level: 2 })).toHaveText(
+      new RegExp(`^${PAY.payslips.heading.replace("{month}", ".+")}$`),
+    );
+    await expect(paper.getByText("Neema", { exact: true })).toBeVisible();
+    await expect(
+      paper.getByRole("row").filter({ hasText: PAY.line.full }),
+    ).toHaveText(/1 × 10,000\s*10,000/);
+    await expect(paper.getByRole("row").last()).toHaveText(
+      new RegExp(`^${PAY.totalMonth}\\s*TSh\\s10,000$`),
+    );
+    // The payment that counts, and only it: the M-Pesa one crossed out stays on her pay page alone.
+    await expect(
+      paper.getByText(/^Amelipwa taslimu na Meneja · /),
+    ).toBeVisible();
+    await expect(paper.getByText(/M-Pesa/)).toHaveCount(0);
+    await expect(
+      paper.getByText(PAYMENT.demoSignature, { exact: true }),
+    ).toBeVisible();
+    // Chapisha opens the browser's print window: caught here, as a test can't print, and counted.
+    await phone.evaluate(() => {
+      const page = window as unknown as { printed: number };
+      page.printed = 0;
+      window.print = () => {
+        page.printed += 1;
+      };
+    });
+    await phone
+      .getByRole("button", { name: sw.pay.paper.print, exact: true })
+      .click();
+    await expect
+      .poll(() =>
+        phone.evaluate(
+          () => (window as unknown as { printed: number }).printed,
+        ),
+      )
+      .toBe(1);
+    // As the browser lays it out for paper: the paper alone, no bar, no arrow, no title, no Chapisha.
+    await phone.emulateMedia({ media: "print" });
+    await expect(paper).toBeVisible();
+    await expect(phone.getByRole("banner")).toBeHidden();
+    await expect(phone.getByRole("heading", { level: 1 })).toBeHidden();
+    await expect(
+      phone.getByRole("button", { name: sw.pay.paper.print, exact: true }),
+    ).toBeHidden();
+    await expect(
+      phone.getByRole("button", { name: sw.pageHeader.back }),
+    ).toBeHidden();
+    await phone.emulateMedia({ media: "screen" });
+    // Back to her pay page, where it was opened from.
+    await back(phone);
+    await expect(
+      foot.getByText(/^Amelipwa taslimu na Meneja · /),
+    ).toBeVisible();
   });
 
   await test.step("Mishahara says she is paid, and offers no Lipa", async () => {

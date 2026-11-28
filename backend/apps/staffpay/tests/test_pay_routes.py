@@ -95,6 +95,8 @@ def ashas_line(staff: StaffMember) -> dict[str, object]:
         "payments": [],
         "to_hand_out": "0.00",
         "own": False,
+        # Nor any line kept, which the papers print once it is approved (WAGE-5).
+        "kept_lines": [],
     }
 
 

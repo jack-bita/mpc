@@ -999,6 +999,63 @@
         "reason": "Why it is crossed out",
         "action": "Cross out"
       }
+    },
+    "paper": {
+      "print": "Print",
+      "picturesLoading": "The signatures are still loading, wait a moment.",
+      "shop": "{code} · {name}"
+    },
+    "sheet": {
+      "title": "List of payments",
+      "heading": "Pay for {month}",
+      "number": "No.",
+      "name": "Name",
+      "amount": "Amount",
+      "date": "Date",
+      "way": "How",
+      "signature": "Signature",
+      "byPen": "Signature by pen",
+      "owes": "Not paid: owes {amount}",
+      "none": "—",
+      "total": "Total for everyone: {total}",
+      "signedBy": "Signed by whoever paid:",
+      "signedOn": "Date:",
+      "notApproved": "This list is ready once the month is approved."
+    },
+    "payslips": {
+      "titleAll": "Payslips",
+      "titleOne": "Payslip",
+      "heading": "Payslip · {month}",
+      "advanceOn": "Advance of {date}",
+      "notApproved": "A payslip is ready once the pay is approved.",
+      "days": "{count, plural, one {1 day} other {# days}}",
+      "nobody": "This worker has no pay this month."
+    },
+    "excel": {
+      "title": "Pay for {month} · Approved by {by} · {date}",
+      "name": "Name",
+      "rate": "Daily rate",
+      "fullDays": "Full days",
+      "halfDays": "Half days",
+      "fines": "Fines",
+      "meals": "Meals",
+      "advances": "Advances",
+      "carried": "Debt",
+      "corrections": "Corrections",
+      "total": "Total",
+      "handedOver": "Paid",
+      "date": "Date",
+      "way": "How",
+      "reference": "Transaction number",
+      "owes": "Not paid",
+      "sheet": "Pay"
+    },
+    "papers": {
+      "printSheet": "Print the list",
+      "printPayslips": "Print the payslips",
+      "printPayslip": "Print the payslip",
+      "excel": "Download Excel",
+      "excelFailed": "The Excel file could not be made. Try again."
     }
   },
   "attendanceWorker": {

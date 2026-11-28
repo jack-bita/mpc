@@ -5739,6 +5739,50 @@
                     "version"
                 ]
             },
+            "KeptLine": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "$ref": "#/components/schemas/PayslipLineKindEnum"
+                    },
+                    "days": {
+                        "type": "integer",
+                        "nullable": true,
+                        "description": "The days it counts, on full, half, fines and meals."
+                    },
+                    "each": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "nullable": true,
+                        "description": "What each day paid, on full and half."
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true,
+                        "description": "An advance's day, or a debt's month as its first day; else none."
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "description": "Plus or minus."
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "A correction's reason, as typed; empty on every other line."
+                    }
+                },
+                "required": [
+                    "amount",
+                    "date",
+                    "days",
+                    "each",
+                    "kind",
+                    "note"
+                ]
+            },
             "LanguageEnum": {
                 "enum": [
                     "sw",
@@ -7340,6 +7384,19 @@
                     "staff",
                     "total"
                 ]
+            },
+            "PayslipLineKindEnum": {
+                "enum": [
+                    "full",
+                    "half",
+                    "fines",
+                    "meals",
+                    "advance",
+                    "carried",
+                    "correction"
+                ],
+                "type": "string",
+                "description": "* `full` - Full days\n* `half` - Half days\n* `fines` - Fines\n* `meals` - Meals\n* `advance` - Money given before payday\n* `carried` - A debt from an earlier month\n* `correction` - A mistake of an earlier month put right"
             },
             "PermissionEnum": {
                 "enum": [
@@ -9422,12 +9479,20 @@
                         "type": "boolean",
                         "readOnly": true,
                         "description": "Whether it is the pay of the person looking, any job of theirs."
+                    },
+                    "kept_lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/KeptLine"
+                        },
+                        "description": "An approved payslip's lines as kept, in order; none on a draft."
                     }
                 },
                 "required": [
                     "approval",
                     "carried_from",
                     "display_name",
+                    "kept_lines",
                     "left_on",
                     "own",
                     "pay",

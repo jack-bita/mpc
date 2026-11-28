@@ -1882,6 +1882,28 @@ export interface components {
             status: string;
             version: string;
         };
+        KeptLine: {
+            kind: components["schemas"]["PayslipLineKindEnum"];
+            /** @description The days it counts, on full, half, fines and meals. */
+            days: number | null;
+            /**
+             * Format: decimal
+             * @description What each day paid, on full and half.
+             */
+            each: string | null;
+            /**
+             * Format: date
+             * @description An advance's day, or a debt's month as its first day; else none.
+             */
+            date: string | null;
+            /**
+             * Format: decimal
+             * @description Plus or minus.
+             */
+            amount: string;
+            /** @description A correction's reason, as typed; empty on every other line. */
+            note: string;
+        };
         /**
          * @description * `sw` - Kiswahili
          *     * `en` - English
@@ -2417,6 +2439,17 @@ export interface components {
             /** Format: date-time */
             readonly approved_at: string;
         };
+        /**
+         * @description * `full` - Full days
+         *     * `half` - Half days
+         *     * `fines` - Fines
+         *     * `meals` - Meals
+         *     * `advance` - Money given before payday
+         *     * `carried` - A debt from an earlier month
+         *     * `correction` - A mistake of an earlier month put right
+         * @enum {string}
+         */
+        PayslipLineKindEnum: "full" | "half" | "fines" | "meals" | "advance" | "carried" | "correction";
         /**
          * @description * `sale.write` - Write a sale or an order
          *     * `sale.take_payment` - Take a payment
@@ -3109,6 +3142,8 @@ export interface components {
             to_hand_out: string;
             /** @description Whether it is the pay of the person looking, any job of theirs. */
             readonly own: boolean;
+            /** @description An approved payslip's lines as kept, in order; none on a draft. */
+            kept_lines: components["schemas"]["KeptLine"][];
         };
         WorkerPayMonthAnswer: {
             /** @example 2026-11 */

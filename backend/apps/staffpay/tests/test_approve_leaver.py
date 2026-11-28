@@ -204,6 +204,13 @@ def test_neema_is_approved_alone_the_evening_she_leaves(shop_a: Shop, baba: Staf
     # Her page and Mishahara say it is approved, by whom and when, and the month still runs for the others.
     answer = page(worked)
     assert answer.worker.approval == Approval("Baba", timezone.now())
+    # Her payslip's lines as kept, for its paper (WAGE-5), though the month still runs; her draft had none.
+    assert shown.worker.kept_lines == ()
+    assert [(line.kind, line.days, line.amount) for line in answer.worker.kept_lines] == [
+        ("full", 6, Decimal("60000.00")),
+        ("half", 2, Decimal("10000.00")),
+        ("meals", 8, Decimal("-8000.00")),
+    ]
     assert (answer.worker.total, answer.worker.today, answer.to_approve) == (Decimal("62000.00"), None, None)
     whole = month(shop_a)
     assert (whole.approval, whole.workers, whole.total) == (None, [answer.worker], Decimal("62000.00"))

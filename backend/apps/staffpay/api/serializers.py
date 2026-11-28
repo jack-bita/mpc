@@ -68,6 +68,7 @@ from apps.staffpay.models import (
     PayRate,
     PayRun,
     Payslip,
+    PayslipLineKind,
     ReviewReason,
 )
 from apps.staffpay.models import LONGEST_REFERENCE as _LONGEST_REFERENCE
@@ -665,6 +666,22 @@ class PaymentLineSerializer(serializers.Serializer[Any]):
     voided = VoidedPaymentSerializer(allow_null=True, help_text="Who crossed it out, or none while it counts.")
 
 
+class KeptLineSerializer(serializers.Serializer[Any]):
+    # One line of an approved payslip as it was kept (KeptLine, WAGE-5), for the printed payslip, which lists each
+    # advance with its day and each correction with its reason; the Excel file reads the line's sums (pay) instead, a
+    # column each. The amounts are strings (rule 3); the papers add nothing up.
+    kind = serializers.ChoiceField(choices=PayslipLineKind.choices)
+    days = serializers.IntegerField(allow_null=True, help_text="The days it counts, on full, half, fines and meals.")
+    each = serializers.DecimalField(
+        max_digits=14, decimal_places=2, allow_null=True, help_text="What each day paid, on full and half."
+    )
+    date = serializers.DateField(
+        allow_null=True, help_text="An advance's day, or a debt's month as its first day; else none."
+    )
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2, help_text="Plus or minus.")
+    note = serializers.CharField(help_text="A correction's reason, as typed; empty on every other line.")
+
+
 class WorkerPaySerializer(serializers.Serializer[Any]):
     # One worker's line of Mishahara, and their own page's: whose, and their last day if they left; the days that are
     # over; today alone, once they tapped Toka, or null (Leo); and what is left to pay, the two together. The month a
@@ -684,6 +701,11 @@ class WorkerPaySerializer(serializers.Serializer[Any]):
     payments = PaymentLineSerializer(many=True)
     to_hand_out = serializers.DecimalField(max_digits=14, decimal_places=2)
     own = serializers.SerializerMethodField(help_text="Whether it is the pay of the person looking, any job of theirs.")
+    # Once a payslip keeps it (WAGE-5): its lines as kept, in their order, which the papers print. None on a draft. On
+    # the manager's answer only: a worker's own (OwnPayLineSerializer) lists what a worker may read, and gains nothing.
+    kept_lines = KeptLineSerializer(
+        many=True, help_text="An approved payslip's lines as kept, in order; none on a draft."
+    )
 
     def get_own(self, line: Any) -> bool:
         # The jobs of the person looking, which the route reads (own_jobs); none when nobody says, as in a test.

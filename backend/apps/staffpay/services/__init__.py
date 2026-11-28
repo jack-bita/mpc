@@ -73,6 +73,7 @@ from apps.staffpay.services.money import (
 from apps.staffpay.services.pay import (
     Approval,
     CorrectionLine,
+    KeptLine,
     OpenDay,
     PaymentLine,
     PayMonth,
@@ -114,6 +115,7 @@ __all__ = [
     "CorrectionLine",
     "DayDecision",
     "DayOption",
+    "KeptLine",
     "MealDay",
     "MealMoneyDays",
     "MealMoneyLine",
