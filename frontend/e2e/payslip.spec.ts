@@ -13,12 +13,13 @@
 //
 // And then her payslip goes on paper (WAGE-5): Chapisha hati ya malipo opens it on A4, each line as kept, her cash
 // payment alone, never the one crossed out; Chapisha opens the browser's print window; and laid out for paper, the page
-// holds the paper alone, nothing of the screen. The month's sheet and its Excel file need the whole month approved, which
-// no browser test does (below), so their own tests prove them (month-sheet.test.tsx, pay-excel.test.tsx).
+// holds the paper alone, nothing of the screen. The month's sheet needs the whole month approved, which
+// whole-month.spec.ts does, after this one (below); the Excel file's own tests prove it (pay-excel.test.tsx).
 //
 // Neema is the visitor's own worker, as a seed person can't be marked left on the demo (demo.people_fixed). A month of
-// everyone is approved by no browser test: it needs a month that is over, which the demo has only on a month's first
-// days, and nothing may be decided, typed or crossed out in it after, so every other test of it would fail.
+// everyone is approved only by whole-month.spec.ts, last month, which the demo always holds whole (DATA-2): it runs
+// after this one and every other test that touches last month, as nothing may be decided, typed or crossed out in a
+// month approved.
 //
 // Her day is the last working day before today, counted from the day the first-day box starts on, the shop's today: the
 // test never reads the clock of the machine it runs on. On a month's first days it falls in the month before, and the
