@@ -32,6 +32,7 @@ from decimal import Decimal
 from io import StringIO
 from typing import Any
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
@@ -808,7 +809,7 @@ def test_coming_public_holidays() -> None:
     assert coming_public_holidays(date(2026, 12, 26)) == [mwaka_mpya, mapinduzi, karume]
 
 
-def test_seed_demo_starts_on_the_first_of_last_month(from_last_month: None) -> None:
+def test_seed_demo_starts_on_the_first_of_last_month(from_last_month: None, monkeypatch: pytest.MonkeyPatch) -> None:
     # DATA-2: the demo's first day is the 1st of the month before today's, so it always holds one month whole and over,
     # and the month before that has nobody to pay. Mid-month, on a month's first day, across a year's end, and on the
     # last day of a month after February's 28 days.
@@ -816,6 +817,23 @@ def test_seed_demo_starts_on_the_first_of_last_month(from_last_month: None) -> N
     assert services._history_starts(date(2026, 12, 1)) == date(2026, 11, 1)
     assert services._history_starts(date(2027, 1, 1)) == date(2026, 12, 1)
     assert services._history_starts(date(2027, 3, 31)) == date(2027, 2, 1)
+    # And the seed itself, made on 1 January 2027, across the year's end (DATA-2's review): every part it starts starts
+    # on 1 December 2026, a Tuesday, a working day: the rules, each person's first day and rate, the first tap and the
+    # first meal money; and its laptop last heard from the server at 06:50 that morning. 06:00 UTC is 09:00 in Arusha.
+    stop_the_clock(monkeypatch, datetime(2027, 1, 1, 6, 0, tzinfo=UTC))
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    first = date(2026, 12, 1)
+    zone = ZoneInfo(shop.timezone)
+    with shop_context(shop):
+        assert set(Setting.objects.filter(created_by__isnull=True).values_list("effective_from", flat=True)) == {first}
+        assert set(StaffMember.objects.values_list("started_on", flat=True)) == {first}
+        assert set(PayRate.objects.values_list("effective_from", flat=True)) == {first}
+        taps = list(AttendanceEvent.objects.order_by("client_time"))
+        assert taps[0].client_time.astimezone(zone).date() == first
+        assert {tap.last_server_time for tap in taps} == {datetime(2026, 12, 1, 6, 50, tzinfo=zone)}
+        assert MealMoney.objects.order_by("date").values_list("date", flat=True)[0] == first
 
 
 def test_seed_demo_sets_its_fines_and_switches_attendance_on(three_weeks: None) -> None:
