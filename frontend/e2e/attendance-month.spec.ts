@@ -1,5 +1,5 @@
 // attendance-month.spec.ts — the month's attendance on the demo, end to end (DATA-8, ATT-5): Meneja opens Mahudhurio
-// ya mwezi on his phone and sees the demo's weeks, a line per worker paid by the day, and Asha's day to decide at the
+// ya mwezi on his phone and sees the demo's days, a line per worker paid by the day, and Asha's day to decide at the
 // top. The card's last Done when: through the real server, the demo seed's taps (sent by its laptop
 // through the push), worked out by the book of days (ATT-10), and the month's route (ATT-5).
 //
@@ -13,10 +13,11 @@
 // runs on, nor its zone: the page's words decide.
 //
 // The tests share one database (the-shop.ts). Others clock Asha in today, which no month counts until it is over, and
-// none moves a day of the seed's weeks: the seed's people stay as made on the demo (demo.people_fixed). But
+// none before it moves a day of the seed's: the seed's people stay as made on the demo (demo.people_fixed). But
 // attendance-worker.spec.ts decides Asha's day with no Toka (ATT-6), and a decision is never taken back: it runs after
 // this file, as files run in their names' order, one at a time (playwright.config.ts). A new spec that reads the days
-// to decide must run before it too.
+// to decide as the seed made them must run before it too; whole-month.spec.ts, later, decides whatever of last month
+// still waits, however many, and crosses out a Toka of its own first.
 import sw from "../messages/sw.json";
 
 import {

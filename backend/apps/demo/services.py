@@ -40,9 +40,10 @@ ya chakula how each day's is split, and can type today's: 3,000 on each working 
 calls Haijaandikwa. What a visitor types takes no note, and crossing out one takes the ready reason, as typed words
 would show to every visitor after them (record_meal_money, void_meal_money).
 
-And two advances of those days (WAGE-8), typed by Meneja, who holds their key, money.advance, as every manager does:
-Asha's and Baraka's, which Advansi lists and their pay takes off, and one of which a visitor can cross out, with the
-ready reason, as for the meal money (record_advance, void_advance).
+And three advances of those days (WAGE-8, DATA-2), typed by Meneja, who holds their key, money.advance, as every
+manager does: two of the newest days, Asha's and Baraka's, and one of last month's, Asha's, which Advansi lists and
+their pay takes off, and any of which a visitor can cross out, with the ready reason, as for the meal money
+(record_advance, void_advance).
 
 And Meneja holds pay.approve (WAGE-3), the owner's own key to Idhinisha: a visitor adds a worker with a daily pay, marks
 them left once a day of theirs is over, and approves their pay alone, on their own page; or approves last month for

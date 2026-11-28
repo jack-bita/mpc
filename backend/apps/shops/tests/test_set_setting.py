@@ -5,7 +5,7 @@ from 1 December. The service checks what Setting.clean() holds (a known key, a v
 rule), which `objects.create` would skip, and two rules of its own, both Jack's (15 Nov 2026):
 - a value starts on the shop's today or later, never before: an earlier day would change what past days answer, and a
   draft pay run with them. One exception: the demo's seed, by name (`as_the_demo_seed`), on the demo alone, as it makes
-  a new shop each morning, with no day worked out yet, and starts its rules three weeks back (DATA-8);
+  a new shop each morning, with no day worked out yet, and starts its rules on the 1st of last month (DATA-2);
 - a side's rule (the two tolerances, the expiry alert, blocking stock below zero) is set one side at a time, with no
   row for the whole shop, so a side's old row can never hide a newer shop value (CORE-4: a side's row beats it).
 A third, the attendance day's times kept in order, has its own file (test_day_in_order.py, ATT-2).
@@ -208,9 +208,10 @@ def test_the_system_sets_a_value_from_today_on_the_demo(shop_a: Shop, settings: 
 
 
 def test_the_demo_seed_starts_a_rule_on_a_past_day(shop_a: Shop, settings: Settings) -> None:
-    # The demo's seed starts its rules three weeks back, so the month page has days to show (DATA-8): attendance on,
-    # and its fines, from 30 Oct when the seed runs on 20 Nov. It makes a new shop each morning, where no day has been
-    # worked out yet, so nothing a past day answered changes. The day is saved as given, and answers from then on.
+    # The demo's seed starts its rules on a day gone by, so the month page has days to show (DATA-8): attendance on,
+    # and its fines, from 30 Oct when DATA-8's seed ran on 20 Nov, and from the 1st of last month since DATA-2. It
+    # makes a new shop each morning, where no day has been worked out yet, so nothing a past day answered changes. The
+    # day is saved as given, and answers from then on.
     settings.DEMO_SEED = True
     three_weeks_back = shop_today(shop_a) - timedelta(days=21)
     with shop_context(shop_a):

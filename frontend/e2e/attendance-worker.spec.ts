@@ -10,14 +10,14 @@
 // attendance-month.spec.ts does, so it never reads the clock of the machine it runs on.
 //
 // The tests share one database (the-shop.ts). Others clock Asha in today, which shows on today's square, not on the
-// day to decide; none moves a day of the seed's weeks (demo.people_fixed).
+// day to decide; none before it moves a day of the seed's (demo.people_fixed).
 //
 // The second test decides that day (ATT-6): Meneja opens it, taps Amua siku hii, picks Siku kamili and one of the demo's
 // ready reasons in the sheet, and the day shows his decision beside what the system said, and leaves Zinahitaji
 // uamuzi. A decision is never taken back, so it runs last of the tests that read Asha's day to decide: after
 // attendance-month.spec.ts, as the tests run one at a time, file by file in their names' order (playwright.config.ts),
-// and after the test above, in this file's order. Of the later files, only pay.spec.ts reads the month, and asks nothing
-// of a day to decide.
+// and after the test above, in this file's order. Of the later files, pay.spec.ts reads the month and asks nothing of a
+// day to decide, and whole-month.spec.ts decides whatever of last month still waits, however many.
 //
 // The third fixes the taps of another of Asha's days to decide, her third latest, out at 15:00 (ATT-13): Meneja crosses
 // out the 15:00 Toka in its sheet, as tapped by mistake, adds Toka 18:45, as she left after closing, and the day is a

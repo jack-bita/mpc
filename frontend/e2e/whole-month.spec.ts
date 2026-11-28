@@ -14,7 +14,9 @@
 // It runs last of the tests that touch last month, by its name, as the tests run one at a time, file by file in their
 // names' order (playwright.config.ts): an approved month takes no change, so a test after it that decided, typed or
 // crossed out anything of it would fail. Only workers.spec.ts runs after it, which reads no month. An approval is never
-// taken back: the demo's next reset makes the month open again.
+// taken back: the demo's next reset makes the month open again. A run that starts its container before midnight in
+// Arusha on a month's last day and reaches this test after it meets a month whose 1st the seed never held, which waits
+// on the one before (pay_run.earlier_month_open), as every test of the days would: rare, and run again.
 import type { Page } from "@playwright/test";
 
 import sw from "../messages/sw.json";

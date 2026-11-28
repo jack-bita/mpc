@@ -950,9 +950,10 @@ def test_seed_demo_numbers_every_record_once(three_weeks: None) -> None:
 
 
 def test_seed_demo_gives_three_weeks_of_taps(three_weeks: None) -> None:
-    # The card's first box (DATA-8): the 21 days before today, worked out by the book (ATT-10), give each of the demo's
-    # people the days the card names, wherever today falls. 21 days hold three Sundays, off, so 18 working days each:
-    # Asha late twice, a half day and a day to decide; Baraka late once and absent once; Meneja late once.
+    # The card's first box (DATA-8): the newest three weeks, the test's span (three_weeks), worked out by the book
+    # (ATT-10), give each of the demo's people the days the card names, wherever today falls. 21 days hold three
+    # Sundays, off, so 18 working days each: Asha late twice, a half day and a day to decide; Baraka late once and
+    # absent once; Meneja late once.
     seed_demo(fresh=True)
 
     shop = the_demo_shop()
