@@ -667,9 +667,9 @@ class PaymentLineSerializer(serializers.Serializer[Any]):
 
 
 class KeptLineSerializer(serializers.Serializer[Any]):
-    # One line of an approved payslip as it was kept (KeptLine, WAGE-5), for the papers: the printed payslip and the
-    # Excel file, which list each advance with its day and each correction with its reason. The amounts are strings
-    # (rule 3); the papers add nothing up.
+    # One line of an approved payslip as it was kept (KeptLine, WAGE-5), for the printed payslip, which lists each
+    # advance with its day and each correction with its reason; the Excel file reads the line's sums (pay) instead, a
+    # column each. The amounts are strings (rule 3); the papers add nothing up.
     kind = serializers.ChoiceField(choices=PayslipLineKind.choices)
     days = serializers.IntegerField(allow_null=True, help_text="The days it counts, on full, half, fines and meals.")
     each = serializers.DecimalField(
