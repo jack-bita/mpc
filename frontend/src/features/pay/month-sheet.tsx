@@ -1,5 +1,6 @@
-// month-sheet.tsx — the month's sheet (WAGE-5): every payment of an approved month on one A4 page, each with its proof,
-// for NSSF and the owner's file, as Jack pictured it (28 Nov 2026):
+// month-sheet.tsx — the month's sheet (WAGE-5): every payment of an approved month on A4, a page, or more for a long
+// month, its headings again on each, each payment with its proof, for NSSF and the owner's file, as Jack pictured it
+// (28 Nov 2026):
 //
 //   MPC · Mabatini Pumba Center
 //   Mishahara ya Novemba 2026
@@ -108,6 +109,7 @@ function TheSheet({
   shop: { code: string; name: string; timezone: string };
 }) {
   const t = useTranslations("pay.sheet");
+  const payWords = useTranslations("pay");
   const monthTitle = useMonthTitle();
   // Each column's heading, in the order Jack drew them; the pen's last, as it is filled last, by hand.
   const columns = [
@@ -132,6 +134,8 @@ function TheSheet({
         {/* Wider than a phone: on the screen it scrolls sideways, on paper it fits the A4 page. */}
         <div className="overflow-x-auto print:overflow-visible">
           <table className="w-full border-collapse text-sm">
+            {/* The table's name, for a screen reader, as Mishahara's list has: "Malipo ya kila mfanyakazi". */}
+            <caption className="sr-only">{payWords("workersLabel")}</caption>
             <thead>
               <tr>
                 {columns.map((heading) => (
@@ -206,7 +210,10 @@ function SheetRow({
   return (
     <tr className="break-inside-avoid">
       <td className={`${cell} tabular-nums`}>{number}</td>
-      <td className={cell}>{worker.display_name}</td>
+      {/* The row's name: a screen reader says whose each cell is. */}
+      <th scope="row" className={`${cell} text-left font-normal`}>
+        {worker.display_name}
+      </th>
       <td className={`${cell} text-right tabular-nums`}>
         {formatAmount(new Decimal(amount))}
       </td>

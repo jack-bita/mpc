@@ -95,7 +95,7 @@ async function rows(): Promise<string[][]> {
   return within(table)
     .getAllByRole("row")
     .slice(1)
-    .map((row) => [...row.querySelectorAll("td")].map(wordsOf));
+    .map((row) => [...row.querySelectorAll("th, td")].map(wordsOf));
 }
 
 beforeEach(() => {
@@ -157,6 +157,18 @@ describe("the month's sheet", () => {
     expect(screen.getByText("Sahihi ya aliyelipa:")).toBeDefined();
     // The shop's name on top, alone, as its code is the same.
     expect(screen.getByText("MPC")).toBeDefined();
+  });
+
+  it("names its table and each row by its worker, for a screen reader", async () => {
+    theShopPays(NOVEMBER);
+    render(<MonthSheetScreen asked="2026-11" />);
+
+    expect(
+      await screen.findByRole("table", { name: "Malipo ya kila mfanyakazi" }),
+    ).toBeDefined();
+    expect(
+      screen.getAllByRole("rowheader").map((name) => name.textContent),
+    ).toEqual(["Asha", "Baraka", "Juma", "Neema"]);
   });
 
   it("names the shop by its code and its name, when they differ", async () => {
