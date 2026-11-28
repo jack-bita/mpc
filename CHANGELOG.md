@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.3.0](https://github.com/jack-bita/mpc/compare/v0.2.0...v0.3.0) (2026-11-28)
+
+
+### Features
+
+* **control:** tofauti, the flags' review pages ([#351](https://github.com/jack-bita/mpc/issues/351)) ([72931e4](https://github.com/jack-bita/mpc/commit/72931e4e73bd2829e1f7649fb504cd6e055ae8d9))
+* **data:** the demo holds a whole month gone by, from the 1st of last month ([#379](https://github.com/jack-bita/mpc/issues/379)) ([6f7ead9](https://github.com/jack-bita/mpc/commit/6f7ead9c078aee5d7fbd8897c2b1322e18fe1904))
+* **data:** the demo starts with three weeks of clock-ins from its own laptop ([#322](https://github.com/jack-bita/mpc/issues/322)) ([1c4b11f](https://github.com/jack-bita/mpc/commit/1c4b11ff739e409ca42fcee1a7d607a81693d183))
+* **frontend:** a worker's long forms open on pages of their own ([#338](https://github.com/jack-bita/mpc/issues/338)) ([ce938ec](https://github.com/jack-bita/mpc/commit/ce938ecb05fd6e528aea1f13e4a736d156ac1d71))
+* **frontend:** a worker's short forms open in sheets, and the page in headed cards ([#335](https://github.com/jack-bita/mpc/issues/335)) ([70d09a3](https://github.com/jack-bita/mpc/commit/70d09a382f6afbbd7c58d9719a9054016c5bc285))
+* **frontend:** give and take away roles and keys on a worker's page ([#303](https://github.com/jack-bita/mpc/issues/303)) ([e239795](https://github.com/jack-bita/mpc/commit/e2397958c1f53eb08400a60e8ec723da73029082))
+* **frontend:** set a worker's pin and temporary password on their page ([#312](https://github.com/jack-bita/mpc/issues/312)) ([a9d8cd5](https://github.com/jack-bita/mpc/commit/a9d8cd51a8318156a50fddc8a565b118f702a4ce))
+* **frontend:** tabs look like buttons, the open one filled green ([#267](https://github.com/jack-bita/mpc/issues/267)) ([0439c0a](https://github.com/jack-bita/mpc/commit/0439c0a0ed9c71bc6e075bea1a83d1384a3d3ac4))
+* **frontend:** the demo's manager logs in from his tile, and every page has a back arrow ([#279](https://github.com/jack-bita/mpc/issues/279)) ([11d9970](https://github.com/jack-bita/mpc/commit/11d9970b0645b723a108ed64f66357f4c89719e8))
+* **frontend:** the workers' page: list, add, each worker's page, suspend, bring back, mark left ([#274](https://github.com/jack-bita/mpc/issues/274)) ([b3437e7](https://github.com/jack-bita/mpc/commit/b3437e79ed8b49feefe2a1b05e8ca715eec9a064))
+* **people:** a worker who left is hired again as the same person, from his page or by his phone ([#285](https://github.com/jack-bita/mpc/issues/285)) ([0072293](https://github.com/jack-bita/mpc/commit/0072293675c29853e6e810c3155e3cee7086d6ce))
+* **people:** a worker's photo, set on their page in the office ([#345](https://github.com/jack-bita/mpc/issues/345)) ([698c522](https://github.com/jack-bita/mpc/commit/698c5221690719df5c99040164733933df5f69e5))
+* **people:** fix a worker's details on their page, with who, when and why ([#282](https://github.com/jack-bita/mpc/issues/282)) ([a024eb4](https://github.com/jack-bita/mpc/commit/a024eb4b040710a0d494bc0a0f1b0e183413fe5f))
+* **people:** give and take away roles and keys from the office ([#291](https://github.com/jack-bita/mpc/issues/291)) ([f9c297a](https://github.com/jack-bita/mpc/commit/f9c297a55bef12399b1a3637142783d10622fe90))
+* **people:** open a shop and set up its owner from the server ([#302](https://github.com/jack-bita/mpc/issues/302)) ([63e5487](https://github.com/jack-bita/mpc/commit/63e54873e2163b8c20dfcf03307efa805e1f4f06))
+* **people:** the shop's workers: list, add, suspend, bring back, mark left ([#270](https://github.com/jack-bita/mpc/issues/270)) ([e7fa1c6](https://github.com/jack-bita/mpc/commit/e7fa1c66638c7ad700e94e2a8d7144380a1435f6))
+* **staffpay:** a manager adds a forgotten tap or crosses out a wrong one ([#332](https://github.com/jack-bita/mpc/issues/332)) ([3eae363](https://github.com/jack-bita/mpc/commit/3eae36378461692b9686a2791b997fd7a51f710f))
+* **staffpay:** a manager decides a worker's day in a sheet ([#329](https://github.com/jack-bita/mpc/issues/329)) ([f89f5e5](https://github.com/jack-bita/mpc/commit/f89f5e529d852aed03746e86a58640a40fc41d90))
+* **staffpay:** a month's pay approved and locked ([#363](https://github.com/jack-bita/mpc/issues/363)) ([ade49fa](https://github.com/jack-bita/mpc/commit/ade49fa971994892b528dea0307c0dbabd708e65))
+* **staffpay:** a pay mistake put right in a later month, and a late tap said ([#369](https://github.com/jack-bita/mpc/issues/369)) ([4fe7146](https://github.com/jack-bita/mpc/commit/4fe7146429fd788a0bd5ba03e25851e098be9441))
+* **staffpay:** a tap in doubt sends its day to review ([#310](https://github.com/jack-bita/mpc/issues/310)) ([44f607a](https://github.com/jack-bita/mpc/commit/44f607afae7e9292315274cf680f36efb6210260))
+* **staffpay:** a worker's day from their taps and the owner's rules ([#300](https://github.com/jack-bita/mpc/issues/300)) ([0b78cd2](https://github.com/jack-bita/mpc/commit/0b78cd2587c08ee8ec6099148d52f69f9b0ed9c7))
+* **staffpay:** a worker's month as a calendar, and each day's taps and photos ([#325](https://github.com/jack-bita/mpc/issues/325)) ([4392ef7](https://github.com/jack-bita/mpc/commit/4392ef7083708e91c2b3409a8af1d2010d436402))
+* **staffpay:** advansi, money given before payday and taken off the pay ([#360](https://github.com/jack-bita/mpc/issues/360)) ([c287e6a](https://github.com/jack-bita/mpc/commit/c287e6a704ca0a9078c959d5e7a08935d3086842))
+* **staffpay:** each worker's daily pay rate, set on their page ([#316](https://github.com/jack-bita/mpc/issues/316)) ([8d61dfd](https://github.com/jack-bita/mpc/commit/8d61dfd9b5b3a5eafd4abe63468444edfc299b28))
+* **staffpay:** every clock-in carries the worker's photo, and a camera that can't never stops it ([#290](https://github.com/jack-bita/mpc/issues/290)) ([07c69b0](https://github.com/jack-bita/mpc/commit/07c69b0ad1e8539d1c32c73cd0ca5192183e15c6))
+* **staffpay:** hela ya chakula, the day's meal money and each worker's share ([#354](https://github.com/jack-bita/mpc/issues/354)) ([c568458](https://github.com/jack-bita/mpc/commit/c5684582022aaea3a6457236b6db648be54dbfec))
+* **staffpay:** mishahara, the month's pay worked out day by day ([#357](https://github.com/jack-bita/mpc/issues/357)) ([b644d7a](https://github.com/jack-bita/mpc/commit/b644d7a297eeb9d0d18780665c1ef0d7a10a62f6))
+* **staffpay:** pay handed out, signed on the screen ([#366](https://github.com/jack-bita/mpc/issues/366)) ([fcad45a](https://github.com/jack-bita/mpc/commit/fcad45af4f016e1c9590ef473f53b51accd90be4))
+* **staffpay:** siku na malipo yangu, a worker's own days and pay ([#372](https://github.com/jack-bita/mpc/issues/372)) ([aa077ca](https://github.com/jack-bita/mpc/commit/aa077ca3ff2e5cab0dfb35423991daed59309104))
+* **staffpay:** the book of days keeps each worker's day ([#307](https://github.com/jack-bita/mpc/issues/307)) ([0b86c8e](https://github.com/jack-bita/mpc/commit/0b86c8e422173744474da6924ab62e5f7a3f388d))
+* **staffpay:** the month's attendance on one page, with the days to decide ([#319](https://github.com/jack-bita/mpc/issues/319)) ([daeb211](https://github.com/jack-bita/mpc/commit/daeb2114dd4335c33f2927aafc80b34babbee9d0))
+* **staffpay:** the month's pay on paper and in excel ([#375](https://github.com/jack-bita/mpc/issues/375)) ([15f66b6](https://github.com/jack-bita/mpc/commit/15f66b67bcad54c6d91b63f2b6f61c1a44c50bee))
+* **sync:** workers' faces on the PIN tiles, from the laptop's own copy ([#348](https://github.com/jack-bita/mpc/issues/348)) ([46ab32b](https://github.com/jack-bita/mpc/commit/46ab32b9791c9c8e2f1205d437e8b0448be0e690))
+
+
+### Bug Fixes
+
+* **demo:** the seed remakes a morning demo that misses a person's key ([#276](https://github.com/jack-bita/mpc/issues/276)) ([4ec0172](https://github.com/jack-bita/mpc/commit/4ec01723907364f277318d786bdb0a96f3835022))
+
 ## [0.2.0](https://github.com/jack-bita/mpc/compare/v0.1.0...v0.2.0) (2026-11-17)
 
 
