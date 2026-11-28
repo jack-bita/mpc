@@ -335,6 +335,31 @@ describe("the printed payslips", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 
+  it("keeps a reason typed as an object's own word as it was typed", async () => {
+    // "constructor" is a name every object has: the ready reasons' lookup took it for one of theirs, and the page broke.
+    const typed = {
+      ...NEEMA,
+      kept_lines: [
+        kept("full", "24000.00", { days: 3, each: "8000.00" }),
+        kept("correction", "9000.00", { note: "constructor" }),
+      ],
+      total: "33000.00",
+    };
+    theShopPays(
+      payMonth([typed], {
+        total: "33000.00",
+        approval: APPROVED,
+        still_to_pay: "33000.00",
+      }),
+    );
+    render(<PrintedPayslipsScreen asked="2026-11" staff={null} />);
+
+    const [slip] = await payslips();
+    expect(
+      within(slip as HTMLElement).getByText("Marekebisho: constructor"),
+    ).toBeDefined();
+  });
+
   it("has nothing to print of a month still open, nor of a worker with no payslip", async () => {
     theShopPays(payMonth([ASHA_DRAFT], { total: "152000.00" }));
     const { unmount } = render(
