@@ -50,6 +50,18 @@ export function words(
   );
 }
 
+/** A regular expression's text that matches `text` as it is, its dots and brackets too. */
+export function exactly(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** A sentence of the book with each {name} matching `pattern`, as a page fills it with words a test can't know:
+ * "Idhinisha {month}" with "\\S+ \\d{4}" → /^Idhinisha \S+ \d{4}$/. */
+export function shaped(sentence: string, pattern: string): RegExp {
+  const parts = sentence.split(/\{\w+\}/).map(exactly);
+  return new RegExp(`^${parts.join(pattern)}$`);
+}
+
 /** `count` days after `day`, both as a date box writes them: "2026-11-15", 2 → "2026-11-17". Days only, in UTC, so no
  * zone moves it. */
 export function daysAfter(day: string, count: number): string {

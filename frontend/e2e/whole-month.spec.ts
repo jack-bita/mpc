@@ -22,9 +22,11 @@ import type { Page } from "@playwright/test";
 import sw from "../messages/sw.json";
 
 import {
+  exactly,
   expect,
   MANAGER_EMAIL,
   MANAGER_PASSWORD,
+  shaped,
   test,
   words,
 } from "./the-shop";
@@ -33,17 +35,6 @@ const APPROVAL = sw.pay.approval;
 const MONTH = sw.attendanceMonth;
 const PAY = sw.pay;
 const WORKER = sw.attendanceWorker;
-
-/** A regular expression that matches `text` as it is, its dots and brackets too. */
-function exactly(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** A sentence of the book with each {name} matching `pattern`: "Idhinisha {month}" → /^Idhinisha \S+ \d{4}$/. */
-function shaped(sentence: string, pattern: string): RegExp {
-  const parts = sentence.split(/\{\w+\}/).map(exactly);
-  return new RegExp(`^${parts.join(pattern)}$`);
-}
 
 /** Both forms of a plural sentence of the book, "{count, plural, one {…} other {…}}", as the screen shows one of them. */
 function eitherForm(sentence: string): RegExp {
