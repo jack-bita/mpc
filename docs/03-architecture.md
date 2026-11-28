@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.115 · 28 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.116 · 28 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.116** (28 Nov 2026, WAGE-5 built): §5.15 names the paper's parts, the library that writes the Excel file and that it is loaded only at the tap; the code map names the two pages and the papers in `features/pay/` (04 v1.222). Marked **(v1.116)**.
 
 **Changes in v1.115** (28 Nov 2026, WAGE-5): §5.15, an approved month's pay prints on A4 from the browser, and its Excel file is made in the browser too, as its words live with the screens' (ADR-0040), with no background job (04 v1.221). Marked **(v1.115)**.
 
@@ -659,7 +661,7 @@ The Foods cashier's queue and notifications must update within seconds. Start wi
 
 - The **daily report** is the drawer session's `report_snapshot`, frozen at approval. **"Send to boss"** builds the text on the device and opens WhatsApp with it (`wa.me` link) — no WhatsApp API, no cost.
 - **Excel exports** run as background jobs when big; download links expire.
-- **A month's pay** **(v1.115)**, once approved (WAGE-5): the month's sheet and every payslip print on A4 from the browser, as office pages that read the month's pay answer, each line as kept; `@page` has no margin, so Chrome prints no header or footer of its own, as SPIKE-2 saw. Its Excel file is made in the browser too, not on the server, as its words live in `sw.json` and `en.json` with the screens' (ADR-0040): a few dozen rows, so no background job and no download link. The money becomes a number only in the file's cells, in whole shillings.
+- **A month's pay** **(v1.115)**, once approved (WAGE-5): the month's sheet and every payslip print on A4 from the browser, as office pages that read the month's pay answer, each line as kept; `@page` has no margin, so Chrome prints no header or footer of its own, as SPIKE-2 saw. Its Excel file is made in the browser too, not on the server, as its words live in `sw.json` and `en.json` with the screens' (ADR-0040): a few dozen rows, so no background job and no download link. The money becomes a number only in the file's cells, in whole shillings. Built **(v1.116)**: both papers are a `Paper` of `PaperSheet`s (`features/pay/paper.tsx`), whose *Chapisha* waits for every signature to come or fail, as they load one by one from the attachments' route; the app frame's bar never prints (`print:hidden`). The file is written by `write-excel-file` (MIT, one helper, `fflate`), loaded by `import()` at the tap, so it is a file of its own that no page carries until then (`pay-excel.ts`).
 - **Full shop export** (a zip of JSON and CSV) for the owner: the shop owns its data.
 
 ### 5.16 Audit
@@ -836,6 +838,7 @@ frontend/src/
 │   │            office/: the office's home page, a button for each screen (v1.34)
 │   │            my-settings/: Mipangilio yangu, a person's own language and font, for everyone (v1.35)
 │   │            my-days-and-pay/: Siku na malipo yangu, a person's own days and pay, for everyone (v1.113)
+│   │            pay/sheet/ and pay/payslips/: an approved month's papers, printed on A4 from the browser (v1.116)
 │   │            each area's layout.tsx puts its screens in AppFrame; the office one adds the offline banner (v1.30),
 │   │            through features/office/office-frame.tsx: who is here, Toka, the way in, the idle lock (v1.34)
 │   ├── print/slip/  print/receipt/      print-only pages
@@ -848,7 +851,7 @@ frontend/src/
 │                             office's frame and home page) (v1.34); settings/ (Mipangilio ya duka: the shop's rules, their
 │                             form and history, the shop's closed days (v1.68), and the sides' switches, each behind its tab (v1.73)) (v1.62);
 │                             meals/ (Hela ya chakula: the days, one day's page, and their sheets) (v1.101); pay/ (Mishahara: everyone's
-│                             month, one worker's pay, and its lines, which a worker's page shows too (v1.103), and the two approvals' sheets (v1.107)); advances/
+│                             month, one worker's pay, and its lines, which a worker's page shows too (v1.103), and the two approvals' sheets (v1.107), and an approved month's papers: its sheet, its payslips and its Excel file (v1.116)); advances/
 │                             (Advansi: the month, one's page, and their sheets) (v1.105); mine/ (Siku na malipo yangu: a worker's own month and
 │                             pay, and a day's sheet) (v1.113)
 ├── offline/                  db.ts (schema + versions), outbox.ts, push.ts, pull.ts,
