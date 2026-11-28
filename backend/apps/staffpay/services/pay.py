@@ -128,7 +128,7 @@ class KeptLine:
     # on the lines that have them; the day of an advance, or the month of a debt, as its first day; the amount, plus
     # or minus; and a correction's reason, empty on every other line. What its kind doesn't hold is None, as the
     # table's rule holds it (staffpay_payslipline_fits_its_kind).
-    kind: str
+    kind: PayslipLineKind
     days: int | None
     each: Decimal | None
     date: dt.date | None
@@ -758,7 +758,8 @@ def _line_of(slip: Payslip, lines: list[PayslipLine], payments: tuple[PaymentLin
         # rounded again, so the paper says what the payslip says.
         kept_lines=tuple(
             KeptLine(
-                kind=line.kind,
+                # The column holds the list's value, a plain string: its own kind again, so a reader can't mistake it.
+                kind=PayslipLineKind(line.kind),
                 days=line.days,
                 each=line.each,
                 date=line.date,

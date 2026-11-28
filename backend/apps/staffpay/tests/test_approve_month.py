@@ -43,6 +43,7 @@ from apps.staffpay.models import (
     PayRun,
     Payslip,
     PayslipLine,
+    PayslipLineKind,
 )
 from apps.staffpay.services import (
     Approval,
@@ -345,11 +346,13 @@ def test_an_approved_payslip_answers_each_of_its_lines_as_kept(
     kept = line_of(month(shop_a, DECEMBER), "Asha")
     # Each as KeptLine(kind, days, each, date, amount, note).
     assert kept.kept_lines == (
-        KeptLine("full", 3, Decimal("10000.00"), None, Decimal("30000.00"), ""),
-        KeptLine("advance", None, None, dt.date(2026, 12, 2), Decimal("-1000.00"), ""),
-        KeptLine("advance", None, None, dt.date(2026, 12, 3), Decimal("-3000.00"), ""),
-        KeptLine("carried", None, None, NOVEMBER, Decimal("-18000.00"), ""),
-        KeptLine("correction", None, None, None, Decimal("9000.00"), "Novemba: siku ya 17/11 haikuhesabiwa"),
+        KeptLine(PayslipLineKind.FULL, 3, Decimal("10000.00"), None, Decimal("30000.00"), ""),
+        KeptLine(PayslipLineKind.ADVANCE, None, None, dt.date(2026, 12, 2), Decimal("-1000.00"), ""),
+        KeptLine(PayslipLineKind.ADVANCE, None, None, dt.date(2026, 12, 3), Decimal("-3000.00"), ""),
+        KeptLine(PayslipLineKind.CARRIED, None, None, NOVEMBER, Decimal("-18000.00"), ""),
+        KeptLine(
+            PayslipLineKind.CORRECTION, None, None, None, Decimal("9000.00"), "Novemba: siku ya 17/11 haikuhesabiwa"
+        ),
     )
     assert sum((line.amount for line in kept.kept_lines), NOTHING) == kept.total == Decimal("17000.00")
     # Her own pay page answers the very same lines as Mishahara.
