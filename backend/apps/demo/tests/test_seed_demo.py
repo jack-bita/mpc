@@ -66,6 +66,7 @@ from apps.people.services import add_worker, end_permission, mark_left, suspend
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, Side
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
+from apps.staffpay.calculations import PaidAs
 from apps.staffpay.models import (
     Advance,
     AttendanceEvent,
@@ -299,20 +300,22 @@ def test_seed_demo_is_repeatable(from_last_month: None) -> None:
     today = shop_today(the_demo_shop())
     working = working_days_from(first_of_last_month(today), today)
     # The taps, the same in both builds above (DATA-8), and as many as the card's days give: two a working day, but
-    # none on Baraka's absent day and no Toka on Asha's day to decide.
+    # none on Baraka's two absent days, the newest's and last month's own (DATA-2), and no Toka on Asha's day to decide.
     taps = first.pop("taps")
     assert Counter(name for name, _kind, _at in taps) == {
         "Asha": 2 * working - 1,
-        "Baraka": 2 * working - 2,
+        "Baraka": 2 * working - 4,
         "Meneja": 2 * working,
     }
     # The meal money of those working days but one, 3,000 a day, typed by Meneja (WAGE-7).
     meals = first.pop("meals")
     assert len(meals) == len({day for day, _amount, _by in meals}) == working - 1
     assert {(str(amount), by) for _day, amount, by in meals} == {("3000.00", "Meneja")}
-    # The two advances, typed by Meneja, with no note, as none is kept on the demo (WAGE-8).
+    # The three advances, typed by Meneja, with no note, as none is kept on the demo (WAGE-8): last month's own of
+    # Asha's first (DATA-2), then the two newest.
     advances = first.pop("advances")
     assert [(name, str(amount), by, note) for name, _day, amount, by, note in advances] == [
+        ("Asha", "15000.00", "Meneja", ""),
         ("Asha", "20000.00", "Meneja", ""),
         ("Baraka", "30000.00", "Meneja", ""),
     ]
@@ -964,6 +967,99 @@ def test_seed_demo_gives_three_weeks_of_taps(three_weeks: None) -> None:
     ]
 
 
+def test_seed_demo_last_month_has_its_own_days(from_last_month: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # DATA-2's second box (Jack: A): last month is like a real one, so its payslips show every kind of line. On 28
+    # November 2026, October's 27 working days, counted from its 1st, a Thursday: Meneja late on Friday 2/10; Asha late
+    # on Saturday 3/10, her advance on Tuesday 6/10, her half day on Wednesday 7/10; Baraka absent on Monday 5/10 and
+    # late after 08:00 on Thursday 8/10. Every other working day on time, the four Sundays off, none to decide.
+    stop_the_clock(monkeypatch, datetime(2026, 11, 28, 6, 0, tzinfo=UTC))
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    october = date(2026, 10, 1)
+    with shop_context(shop):
+        days = work_out_days(shop, october, date(2026, 10, 31))
+        pay = {worker.display_name: worker for worker in pay_month(shop, october).workers}
+    kinds = {name: Counter(day.status for day in days if day.staff.display_name == name) for name in pay}
+    assert kinds == {
+        "Asha": {DayStatus.ON_TIME: 25, DayStatus.LATE: 1, DayStatus.HALF: 1, DayStatus.OFF: 4},
+        "Baraka": {DayStatus.ON_TIME: 25, DayStatus.LATE: 1, DayStatus.ABSENT: 1, DayStatus.OFF: 4},
+        "Meneja": {DayStatus.ON_TIME: 26, DayStatus.LATE: 1, DayStatus.OFF: 4},
+    }
+    odd = sorted(
+        (day.date, day.staff.display_name, day.status, day.fine)
+        for day in days
+        if day.status not in (DayStatus.ON_TIME, DayStatus.OFF)
+    )
+    assert odd == [
+        (date(2026, 10, 2), "Meneja", DayStatus.LATE, Decimal("500")),
+        (date(2026, 10, 3), "Asha", DayStatus.LATE, Decimal("500")),
+        (date(2026, 10, 5), "Baraka", DayStatus.ABSENT, Decimal("0")),
+        (date(2026, 10, 7), "Asha", DayStatus.HALF, Decimal("0")),
+        (date(2026, 10, 8), "Baraka", DayStatus.LATE, Decimal("1500")),
+    ]
+
+    def lines(name: str) -> tuple[Any, ...]:
+        # A worker's pay as Mishahara lists it: the days, full then half; the fines; the meals; the advances; the total.
+        worker = pay[name].pay
+        days_paid = [(line.paid_as, line.days, line.each, line.amount) for line in worker.lines]
+        return (days_paid, worker.fined_days, worker.fines, worker.meal_days, worker.meals, worker.advances)
+
+    # The meal money, 3,000 a day, handed out each day and taken off the month's pay (WAGE-7): 1,000 each, but 1,500 to
+    # each of the two who came on Baraka's absent day; Asha's half day shares it.
+    assert lines("Asha") == (
+        [(PaidAs.FULL, 26, Decimal("10000"), Decimal("260000")), (PaidAs.HALF, 1, Decimal("5000"), Decimal("5000"))],
+        1,
+        Decimal("500"),
+        27,
+        Decimal("27500"),
+        Decimal("15000"),
+    )
+    assert lines("Baraka") == (
+        [(PaidAs.FULL, 26, Decimal("10000"), Decimal("260000"))],
+        1,
+        Decimal("1500"),
+        26,
+        Decimal("26000"),
+        Decimal("0"),
+    )
+    assert lines("Meneja") == (
+        [(PaidAs.FULL, 27, Decimal("15000"), Decimal("405000"))],
+        1,
+        Decimal("500"),
+        27,
+        Decimal("27500"),
+        Decimal("0"),
+    )
+    # The days less the fines, the meals and the advances: 260,000 + 5,000 − 500 − 27,500 − 15,000;
+    # 260,000 − 1,500 − 26,000; 405,000 − 500 − 27,500.
+    assert {name: worker.total for name, worker in pay.items()} == {
+        "Asha": Decimal("222000"),
+        "Baraka": Decimal("232500"),
+        "Meneja": Decimal("377000"),
+    }
+
+
+def test_seed_demo_odd_days_never_meet(from_last_month: None) -> None:
+    # A newest odd day counts back from yesterday (OddDay.back), last month's own forward from its 1st
+    # (LastMonthDay.place, DATA-2): on a month's first days both fall in last month, and two on one day would leave one
+    # unseen, a fine or an absence lost with no test the wiser. Nor may last month's own fall on the forgotten meal
+    # money, which all three share on the meal page (meal-money.spec.ts), or on a newest advance. From the dates
+    # alone, on every day of three years: a month holds at least 24 working days, and every place is among them.
+    for place in [odd.place for person in services.PEOPLE for odd in person.last_month_days]:
+        assert 1 <= place <= 24
+    for n in range(3 * 366):
+        today = date(2026, 1, 1) + timedelta(days=n)
+        back = services._working_days_back(today)
+        last_month = services._last_months_days(today)
+        assert len(last_month) >= 24, today
+        newest = {back[odd.back - 1] for person in services.PEOPLE for odd in person.odd_days}
+        newest |= {back[services.FORGOTTEN_MEALS_BACK - 1]} | {back[place - 1] for _, place, _ in services.ADVANCES}
+        own = {last_month[odd.place - 1] for person in services.PEOPLE for odd in person.last_month_days}
+        own |= {last_month[place - 1] for _, place, _ in services.LAST_MONTH_ADVANCES}
+        assert not newest & own, today
+
+
 def test_seed_demo_fills_the_month_page(from_last_month: None) -> None:
     # The card's first box, as the month page reads it (attendance_month, ATT-5), not only the book: the demo's days,
     # from the 1st of last month (DATA-2), fall in two months, and over them each of the three people is listed, by
@@ -988,10 +1084,12 @@ def test_seed_demo_fills_the_month_page(from_last_month: None) -> None:
         for name in listed
     }
     # ✓ Ch ½ H !, as the page shows them.
+    # The newest days' (DATA-8) and last month's own (DATA-2): Asha late once more and a half day more, Baraka absent
+    # once more and late once more, Meneja late once more.
     assert counted == {
-        "Asha": [working - 5, 2, 1, 0, 2],
-        "Baraka": [working - 3, 1, 0, 1, 1],
-        "Meneja": [working - 1, 1, 0, 0, 0],
+        "Asha": [working - 7, 3, 2, 0, 2],
+        "Baraka": [working - 5, 2, 0, 2, 1],
+        "Meneja": [working - 2, 2, 0, 0, 0],
     }
     # The three days to decide, oldest first, as the list shows them, in one month or across two (ATT-6's review).
     first, second, third = services._working_days_back(today)[:3]
