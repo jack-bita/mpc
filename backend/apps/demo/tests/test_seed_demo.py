@@ -832,7 +832,10 @@ def test_seed_demo_starts_on_the_first_of_last_month(from_last_month: None, monk
         assert set(StaffMember.objects.values_list("started_on", flat=True)) == {first}
         assert set(PayRate.objects.values_list("effective_from", flat=True)) == {first}
         taps = list(AttendanceEvent.objects.order_by("client_time"))
-        assert taps[0].client_time.astimezone(zone).date() == first
+        # Every seed tap has the laptop's time; only a tap added in the office has none (ATT-13).
+        first_tap = taps[0].client_time
+        assert first_tap is not None
+        assert first_tap.astimezone(zone).date() == first
         assert {tap.last_server_time for tap in taps} == {datetime(2026, 12, 1, 6, 50, tzinfo=zone)}
         assert MealMoney.objects.order_by("date").values_list("date", flat=True)[0] == first
 
