@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.74 · 27 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.75 · 28 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -81,6 +81,8 @@
 **Changes in v1.72** (26 Nov 2026, WAGE-9): §12, a new append-only record, `PayslipPayment`, a payslip handed out: the whole amount, at once (Jack: A), in cash with the worker's signature drawn on the screen (Jack: A), or by M-Pesa or a bank with its transaction number; voided only, never one's own. §13, a new kind of attachment, `signature`, never removed. §5 says what `pay.run` opens; §3, §14, §16 (T2, a new A5), §19 and §21 name it. A mistake found after an approval is WAGE-10's now (04 v1.209, 01 v1.13). Marked **(v1.72)**.
 
 **Changes in v1.73** (27 Nov 2026, WAGE-10): §12, a new append-only record, `PayCorrection`, a mistake found after a month's approval put right in a later month's pay, plus or minus, with its reason, a payslip line of its own; typed and crossed out only by whoever approves pay, never on one's own (Jack: A); none for one who left whose pay is approved (Jack: A), §20 item 15. §12 and §13, a tap a laptop sends after its day's pay was approved raises a `late_record` flag naming its worker. §3, §15 (8), §16 (T2, A3), §19 and §21 name them (04 v1.213, 01 v1.14). Marked **(v1.73)**.
+
+**Changes in v1.75** (28 Nov 2026, WAGE-5): §12, an approved month's payslips print on A4, each line as kept, with the month's sheet of every payment and its signature, and the month goes into an Excel file; §21 names the payslip, *Hati ya malipo* (04 v1.221). Marked **(v1.75)**.
 
 **Changes in v1.74** (27 Nov 2026, WAGE-4): §16, A4 says where a worker reads their own days and pay, *Siku na malipo yangu*, online, after any login, the job they are logged in as, with nothing kept on a shared laptop; §21 names the page (04 v1.217). Marked **(v1.74)**.
 
@@ -635,7 +637,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - **What it freezes** **(v1.70)**: every day, clock event, decision, rate, advance and meal money of the month, for every job, and of every month before it, as months are approved in order and nobody is paid for one again **(v1.71)**; a clock event a laptop sends late is still kept, and moves no day already paid; it raises a `late_record` flag naming its worker (§13), and its day says it came after and isn't counted (WAGE-10) **(v1.73)**. A mistake is a correction in a later month (A3, `PayCorrection`) **(v1.73)**.
 - **The day still running** **(v1.66)**: the pay counts the days that are over; today is added, apart and never kept, once the worker taps Toka, judged by the same rule (one with a tap of no trusted time waits at once, whatever else is tapped **(v1.67)**), and less today's share of the meals: today's money ÷ those who have tapped today and share them (Jack: A). So one who leaves tonight is paid for today; the book's own split, once the day is over, may differ by a little.
 
-**Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, meal shares **(v1.29)**, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own. One per job and month, with its `total`; its run is empty for one approved alone **(v1.70)**.
+**Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, meal shares **(v1.29)**, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own. One per job and month, with its `total`; its run is empty for one approved alone **(v1.70)**. Once approved, it prints on an A4 page, *Hati ya malipo*, each line as kept; the month's sheet prints every payment with its signature and a space to sign by pen, for NSSF and the owner's file; and the month goes into an Excel file, a row per payslip (WAGE-5) **(v1.75)**.
 - **PayslipLine** **(v1.70)**: the lines, in order, each with its amount, plus or minus, so they add up to the total: full days and half days, each `days` × `each`; fines and meals, with how many days; each advance, with its date; a debt carried from an earlier month, with that month; and each correction, with its reason copied (T4), last, in the order typed **(v1.73)**. Append-only, as the payslip and the run are (T2).
 - **A total below 0** **(v1.70)**: the payslip pays 0 (Jack: A), and the next payslip of the same job starts with the debt, a line of its own. The debt is the job's: one hired again starts clean, and a leaver's stays on their last payslip. A month's whole counts each total below 0 as 0, so it is what the month pays, with those approved alone in it; what is still to hand over is WAGE-9's *Bado kulipa* **(v1.71)**.
 - **Leaving mid-month** **(v1.29)**: a worker who leaves gets their payslip up to `left_on`, approved and paid on its own, before the month's run: the owner reads it and pays, with nothing to count by hand (Jack, 15 Nov 2026). The month's run then holds it as it was approved. Alone only once they have left and tapped Toka, or never tapped that day; today is kept with their other days, its share of the meals as they were paid it, though the date may be split again among more; their own days, rates and advances are locked from then on, the shop's meal money isn't **(v1.70)**.
@@ -887,6 +889,7 @@ One word per idea, the same in code, docs and UI. The Swahili is a draft — Jac
 | Attendance | Mahudhurio | Clocking in and out |
 | `clock` `in` · `out` | Ingia kazini · Toka kazini | One tap at a shop laptop as a worker arrives or leaves; *Toka* alone is logging out, *Ingia* logging in **(v1.24)** |
 | PayRun | Mishahara | One month's pay for everyone |
+| Payslip | Hati ya malipo | One worker's month, as approved, line by line; printed on A4 (WAGE-5) **(v1.75)** |
 | Approving a month | Idhinisha | Its numbers are final; not the same as paying (*Lipa*) **(v1.70)** |
 | PayslipPayment | Lipa · Amelipwa · Hajalipwa | A payslip handed out to its worker; *Bado kulipa*, what is still to hand out **(v1.72)** |
 | `signature` | Sahihi | A worker's signature, drawn on the screen as they are paid in cash **(v1.72)** |

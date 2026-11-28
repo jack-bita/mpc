@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.114 · 27 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.115 · 28 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.115** (28 Nov 2026, WAGE-5): §5.15, an approved month's pay prints on A4 from the browser, and its Excel file is made in the browser too, as its words live with the screens' (ADR-0040), with no background job (04 v1.221). Marked **(v1.115)**.
 
 **Changes in v1.114** (27 Nov 2026, WAGE-4's review): §5.8, a worker's own reads refuse a job not working themselves, and a laptop's clock a little fast steps the page back a month; §6.1, payslips are never stored on a shared device, as a worker's own is now shown on one (04 v1.219). Marked **(v1.114)**.
 
@@ -657,6 +659,7 @@ The Foods cashier's queue and notifications must update within seconds. Start wi
 
 - The **daily report** is the drawer session's `report_snapshot`, frozen at approval. **"Send to boss"** builds the text on the device and opens WhatsApp with it (`wa.me` link) — no WhatsApp API, no cost.
 - **Excel exports** run as background jobs when big; download links expire.
+- **A month's pay** **(v1.115)**, once approved (WAGE-5): the month's sheet and every payslip print on A4 from the browser, as office pages that read the month's pay answer, each line as kept; `@page` has no margin, so Chrome prints no header or footer of its own, as SPIKE-2 saw. Its Excel file is made in the browser too, not on the server, as its words live in `sw.json` and `en.json` with the screens' (ADR-0040): a few dozen rows, so no background job and no download link. The money becomes a number only in the file's cells, in whole shillings.
 - **Full shop export** (a zip of JSON and CSV) for the owner: the shop owns its data.
 
 ### 5.16 Audit
