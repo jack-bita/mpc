@@ -1027,7 +1027,8 @@
       "titleOne": "Hati ya malipo",
       "heading": "Hati ya malipo · {month}",
       "advanceOn": "Advansi ya {date}",
-      "notApproved": "Hati ya malipo inapatikana malipo yakishaidhinishwa."
+      "notApproved": "Hati ya malipo inapatikana malipo yakishaidhinishwa.",
+      "days": "siku {count}"
     },
     "excel": {
       "title": "Mishahara ya {month} · Imeidhinishwa na {by} · {date}",

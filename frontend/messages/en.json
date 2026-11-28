@@ -1027,7 +1027,8 @@
       "titleOne": "Payslip",
       "heading": "Payslip · {month}",
       "advanceOn": "Advance of {date}",
-      "notApproved": "A payslip is ready once the pay is approved."
+      "notApproved": "A payslip is ready once the pay is approved.",
+      "days": "{count, plural, one {1 day} other {# days}}"
     },
     "excel": {
       "title": "Pay for {month} · Approved by {by} · {date}",

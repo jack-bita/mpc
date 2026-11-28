@@ -155,16 +155,17 @@ function PrintedPayslip({
           }),
           amount: plus,
         };
+      // Fines and meals say how many days, in words of the payslip's own ("siku 2"), as neither is a meal's alone.
       case "fines":
         return {
           what: pay("fines"),
-          many: pay("mealDays", { count: line.days ?? 0 }),
+          many: t("days", { count: line.days ?? 0 }),
           amount: signed(line.amount),
         };
       case "meals":
         return {
           what: pay("meals"),
-          many: pay("mealDays", { count: line.days ?? 0 }),
+          many: t("days", { count: line.days ?? 0 }),
           amount: signed(line.amount),
         };
       case "advance":
