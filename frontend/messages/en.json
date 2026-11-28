@@ -1002,7 +1002,25 @@
     },
     "paper": {
       "print": "Print",
-      "picturesLoading": "The signatures are still loading, wait a moment."
+      "picturesLoading": "The signatures are still loading, wait a moment.",
+      "shop": "{code} · {name}"
+    },
+    "sheet": {
+      "title": "List of payments",
+      "heading": "Pay for {month}",
+      "number": "No.",
+      "name": "Name",
+      "amount": "Amount",
+      "date": "Date",
+      "way": "How",
+      "signature": "Signature",
+      "byPen": "Signature by pen",
+      "owes": "Not paid: owes {amount}",
+      "none": "—",
+      "total": "Total for everyone: {total}",
+      "signedBy": "Signed by whoever paid:",
+      "signedOn": "Date:",
+      "notApproved": "This list is ready once the month is approved."
     }
   },
   "attendanceWorker": {

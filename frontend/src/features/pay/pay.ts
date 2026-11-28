@@ -53,6 +53,11 @@ export function workerPayPage(staff: string, month: string): string {
   return `${PAY_PAGE}worker/?${new URLSearchParams({ [STAFF_PARAM]: staff, [MONTH_PARAM]: month }).toString()}`;
 }
 
+/** The month's sheet, printed for NSSF and the owner's file once the month is approved (WAGE-5). */
+export function monthSheetPage(month: string): string {
+  return `${PAY_PAGE}sheet/?${new URLSearchParams({ [MONTH_PARAM]: month }).toString()}`;
+}
+
 /** The pay's place in the store of server answers: every month of everyone's, and of each worker's, under it, so a save
  * that moves the pay asks them all again. */
 export const PAY = ["staffpay", "pay"] as const;

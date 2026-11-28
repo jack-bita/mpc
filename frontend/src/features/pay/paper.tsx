@@ -86,6 +86,26 @@ export function Paper({
   );
 }
 
+/** The top of every paper: the shop, by its code and its name ("MPC · Mabatini Pumba Center"), or its name alone when the
+ * two are one; then the paper's own title, the sheet's one heading, under the page's <h1> (PageHeader). */
+export function PaperHeading({
+  shop,
+  title,
+}: {
+  shop: { code: string; name: string };
+  title: string;
+}) {
+  const t = useTranslations("pay.paper");
+  return (
+    <header className="grid gap-1">
+      <p className="text-lg font-semibold">
+        {shop.code === shop.name ? shop.name : t("shop", shop)}
+      </p>
+      <h2 className="text-xl font-semibold">{title}</h2>
+    </header>
+  );
+}
+
 /** One A4 page of a paper: on the screen a white page with an edge, A4 wide at most; on paper the whole sheet, with
  * the page's own padding, and the next sheet starting on a new page (break-after). */
 export function PaperSheet({ children }: { children: ReactNode }) {
