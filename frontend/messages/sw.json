@@ -1021,6 +1021,13 @@
       "signedBy": "Sahihi ya aliyelipa:",
       "signedOn": "Tarehe:",
       "notApproved": "Orodha hii inapatikana mwezi ukishaidhinishwa."
+    },
+    "payslips": {
+      "titleAll": "Hati za malipo",
+      "titleOne": "Hati ya malipo",
+      "heading": "Hati ya malipo · {month}",
+      "advanceOn": "Advansi ya {date}",
+      "notApproved": "Hati ya malipo inapatikana malipo yakishaidhinishwa."
     }
   },
   "attendanceWorker": {

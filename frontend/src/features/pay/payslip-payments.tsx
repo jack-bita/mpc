@@ -167,8 +167,9 @@ export function PayslipPayments({
   );
 }
 
-/** How a payment and its crossing out are said, on the shop's own clock and calendar. */
-function useSaid(timezone: string) {
+/** How a payment and its crossing out are said, on the shop's own clock and calendar; the printed payslip says them
+ * the same (WAGE-5). */
+export function useSaid(timezone: string) {
   const t = useTranslations("pay.payment");
   const attendance = useTranslations("attendance");
   const when = (at: string) => ({
@@ -201,8 +202,15 @@ function useSaid(timezone: string) {
   };
 }
 
-/** What proves a payment: its transaction number; its signature, kept for good; or, on the demo, that none is kept. */
-function Proof({ payment, name }: { payment: PaymentLine; name: string }) {
+/** What proves a payment: its transaction number; its signature, kept for good; or, on the demo, that none is kept. The
+ * printed payslip shows the same (WAGE-5). */
+export function Proof({
+  payment,
+  name,
+}: {
+  payment: PaymentLine;
+  name: string;
+}) {
   const t = useTranslations("pay.payment");
   const [failed, setFailed] = useState(false);
   return (

@@ -58,6 +58,14 @@ export function monthSheetPage(month: string): string {
   return `${PAY_PAGE}sheet/?${new URLSearchParams({ [MONTH_PARAM]: month }).toString()}`;
 }
 
+/** The printed payslips of a month, once approved (WAGE-5): everyone's, one A4 page each, or one worker's alone, as their
+ * pay page opens it, a leaver approved alone before the month among them. */
+export function payslipsPage(month: string, staff?: string): string {
+  const address = new URLSearchParams({ [MONTH_PARAM]: month });
+  if (staff !== undefined) address.set(STAFF_PARAM, staff);
+  return `${PAY_PAGE}payslips/?${address.toString()}`;
+}
+
 /** The pay's place in the store of server answers: every month of everyone's, and of each worker's, under it, so a save
  * that moves the pay asks them all again. */
 export const PAY = ["staffpay", "pay"] as const;

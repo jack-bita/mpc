@@ -1021,6 +1021,13 @@
       "signedBy": "Signed by whoever paid:",
       "signedOn": "Date:",
       "notApproved": "This list is ready once the month is approved."
+    },
+    "payslips": {
+      "titleAll": "Payslips",
+      "titleOne": "Payslip",
+      "heading": "Payslip · {month}",
+      "advanceOn": "Advance of {date}",
+      "notApproved": "A payslip is ready once the pay is approved."
     }
   },
   "attendanceWorker": {
