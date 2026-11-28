@@ -1028,7 +1028,8 @@
       "heading": "Hati ya malipo · {month}",
       "advanceOn": "Advansi ya {date}",
       "notApproved": "Hati ya malipo inapatikana malipo yakishaidhinishwa.",
-      "days": "siku {count}"
+      "days": "siku {count}",
+      "nobody": "Mfanyakazi huyu hana malipo katika mwezi huu."
     },
     "excel": {
       "title": "Mishahara ya {month} · Imeidhinishwa na {by} · {date}",

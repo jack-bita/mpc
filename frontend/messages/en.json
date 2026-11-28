@@ -1028,7 +1028,8 @@
       "heading": "Payslip · {month}",
       "advanceOn": "Advance of {date}",
       "notApproved": "A payslip is ready once the pay is approved.",
-      "days": "{count, plural, one {1 day} other {# days}}"
+      "days": "{count, plural, one {1 day} other {# days}}",
+      "nobody": "This worker has no pay this month."
     },
     "excel": {
       "title": "Pay for {month} · Approved by {by} · {date}",

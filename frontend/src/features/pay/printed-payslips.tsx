@@ -99,7 +99,13 @@ export function PrintedPayslipsScreen({
         </p>
         <ApiErrorAlert error={who.error} />
         <ApiErrorAlert error={answer.error} />
-        {month === null || (read !== null && slips.length === 0) ? (
+        {/* An address naming a worker the month has no line for (another month's, or a mistyped one) says so, as its
+            payslip will never come; else nothing to print yet. */}
+        {read !== null &&
+        staff !== null &&
+        !read.workers.some((worker) => worker.staff === staff) ? (
+          <p>{t("nobody")}</p>
+        ) : month === null || (read !== null && slips.length === 0) ? (
           <p>{t("notApproved")}</p>
         ) : null}
       </div>

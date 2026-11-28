@@ -315,6 +315,26 @@ describe("the printed payslips", () => {
     ).toBeDefined();
   });
 
+  it("says so of an address naming a worker the month has no line for", async () => {
+    theShopPays(NOVEMBER);
+    render(
+      <PrintedPayslipsScreen
+        asked="2026-11"
+        staff="019a8600-0000-7000-8000-0000000000ff"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Mfanyakazi huyu hana malipo katika mwezi huu."),
+    ).toBeDefined();
+    expect(
+      screen.queryByText(
+        "Hati ya malipo inapatikana malipo yakishaidhinishwa.",
+      ),
+    ).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
   it("has nothing to print of a month still open, nor of a worker with no payslip", async () => {
     theShopPays(payMonth([ASHA_DRAFT], { total: "152000.00" }));
     const { unmount } = render(
