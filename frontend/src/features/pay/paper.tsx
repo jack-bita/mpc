@@ -15,7 +15,8 @@
 // empty boxes where the signatures go: they load one by one from the attachments' route (photoAddress).
 //
 // The ink is the app's own dark text on its white (globals.css): the app is light only, so the paper prints dark on
-// white, never the pale greys a screen uses for quiet words, which print faint.
+// white; on paper every word and line inside a sheet takes that ink, never the pale greys a screen uses for quiet
+// words, which print faint (PaperSheet).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and watches the paper's pictures.
 "use client";
@@ -112,13 +113,15 @@ export function PaperHeading({
 }
 
 /** One A4 page of a paper: on the screen a white page with an edge, A4 wide at most; on paper the whole sheet, with
- * the page's own padding, and the next sheet starting on a new page (break-after). A sheet longer than a page, a month's
+ * the page's own padding, and the next sheet starting on a new page (break-after). On paper every word and line inside
+ * it is the dark ink, the quiet grey of a screen's notes (Aliondoka…, the demo's signature line) and the pale edge of a
+ * signature's box among them, as they print faint (print:**:, WAGE-5's review). A sheet longer than a page, a month's
  * of twenty workers or more, gets its padding again on each page it runs onto (box-decoration-clone), or page 2's rows
  * would start at the paper's very edge, which a printer can't reach (WAGE-5's review). Checked by printing a 60-row
  * table to PDF in Playwright's Chromium: with it, page 1's last row ends 34 pt (12 mm) higher. */
 export function PaperSheet({ children }: { children: ReactNode }) {
   return (
-    <section className="bg-background text-foreground mx-auto w-full max-w-[210mm] break-after-page border border-border p-[12mm] box-decoration-clone print:max-w-none print:border-0 last:break-after-auto">
+    <section className="bg-background text-foreground mx-auto w-full max-w-[210mm] break-after-page border border-border p-[12mm] box-decoration-clone print:max-w-none print:border-0 print:**:border-foreground print:**:text-foreground last:break-after-auto">
       {children}
     </section>
   );
