@@ -76,6 +76,7 @@ from apps.staffpay.models import (
     MealMoney,
     NoPhoto,
     PayRate,
+    PayRun,
     Payslip,
     ReviewReason,
     TimeCheck,
@@ -875,6 +876,19 @@ def test_seed_demo_last_month_can_be_approved(from_last_month: None, monkeypatch
         run = approve_as_read(shop, date(2026, 10, 1), meneja)
         paid = sorted(Payslip.objects.filter(pay_run=run).values_list("staff__display_name", flat=True))
     assert (run.month, paid) == (date(2026, 10, 1), ["Asha", "Baraka", "Meneja"])
+
+    # A visitor's approval stays for every visitor after them until the reset, as the runbook says (DATA-2's review): a
+    # wake-up the same day keeps the shop, its run with it; the next morning's reset wipes the run, a ledger, through
+    # the TRUNCATE its no-delete trigger doesn't watch, and October can be approved again.
+    assert seed_demo() == Seeded.KEPT
+    with shop_context(shop):
+        assert PayRun.objects.filter(pk=run.pk).exists()
+    assert seed_demo(fresh=True) == Seeded.MADE
+    again = the_demo_shop()
+    with shop_context(again):
+        assert not PayRun.objects.exists()
+        meneja = StaffMember.objects.get(display_name="Meneja")
+        assert approve_as_read(again, date(2026, 10, 1), meneja).month == date(2026, 10, 1)
 
 
 def test_seed_demo_first_days_of_a_month_wait_for_decisions(
